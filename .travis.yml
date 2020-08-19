@@ -27,9 +27,9 @@ matrix:
     - bash .travis-install-odin.sh
     cache:
       directories:
-        - $HOME/hdf5-1.10.1
-        - $HOME/c-blosc-1.14.2
-        - $HOME/librdkafka-1.0.0
+      - "$HOME/hdf5-1.10.1"
+      - "$HOME/c-blosc-1.14.2"
+      - "$HOME/librdkafka-1.0.0"
 install:
 - git fetch --depth=500
 - mkdir -p build
@@ -40,9 +40,12 @@ install:
 - cmake --build . --target install;
 - cd ..
 script:
-#- "${ODIN_PREFIX}/bin/odinDataTest --json=${INSTALL_PREFIX}/test_config/excalibur.json"
 - ls -l $INSTALL_PREFIX
 after_success:
 - coveralls
 notifications:
-  slack: stfc-aeg:OrPwghON1DC3Rm9SnqOeufdQ
+  slack:
+    rooms:
+      - secure: NFAB8AsnQh3vLjj0ZvVW0mH4hH2+bnv6+cjGPV/P8WI8pG5Qg26jpL2d7Ahc0KF3gqAKdesoYJGXtAHSMCu0/XoR6QSljD+E3Fc1an4/4gOIFphJI7PFh7IlHpNN6dPRRI+FhS5szQWkXoq8kiFw64POTgf1bZeXeWVosMzG1vcCqY212vkA9vStaNSuSqMCfITXOjTbPRoCzS/RCM5QhW/oeYGBO6MTjrki5GetE14EuOCwcvQtxocb5hXUfKvbsQ/4rBzIU4Kh+cZoTzdpFmdz1FgpZXnbQa/BOWMphSdI57dJSBgWaUGD0MZMD3s+zrqMGuX5OeDQ14fghPu7g7Fw2ikdMBTZoDtfcAm5oAzHvPaUeonsZoVV+2B6v5C15EJtqJwr7AmczKHJXFpJKDpnsleVb7l+jqSp3bTGFTqTyNbtxoN/gtDkRfQ49/X2cHLrUPvuSz7IuI9Vv62U8IpB49LcNbLNS6D6189f3LA6XyCYDMDigh5qqoJrxYKSpZ5w1/SjjCnEF4ulD8yDjN9DkRg5pIaQBIadLHqm74ncwb4GG418awPfpbMdXo9sCMuS6sEfiEpvvzlCjf59hH6XsgVoD4oJ0xeGFBuroXnYr3Oj4y/lolb6RquMGbCba2larKtnA48uVe/oyTXhg8QMkxPU9T4lJAgvmSsedDI=
+    on_success: always
+    on_failure: always
