@@ -25,6 +25,11 @@ matrix:
     - bash .travis-install-librdkafka.sh
     - bash .travis-install-hdf5.sh
     - bash .travis-install-odin.sh
+    cache:
+      directories:
+        - $HOME/hdf5-1.10.1
+        - $HOME/c-blosc-1.14.2
+        - $HOME/librdkafka-1.0.0
 install:
 - git fetch --depth=500
 - mkdir -p build
