@@ -1,0 +1,44 @@
+language: cpp
+sudo: false
+matrix:
+  include:
+  - os: linux
+    compiler: gcc
+    addons:
+      apt:
+        packages:
+        - liblog4cxx10-dev
+        - libboost-program-options-dev
+        - libboost-filesystem-dev
+        - libboost-date-time-dev
+        - libboost-dev
+        - libboost-system-dev
+        - libboost-test-dev
+        - libboost-thread-dev
+        - libzmq3-dev
+        - libpcap-dev
+        - libboost-regex-dev
+    env: HDF5_ROOT=$HOME/hdf5-1.10.1 INSTALL_PREFIX=$HOME/install_prefix ODIN_PREFIX=$HOME/odin-data
+      BLOSC_ROOT=$HOME/c-blosc-1.14.2 KAFKA_ROOT=$HOME/librdkafka-1.0.0
+    before_install:
+    - bash .travis-install-blosc.sh
+    - bash .travis-install-librdkafka.sh
+    - bash .travis-install-hdf5.sh
+    - bash .travis-install-odin.sh
+install:
+- git fetch --depth=500
+- mkdir -p build
+- mkdir -p $INSTALL_PREFIX
+- cd build;
+- cmake -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON -DBoost_NO_BOOST_CMAKE=ON -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX
+  -DODINDATA_ROOT_DIR=$ODIN_PREFIX ../data;
+- cmake --build . --target install;
+- cd ..
+script:
+#- "${ODIN_PREFIX}/bin/odinDataTest --json=${INSTALL_PREFIX}/test_config/excalibur.json"
+- ls -l $INSTALL_PREFIX
+after_success:
+- coveralls
+notifications:
+  slack:
+    secure: c5nP/QAzzUPk4zoCKjkvEf48SVhxVmicZY7/178YiU8FwiasMqNIAd5I7q7ZIJ3J3yIigE6LOq8pFa9hUVXYkiB41szjZ2fwIwTDBnTUYXjsKDY4wHzrkpLk/lUOsx7RQRsGBrao3R5GC/j08yyV1JG7y3urP6DHQE7/SrEPK/wcisk/CHWs372IhYM7EOycrNIO0tFLwfehFgMoj/D52jJuVBhl6577lC4mo5aaIGa1BlUPl4B31G4HQpmA2x/XBvoH42oEhQxJOIX1+rfe/Ats1IF+vO8pURUQiEXj5L0iGpJGWH78PRldwFUrWfzTc6s+4855Ay1uZKsgRrt3D2ORMrtdFWrL5I/Ps7vm+n0NmtkI4ozBLn3p7eKWBkofJhrBxs4Ez/Qi4VrWGJTHeWk92vfHRjF4w0iYdvZmgz1m8IIA5AmzVAGYsnhyVmDKkc1IQ2o6dlGCohCjlViFwHFCYx74LnALqvsz1VB2N3dvFEf0v0VVqFbX2BWjgu4FuQJJW012jRosKeJBf090JUndBzkh/GSum4toQKOd71XK0bvfaIwGkYrokvwDdRpYeIKYQGaFHI0Hvrts6LJH2wmyDXa7/BZ0c22llktv7emdrnAhKXhMDb+h/NSXxk8wTZyuqEojVqxTVuUPG4bPrJk8DZHigKc2jmqjJrmWtTc=
