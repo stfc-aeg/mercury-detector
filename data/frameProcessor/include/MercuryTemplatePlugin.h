@@ -28,7 +28,7 @@ namespace FrameProcessor
 
   /** Template for future Mercury Frame objects.
    *
-   * This template may be the basis for any future hexitec plug-in(s).
+   * This template may be the basis for any future MERCURY plug-in(s).
    */
   class MercuryTemplatePlugin : public FrameProcessorPlugin
   {

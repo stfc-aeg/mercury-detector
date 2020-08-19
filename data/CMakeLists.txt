@@ -36,7 +36,7 @@ find_package(Log4CXX 0.10.0 REQUIRED)
 find_package(ZeroMQ 3.2.4 REQUIRED)
 find_package(OdinData REQUIRED)
 
-message("Determining hexitec-detector version")
+message("Determining mercury-detector version")
 include(GetGitRevisionDescription)
 git_describe(GIT_DESC_STR)
 
