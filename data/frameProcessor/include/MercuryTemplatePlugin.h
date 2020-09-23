@@ -28,7 +28,7 @@ namespace FrameProcessor
 
   /** Template for future Mercury Frame objects.
    *
-   * This template may be the basis for any future Mercury plug-in(s).
+   * This template may be the basis for any future Mercury plugin(s).
    */
   class MercuryTemplatePlugin : public FrameProcessorPlugin
   {

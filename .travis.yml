@@ -1,0 +1,51 @@
+language: cpp
+sudo: false
+matrix:
+  include:
+  - os: linux
+    compiler: gcc
+    addons:
+      apt:
+        packages:
+        - liblog4cxx10-dev
+        - libboost-program-options-dev
+        - libboost-filesystem-dev
+        - libboost-date-time-dev
+        - libboost-dev
+        - libboost-system-dev
+        - libboost-test-dev
+        - libboost-thread-dev
+        - libzmq3-dev
+        - libpcap-dev
+        - libboost-regex-dev
+    env: HDF5_ROOT=$HOME/hdf5-1.10.1 INSTALL_PREFIX=$HOME/install_prefix ODIN_PREFIX=$HOME/odin-data
+      BLOSC_ROOT=$HOME/c-blosc-1.14.2 KAFKA_ROOT=$HOME/librdkafka-1.0.0
+    before_install:
+    - bash .travis-install-blosc.sh
+    - bash .travis-install-librdkafka.sh
+    - bash .travis-install-hdf5.sh
+    - bash .travis-install-odin.sh
+    cache:
+      directories:
+      - "$HOME/hdf5-1.10.1"
+      - "$HOME/c-blosc-1.14.2"
+      - "$HOME/librdkafka-1.0.0"
+install:
+- git fetch --depth=500
+- mkdir -p build
+- mkdir -p $INSTALL_PREFIX
+- cd build;
+- cmake -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON -DBoost_NO_BOOST_CMAKE=ON -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX
+  -DODINDATA_ROOT_DIR=$ODIN_PREFIX ../data;
+- cmake --build . --target install;
+- cd ..
+script:
+- ls -l $INSTALL_PREFIX
+after_success:
+- coveralls
+notifications:
+  slack:
+    rooms:
+      secure: YNx88ry3JVcWs2RLWqCUp4D8+Kvoc6TAiHqZ1f5vG+k6Zy2jPvNsHHwLSasDhixiyqRTUKLKT9y5uL07AEqTPK3wwe6xjsfwxnFIl+ebING9x6REuBtf4+PwZHdVN6nKostaM8U4iKCktP8IGT3EeI1Ly9UuwWL2ll90Rc1YNMbLvoP1oJa8JYlq/8ucJu2s9e8tHoYqnnUaRSODZGqAso0gUesfGv/ncoFOUmP4xgjhSGvC2nMJqSai+rcgzFr2BEdn0t+XbVDZ4Wua3S6Hu1RpoESB4a164HfFGS+U+rZbQXaj1hlA1mZ0UygBUmHf37rp/65t4d3NI56gdRZ//8Sr4oZh1BoTWwC6bn3R7dwinvgwu48XLajzLUClcsqJjVKEAEXy7LLw6uk2+m0mDFtqhoUz0grZnKV080JVLzV/sMAEtKmtz7yrMkVhbVnx8YeqoHkmTyAn+tXbpulbg6G4WGqCoKEFYrYBbZhEHSnza884CrfQmvV2kUXssX/+x54SgfFZ1wt36F/YmVmfs01DZocpbCsuYEzypom+ZrBjRQmrV12mEaRnpqeEdWaLfYOIZwznA2on1I61bJk8Ht/GBV0q2uZXoRpgt85UakH3KCVkCyu+teDLI9f7351X6X70FWk0p99cZ1WBDtK2COwJG53r2BebHDnKcYcHep8=
+    on_success: always
+    on_failure: always
