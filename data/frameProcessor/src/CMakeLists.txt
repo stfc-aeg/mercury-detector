@@ -7,5 +7,7 @@ include_directories(${FRAMEPROCESSOR_DIR}/include ${ODINDATA_INCLUDE_DIRS}
 
 # Add library for mercury plugin
 add_library(MercuryTemplatePlugin SHARED MercuryTemplatePlugin.cpp)
+add_library(MercuryProcessorPlugin SHARED MercuryProcessorPlugin.cpp)
 
 install(TARGETS MercuryTemplatePlugin LIBRARY DESTINATION lib)
+install(TARGETS MercuryProcessorPlugin LIBRARY DESTINATION lib)

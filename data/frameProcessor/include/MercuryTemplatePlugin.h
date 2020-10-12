@@ -8,19 +8,7 @@
 #ifndef INCLUDE_MERCURYTEMPLATEPLUGIN_H_
 #define INCLUDE_MERCURYTEMPLATEPLUGIN_H_
 
-#include <log4cxx/logger.h>
-#include <log4cxx/basicconfigurator.h>
-#include <log4cxx/propertyconfigurator.h>
-#include <log4cxx/helpers/exception.h>
-using namespace log4cxx;
-using namespace log4cxx::helpers;
-
-
-#include "FrameProcessorPlugin.h"
-#include "MercuryDefinitions.h"
-#include "ClassLoader.h"
-#include <boost/algorithm/string.hpp>
-#include <map>
+#include "MercuryProcessorPlugin.h"
 
 namespace FrameProcessor
 {
@@ -28,19 +16,13 @@ namespace FrameProcessor
 
   /** Template for future Mercury Frame objects.
    *
-   * This template may be the basis for any future MERCURY plug-in(s).
+   * This template may be the basis for any future Mercury plugin(s).
    */
-  class MercuryTemplatePlugin : public FrameProcessorPlugin
+  class MercuryTemplatePlugin : public MercuryProcessorPlugin
   {
     public:
       MercuryTemplatePlugin();
       virtual ~MercuryTemplatePlugin();
-
-      int get_version_major();
-      int get_version_minor();
-      int get_version_patch();
-      std::string get_version_short();
-      std::string get_version_long();
 
       void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
       void requestConfiguration(OdinData::IpcMessage& reply);

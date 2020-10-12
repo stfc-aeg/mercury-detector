@@ -5,4 +5,4 @@ ADD_DEFINITIONS(-DBUILD_DIR="${CMAKE_BINARY_DIR}")
 include_directories(${FRAMERECEIVER_DIR}/include ${ODINDATA_INCLUDE_DIRS} 
 	${Boost_INCLUDE_DIRS} ${LOG4CXX_INCLUDE_DIRS}/.. ${ZEROMQ_INCLUDE_DIRS})
 
-# Add library for MERCURY frame decoder
+# Add library for Mercury frame decoder
