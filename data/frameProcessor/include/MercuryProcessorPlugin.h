@@ -49,7 +49,7 @@ namespace FrameProcessor
       virtual void status(OdinData::IpcMessage& status);
       virtual bool reset_statistics();
 
-    private:
+    protected:
       /** Configuration constant for Hardware sensors **/
       static const std::string CONFIG_SENSORS_LAYOUT;
 
@@ -57,9 +57,7 @@ namespace FrameProcessor
       std::string sensors_layout_str_;
       MercurySensorLayoutMap sensors_layout_;
 
-      virtual void process_frame(boost::shared_ptr<Frame> frame); // Should be without '= 0' attached?
-
-      // virtual void process_frame(boost::shared_ptr<Frame> frame) = 0;
+      virtual void process_frame(boost::shared_ptr<Frame> frame);
 
       /** Pointer to logger **/
       LoggerPtr logger_;
