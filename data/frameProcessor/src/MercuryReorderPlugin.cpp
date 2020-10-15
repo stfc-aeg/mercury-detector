@@ -46,7 +46,6 @@ namespace FrameProcessor
    * to configure the plugin, and any response can be added to the reply IpcMessage. This
    * plugin supports the following configuration parameters:
    * 
-   * - sensors_layout_str_  <=> sensors_layout
    * - write_raw_data_      <=> raw_data
    *
    * \param[in] config - Reference to the configuration IpcMessage object.

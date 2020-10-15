@@ -9,7 +9,9 @@ include_directories(${FRAMEPROCESSOR_DIR}/include ${ODINDATA_INCLUDE_DIRS}
 add_library(MercuryTemplatePlugin SHARED MercuryTemplatePlugin.cpp)
 add_library(MercuryProcessorPlugin SHARED MercuryProcessorPlugin.cpp)
 add_library(MercuryReorderPlugin SHARED MercuryReorderPlugin.cpp)
+add_library(MercuryAdditionPlugin SHARED MercuryAdditionPlugin.cpp)
 
 install(TARGETS MercuryTemplatePlugin LIBRARY DESTINATION lib)
 install(TARGETS MercuryProcessorPlugin LIBRARY DESTINATION lib)
 install(TARGETS MercuryReorderPlugin LIBRARY DESTINATION lib)
+install(TARGETS MercuryAdditionPlugin LIBRARY DESTINATION lib)

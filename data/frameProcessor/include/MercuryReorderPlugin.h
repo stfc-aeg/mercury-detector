@@ -13,8 +13,6 @@
 
 namespace FrameProcessor
 {
-  typedef std::map<int, Mercury::MercurySensorLayoutMapEntry> MercurySensorLayoutMap;
-
   /** Reorder pixels within Mercury Frame objects.
    *
    * The MercuryReorderPlugin class receives a raw data Frame object,
