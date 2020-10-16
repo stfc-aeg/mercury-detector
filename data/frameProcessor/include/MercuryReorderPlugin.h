@@ -53,7 +53,7 @@ namespace FrameProcessor
       int sensors_config_;
       /** Packet loss counter **/
       int packets_lost_;
-      /** Overwrite UDP frame number until firmware resets
+      /** Overwrite UDP frame number until firmware fixed to reset
        * it before each acquisition **/
       uint32_t frame_number_;
 
