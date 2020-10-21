@@ -24,8 +24,6 @@ using namespace log4cxx::helpers;
 
 namespace FrameProcessor
 {
-  typedef std::map<int, Mercury::MercurySensorLayoutMapEntry> MercurySensorLayoutMap;
-
   /** Abstract plugin class, providing common components to all Mercury plugins.
    *
    * All OdinData Mercury plugins must subclass this class. It provides the
@@ -50,13 +48,6 @@ namespace FrameProcessor
       virtual bool reset_statistics();
 
     protected:
-      /** Configuration constant for Hardware sensors **/
-      static const std::string CONFIG_SENSORS_LAYOUT;
-
-      std::size_t parse_sensors_layout_map(const std::string sensors_layout_str);
-      std::string sensors_layout_str_;
-      MercurySensorLayoutMap sensors_layout_;
-
       virtual void process_frame(boost::shared_ptr<Frame> frame);
 
       /** Pointer to logger **/
