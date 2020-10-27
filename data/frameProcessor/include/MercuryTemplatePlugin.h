@@ -12,8 +12,6 @@
 
 namespace FrameProcessor
 {
-  typedef std::map<int, Mercury::MercurySensorLayoutMapEntry> MercurySensorLayoutMap;
-
   /** Template for future Mercury Frame objects.
    *
    * This template may be the basis for any future Mercury plugin(s).
@@ -30,9 +28,6 @@ namespace FrameProcessor
       bool reset_statistics(void);
 
     private:
-      /** Configuration constant for Hardware sensors **/
-      static const std::string CONFIG_SENSORS_LAYOUT;
-
       void process_frame(boost::shared_ptr<Frame> frame);
   };
 

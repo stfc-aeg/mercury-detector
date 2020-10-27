@@ -32,9 +32,6 @@ namespace FrameProcessor
 
     /// Set threshold mode to none (initially; 0=none, 1=value ,2=file)
     threshold_mode_ = (ThresholdMode)0;
-
-    sensors_layout_str_ = Mercury::default_sensors_layout_map;
-    parse_sensors_layout_map(sensors_layout_str_);
   }
 
   /**
@@ -117,7 +114,6 @@ namespace FrameProcessor
   {
     // Return the configuration of the process plugin
     std::string base_str = get_name() + "/";
-    reply.set_param(base_str + MercuryThresholdPlugin::CONFIG_SENSORS_LAYOUT, sensors_layout_str_);
     int mode = int(threshold_mode_);
     std::string mode_str = determineThresholdMode(mode);
     reply.set_param(base_str + MercuryThresholdPlugin::CONFIG_THRESHOLD_MODE , mode_str);
@@ -134,7 +130,6 @@ namespace FrameProcessor
   {
     // Record the plugin's status items
     LOG4CXX_DEBUG(logger_, "Status requested for MercuryThresholdPlugin");
-    status.set_param(get_name() + "/sensors_layout", sensors_layout_str_);
     int mode = int(threshold_mode_);
     std::string mode_str = determineThresholdMode(mode);
     status.set_param(get_name() + "/threshold_mode", mode_str);

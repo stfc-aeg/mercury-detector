@@ -27,9 +27,6 @@ namespace FrameProcessor
     directional_distance_ = (int)pixel_grid_size_/2;  // Set to 1 for 3x3: 2 for 5x5 pixel grid
     number_rows_ = image_height_;
     number_columns_ = image_width_;
-
-    sensors_layout_str_ = Mercury::default_sensors_layout_map;
-    parse_sensors_layout_map(sensors_layout_str_);
   }
 
   /**
@@ -65,7 +62,6 @@ namespace FrameProcessor
   {
     // Return the configuration of the process plugin
     std::string base_str = get_name() + "/";
-    reply.set_param(base_str + MercuryAdditionPlugin::CONFIG_SENSORS_LAYOUT, sensors_layout_str_);
     reply.set_param(base_str + MercuryAdditionPlugin::CONFIG_PIXEL_GRID_SIZE, pixel_grid_size_);
   }
 
@@ -78,7 +74,6 @@ namespace FrameProcessor
   {
     // Record the plugin's status items
     LOG4CXX_DEBUG(logger_, "Status requested for MercuryAdditionPlugin");
-    status.set_param(get_name() + "/sensors_layout", sensors_layout_str_);
     status.set_param(get_name() + "/pixel_grid_size", pixel_grid_size_);
   }
 

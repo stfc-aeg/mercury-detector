@@ -35,9 +35,6 @@ namespace FrameProcessor
 
     *gradient_values_ = 1;
     *intercept_values_ = 0;
-
-    sensors_layout_str_ = Mercury::default_sensors_layout_map;
-    parse_sensors_layout_map(sensors_layout_str_);
   }
 
   /**
@@ -82,7 +79,6 @@ namespace FrameProcessor
   {
     // Return the configuration of the calibration plugin
     std::string base_str = get_name() + "/";
-    reply.set_param(base_str + MercuryCalibrationPlugin::CONFIG_SENSORS_LAYOUT, sensors_layout_str_);
     reply.set_param(base_str + MercuryCalibrationPlugin::CONFIG_GRADIENTS_FILE, gradients_filename_);
     reply.set_param(base_str + MercuryCalibrationPlugin::CONFIG_INTERCEPTS_FILE, intercepts_filename_);
   }
@@ -96,7 +92,6 @@ namespace FrameProcessor
   {
     // Record the plugin's status items
     LOG4CXX_DEBUG(logger_, "Status requested for MercuryCalibrationPlugin");
-    status.set_param(get_name() + "/sensors_layout", sensors_layout_str_);
     status.set_param(get_name() + "/gradients_filename", gradients_filename_);
     status.set_param(get_name() + "/intercepts_filename", intercepts_filename_);
   }

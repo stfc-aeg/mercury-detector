@@ -18,7 +18,6 @@ namespace FrameProcessor
    * The constructor sets up logging used within the class.
    */
   MercuryReorderPlugin::MercuryReorderPlugin() :
-  		sensors_config_(Mercury::sensorConfigTwo),
       packets_lost_(0),
       frame_number_(0),
       write_raw_data_(true)
@@ -28,9 +27,6 @@ namespace FrameProcessor
     logger_->setLevel(Level::getAll());
     LOG4CXX_TRACE(logger_, "MercuryReorderPlugin version " <<
                   this->get_version_long() << " loaded.");
-
-    sensors_layout_str_ = Mercury::default_sensors_layout_map;
-    parse_sensors_layout_map(sensors_layout_str_);
   }
 
   /**
@@ -74,7 +70,6 @@ namespace FrameProcessor
   {
   	// Return the configuration of the reorder plugin
   	std::string base_str = get_name() + "/";
-    reply.set_param(base_str + MercuryReorderPlugin::CONFIG_SENSORS_LAYOUT, sensors_layout_str_);
     reply.set_param(base_str + MercuryReorderPlugin::CONFIG_DROPPED_PACKETS, packets_lost_);
     reply.set_param(base_str + MercuryReorderPlugin::CONFIG_RAW_DATA, write_raw_data_);
     reply.set_param(base_str + MercuryReorderPlugin::CONFIG_FRAME_NUMBER, frame_number_);
@@ -89,7 +84,6 @@ namespace FrameProcessor
   {
     // Record the plugin's status items
     LOG4CXX_DEBUG(logger_, "Status requested for MercuryReorderPlugin");
-    status.set_param(get_name() + "/sensors_layout", sensors_layout_str_);
     status.set_param(get_name() + "/packets_lost", packets_lost_);
     status.set_param(get_name() + "/raw_data", write_raw_data_);
     status.set_param(get_name() + "/frame_number", frame_number_);
@@ -114,9 +108,8 @@ namespace FrameProcessor
   void MercuryReorderPlugin::process_lost_packets(boost::shared_ptr<Frame>& frame)
   {
     const Mercury::FrameHeader* hdr_ptr = static_cast<const Mercury::FrameHeader*>(frame->get_data_ptr());
-    Mercury::SensorConfigNumber sensors_config = static_cast<Mercury::SensorConfigNumber>(sensors_config_);
-    if (hdr_ptr->total_packets_received < Mercury::num_fem_frame_packets(sensors_config)){
-      int packets_lost = Mercury::num_fem_frame_packets(sensors_config) - hdr_ptr->total_packets_received;
+    if (hdr_ptr->total_packets_received < Mercury::num_fem_frame_packets()){
+      int packets_lost = Mercury::num_fem_frame_packets() - hdr_ptr->total_packets_received;
       LOG4CXX_ERROR(logger_, "Frame number " << hdr_ptr->frame_number << " has dropped " << packets_lost << " packet(s)");
       packets_lost_ += packets_lost;
       LOG4CXX_ERROR(logger_, "Total packets lost since startup " << packets_lost_);

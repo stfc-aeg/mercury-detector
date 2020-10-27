@@ -10,8 +10,6 @@
 
 namespace FrameProcessor
 {
-  const std::string MercuryTemplatePlugin::CONFIG_SENSORS_LAYOUT  = "sensors_layout";
-
   /**
    * The constructor sets up logging used within the class.
    */
@@ -37,25 +35,19 @@ namespace FrameProcessor
    * to configure the plugin, and any response can be added to the reply IpcMessage.  This
    * plugin supports the following configuration parameters:
    * 
-   * - sensors_layout_str_      <=> sensors_layout
+   * - xx_      <=> xx
    *
    * \param[in] config - Reference to the configuration IpcMessage object.
    * \param[in] reply - Reference to the reply IpcMessage object.
    */
   void MercuryTemplatePlugin::configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
   {
-    if (config.has_param(MercuryTemplatePlugin::CONFIG_SENSORS_LAYOUT))
-    {
-      sensors_layout_str_= config.get_param<std::string>(MercuryTemplatePlugin::CONFIG_SENSORS_LAYOUT);
-      parse_sensors_layout_map(sensors_layout_str_);
-    }
+
   }
 
   void MercuryTemplatePlugin::requestConfiguration(OdinData::IpcMessage& reply)
   {
     // Return the configuration of the process plugin
-    std::string base_str = get_name() + "/";
-    reply.set_param(base_str + MercuryTemplatePlugin::CONFIG_SENSORS_LAYOUT, sensors_layout_str_);
   }
 
   /**
@@ -67,7 +59,14 @@ namespace FrameProcessor
   {
     // Record the plugin's status items
     LOG4CXX_DEBUG(logger_, "Status requested for MercuryTemplatePlugin");
-    status.set_param(get_name() + "/sensors_layout", sensors_layout_str_);
+  }
+
+  /**
+   * Reset process plugin statistics
+   */
+  bool MercuryTemplatePlugin::reset_statistics(void)
+  {
+    return true;
   }
 
   /**

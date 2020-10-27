@@ -42,9 +42,6 @@ namespace FrameProcessor
     number_bins_ = (int)(((bin_end_ - bin_start_) / bin_width_) + 0.5);
 
     initialiseHistograms();
-
-    sensors_layout_str_ = Mercury::default_sensors_layout_map;
-    parse_sensors_layout_map(sensors_layout_str_);
   }
 
   /**
@@ -202,7 +199,6 @@ namespace FrameProcessor
   {
     // Return the configuration of the histogram plugin
     std::string base_str = get_name() + "/";
-    reply.set_param(base_str + MercuryHistogramPlugin::CONFIG_SENSORS_LAYOUT, sensors_layout_str_);
     reply.set_param(base_str + MercuryHistogramPlugin::CONFIG_MAX_FRAMES , max_frames_received_);
     reply.set_param(base_str + MercuryHistogramPlugin::CONFIG_BIN_START, bin_start_);
     reply.set_param(base_str + MercuryHistogramPlugin::CONFIG_BIN_END , bin_end_);
@@ -222,7 +218,6 @@ namespace FrameProcessor
   {
     // Record the plugin's status items
     LOG4CXX_DEBUG(logger_, "Status requested for MercuryHistogramPlugin");
-    status.set_param(get_name() + "/sensors_layout", sensors_layout_str_);
     status.set_param(get_name() + "/max_frames_received", max_frames_received_);
     status.set_param(get_name() + "/bin_start", bin_start_);
     status.set_param(get_name() + "/bin_end", bin_end_);
