@@ -53,7 +53,6 @@ namespace FrameSimulator {
         int total_bytes;
 
         int current_frame_num;
-        int current_subframe_num;
 
     };
 
