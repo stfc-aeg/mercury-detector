@@ -49,75 +49,75 @@ namespace FrameReceiver
 
   class MercuryFrameDecoder : public FrameDecoderUDP
   {
-  public:
+    public:
 
-    MercuryFrameDecoder();
-    ~MercuryFrameDecoder();
+      MercuryFrameDecoder();
+      ~MercuryFrameDecoder();
 
-    int get_version_major();
-    int get_version_minor();
-    int get_version_patch();
-    std::string get_version_short();
-    std::string get_version_long();
+      int get_version_major();
+      int get_version_minor();
+      int get_version_patch();
+      std::string get_version_short();
+      std::string get_version_long();
 
-    void init(LoggerPtr& logger, OdinData::IpcMessage& config_msg);
-    void request_configuration(const std::string param_prefix, OdinData::IpcMessage& config_reply);
+      void init(LoggerPtr& logger, OdinData::IpcMessage& config_msg);
+      void request_configuration(const std::string param_prefix, OdinData::IpcMessage& config_reply);
 
-    const size_t get_frame_buffer_size(void) const;
-    const size_t get_frame_header_size(void) const;
+      const size_t get_frame_buffer_size(void) const;
+      const size_t get_frame_header_size(void) const;
 
-    inline const bool requires_header_peek(void) const
-    {
-      return true;
-    };
+      inline const bool requires_header_peek(void) const
+      {
+        return true;
+      };
 
-    const size_t get_packet_header_size(void) const;
-    void process_packet_header (size_t bytes_received, int port,
-        struct sockaddr_in* from_addr);
+      const size_t get_packet_header_size(void) const;
+      void process_packet_header (size_t bytes_received, int port,
+          struct sockaddr_in* from_addr);
 
-    void* get_next_payload_buffer(void) const;
-    size_t get_next_payload_size(void) const;
-    FrameDecoder::FrameReceiveState process_packet (size_t bytes_received,
-    		int port, struct sockaddr_in* from_addr);
+      void* get_next_payload_buffer(void) const;
+      size_t get_next_payload_size(void) const;
+      FrameDecoder::FrameReceiveState process_packet (size_t bytes_received,
+          int port, struct sockaddr_in* from_addr);
 
-    void monitor_buffers(void);
-    void get_status(const std::string param_prefix, OdinData::IpcMessage& status_msg);
+      void monitor_buffers(void);
+      void get_status(const std::string param_prefix, OdinData::IpcMessage& status_msg);
 
-    void* get_packet_header_buffer(void);
+      void* get_packet_header_buffer(void);
 
-    uint32_t get_frame_counter(void) const;
-    uint32_t get_packet_number(void) const;
-    bool get_start_of_frame_marker(void) const;
-    bool get_end_of_frame_marker(void) const;
+      uint32_t get_frame_counter(void) const;
+      uint32_t get_packet_number(void) const;
+      bool get_start_of_frame_marker(void) const;
+      bool get_end_of_frame_marker(void) const;
 
-  private:
+    private:
 
-    void initialise_frame_header(Mercury::FrameHeader* header_ptr);
-    unsigned int elapsed_ms(struct timespec& start, struct timespec& end);
-    std::size_t parse_fem_port_map(const std::string fem_port_map_str);
-    void parse_sensors_layout_map(const std::string sensors_layout_str);
+      void initialise_frame_header(Mercury::FrameHeader* header_ptr);
+      unsigned int elapsed_ms(struct timespec& start, struct timespec& end);
+      std::size_t parse_fem_port_map(const std::string fem_port_map_str);
+      void parse_sensors_layout_map(const std::string sensors_layout_str);
 
-    std::string fem_port_map_str_;
-    MercuryDecoderFemMap fem_port_map_;
-    boost::shared_ptr<void> current_packet_header_;
-    boost::shared_ptr<void> dropped_frame_buffer_;
-    boost::shared_ptr<void> ignored_packet_buffer_;
-    std::string sensors_layout_str_;
-    MercurySensorLayoutMap sensors_layout_;
+      std::string fem_port_map_str_;
+      MercuryDecoderFemMap fem_port_map_;
+      boost::shared_ptr<void> current_packet_header_;
+      boost::shared_ptr<void> dropped_frame_buffer_;
+      boost::shared_ptr<void> ignored_packet_buffer_;
+      std::string sensors_layout_str_;
+      MercurySensorLayoutMap sensors_layout_;
 
-    int current_frame_seen_;
-    int current_frame_buffer_id_;
-    void* current_frame_buffer_;
-    Mercury::FrameHeader* current_frame_header_;
-    MercuryDecoderFemMapEntry current_packet_fem_map_;
+      int current_frame_seen_;
+      int current_frame_buffer_id_;
+      void* current_frame_buffer_;
+      Mercury::FrameHeader* current_frame_header_;
+      MercuryDecoderFemMapEntry current_packet_fem_map_;
 
-    bool dropping_frame_data_;
-    uint32_t packets_ignored_;
-    uint32_t packets_lost_;
-    uint32_t fem_packets_lost_;
+      bool dropping_frame_data_;
+      uint32_t packets_ignored_;
+      uint32_t packets_lost_;
+      uint32_t fem_packets_lost_;
 
-    static const std::string CONFIG_FEM_PORT_MAP;
-    static const std::string CONFIG_SENSORS_LAYOUT;
+      static const std::string CONFIG_FEM_PORT_MAP;
+      static const std::string CONFIG_SENSORS_LAYOUT;
 
   };
 

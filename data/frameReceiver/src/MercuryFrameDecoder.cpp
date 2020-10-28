@@ -30,7 +30,6 @@ const std::string MercuryFrameDecoder::CONFIG_FEM_PORT_MAP = "fem_port_map";
 //!
 MercuryFrameDecoder::MercuryFrameDecoder() :
     FrameDecoderUDP(),
-		// sensors_config_(Mercury::sensorConfigTwo),
 		current_frame_seen_(Mercury::default_frame_number),
     current_frame_buffer_id_(Mercury::default_frame_number),
     current_frame_buffer_(0),
@@ -99,15 +98,15 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
   // of the map parsing.
   if (config_msg.has_param(CONFIG_FEM_PORT_MAP))
   {
-      fem_port_map_str_ = config_msg.get_param<std::string>(CONFIG_FEM_PORT_MAP);
-      LOG4CXX_DEBUG_LEVEL(1, logger_, "Parsing FEM to port map found in config: "
-                          << fem_port_map_str_);
+    fem_port_map_str_ = config_msg.get_param<std::string>(CONFIG_FEM_PORT_MAP);
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "Parsing FEM to port map found in config: "
+                        << fem_port_map_str_);
   }
   else
   {
-      LOG4CXX_DEBUG_LEVEL(1,logger_, "No FEM to port map found in config, using default: "
-                          << default_fem_port_map);
-      fem_port_map_str_ = default_fem_port_map;
+    LOG4CXX_DEBUG_LEVEL(1,logger_, "No FEM to port map found in config, using default: "
+                        << default_fem_port_map);
+    fem_port_map_str_ = default_fem_port_map;
   }
 
   parse_fem_port_map(fem_port_map_str_);
@@ -224,13 +223,13 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
       hdr_ptr++;
     }
     ss << std::dec;
-    LOG4CXX_INFO(packet_logger_, ss.str ());
+    LOG4CXX_INFO(packet_logger_, ss.str());
   }
 
   // Resolve the FEM index from the port the packet arrived on
-  if (fem_port_map_.count(port)) {
+  if (fem_port_map_.count(port))
+  {
     current_packet_fem_map_ =  fem_port_map_[port];
-
   }
   else
   {
@@ -281,7 +280,6 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
         }
         else
         {
-
           current_frame_buffer_id_ = empty_buffer_queue_.front();
           empty_buffer_queue_.pop();
           frame_buffer_map_[current_frame_seen_] = current_frame_buffer_id_;
@@ -304,7 +302,6 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
         // Initialise frame header
         current_frame_header_ = reinterpret_cast<Mercury::FrameHeader*>(current_frame_buffer_);
         initialise_frame_header(current_frame_header_);
-
       }
       else
       {
@@ -312,11 +309,9 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
         current_frame_buffer_ = buffer_manager_->get_buffer_address(current_frame_buffer_id_);
         current_frame_header_ = reinterpret_cast<Mercury::FrameHeader*>(current_frame_buffer_);
       }
-
     }
 
-    Mercury::FemReceiveState* fem_rx_state =
-        &(current_frame_header_->fem_rx_state);
+    Mercury::FemReceiveState* fem_rx_state = &(current_frame_header_->fem_rx_state);
 
     // If SOF or EOF markers seen in packet header, increment appropriate field in frame header
     if (start_of_frame_marker)
@@ -365,7 +360,7 @@ void MercuryFrameDecoder::initialise_frame_header(Mercury::FrameHeader* header_p
 //!
 //! This method returns a pointer to the next packet payload buffer within the appropriate frame.
 //! The location of this is determined by state information set during the processing of the packet
-//! header. If thepacket is not from a recognised FEM, a pointer to the ignored packet buffer will
+//! header. If the packet is not from a recognised FEM, a pointer to the ignored packet buffer will
 //! be returned instead.
 //!
 //! \return pointer to the next payload buffer
@@ -436,7 +431,6 @@ FrameDecoder::FrameReceiveState MercuryFrameDecoder::process_packet(size_t bytes
   // Only process the packet if it is not being ignored due to an illegal port to FEM index mapping
   if (current_packet_fem_map_.fem_idx_ != ILLEGAL_FEM_IDX)
   {
-
     // Get a convenience pointer to the FEM receive state data in the frame header
     Mercury::FemReceiveState* fem_rx_state = &(current_frame_header_->fem_rx_state);
 
@@ -448,7 +442,6 @@ FrameDecoder::FrameReceiveState MercuryFrameDecoder::process_packet(size_t bytes
     // and hand off the frame for downstream processing.
     if (current_frame_header_->total_packets_received == Mercury::num_fem_frame_packets())
     {
-
       // Check that the appropriate number of SOF and EOF markers (one each per frame) have
       // been seen, otherwise log a warning
 
@@ -509,7 +502,6 @@ void MercuryFrameDecoder::monitor_buffers(void)
 
     if (elapsed_ms(frame_header->frame_start_time, current_time) > frame_timeout_ms_)
     {
-
       const std::size_t num_fem_frame_packets =
           Mercury::num_fem_frame_packets();
 
