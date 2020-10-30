@@ -26,6 +26,8 @@ namespace Mercury {
     static const uint32_t end_of_frame_mask   = 1 << 30;
     static const uint32_t packet_number_mask  = 0x3FFFFFFF;
 
+    static const int32_t default_frame_number = -1;
+
     typedef struct
     {
       uint32_t frame_counter;
@@ -56,6 +58,19 @@ namespace Mercury {
     {
       std::size_t num_fem_frame_packets = (num_primary_packets + num_tail_packets);
       return num_fem_frame_packets;
+    }
+
+    inline const std::size_t frame_size()
+    {
+      std::size_t frame_size = (primary_packet_size * num_primary_packets) +
+          (tail_packet_size * num_tail_packets);
+      return frame_size;
+    }
+
+    inline const std::size_t max_frame_size()
+    {
+      std::size_t max_frame_size = sizeof(FrameHeader) + frame_size();
+      return max_frame_size;
     }
 }
 
