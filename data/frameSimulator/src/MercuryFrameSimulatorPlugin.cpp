@@ -27,7 +27,6 @@ namespace FrameSimulator {
         total_bytes = 0;
 
         current_frame_num = -1;
-        current_subframe_num = -1;
     }
 
     /** Extracts the frames from the pcap data file buffer
@@ -101,7 +100,54 @@ namespace FrameSimulator {
         std::size_t image_bytes = num_pixels * sizeof(uint16_t);
 
         //allocate buffer for packet data including header
-        u_char* packet_data = new u_char[packet_len_ + sizeof(Mercury::PacketHeader)];
+        u_char* head_packet_data = new u_char[Mercury::primary_packet_size + sizeof(Mercury::PacketHeader)];
+        u_char* tail_packet_data = new u_char[Mercury::tail_packet_size + sizeof(Mercury::PacketHeader)];
+        
+        // Loop over specified number of frames to generate packet and frame data
+        for (int frame = 0; frame < num_frames; frame++) {
+            
+            u_char* data_ptr = reinterpret_cast<u_char*>(pixel_data);
+
+            uint32_t packet_number = 0;
+            uint32_t packet_flags = 0;
+
+            // Setup Head Packet Header
+            Mercury::PacketHeader* head_packet_header = 
+                reinterpret_cast<Mercury::PacketHeader*>(head_packet_data);
+            packet_flags =
+                (packet_number & Mercury::packet_number_mask) | Mercury::start_of_frame_mask;
+            
+            head_packet_header->frame_counter = frame;
+            head_packet_header->packet_number_flags = packet_flags;
+
+            //copy data into Head Packet
+            memcpy((head_packet_data + sizeof(Mercury::PacketHeader)), data_ptr, Mercury::primary_packet_size);
+
+            //Pass head packet to Frame Extraction
+            this->extract_frames(head_packet_data, Mercury::primary_packet_size + sizeof(Mercury::PacketHeader));
+
+            //change packet number and data_ptr for the tail header
+            packet_number = 1;
+            data_ptr += Mercury::primary_packet_size;
+            //Now the same for the Tail Packet Header and Data
+            Mercury::PacketHeader* tail_packet_header = 
+                reinterpret_cast<Mercury::PacketHeader*>(tail_packet_data);
+            packet_flags =
+                (packet_number & Mercury::packet_number_mask) | Mercury::end_of_frame_mask;
+            
+            tail_packet_header->frame_counter = frame;
+            tail_packet_header->packet_number_flags = packet_flags;
+
+            //copy data into Head Packet
+            memcpy((tail_packet_data + sizeof(Mercury::PacketHeader)), data_ptr, Mercury::tail_packet_size);
+
+            //Pass head packet to Frame Extraction
+            this->extract_frames(tail_packet_data, Mercury::tail_packet_size + sizeof(Mercury::PacketHeader));
+        }
+
+        delete [] head_packet_data;
+        delete [] tail_packet_data;
+        delete [] pixel_data;
 
     }
 
