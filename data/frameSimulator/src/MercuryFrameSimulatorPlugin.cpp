@@ -14,7 +14,7 @@
 namespace FrameSimulator {
 
 
-    /** Construct an MercuryFrameSimulatorPlugin
+    /** Construct a MercuryFrameSimulatorPlugin
     * setup an instance of the logger
     * initialises data and frame counts
     */
