@@ -56,12 +56,12 @@ namespace FrameProcessor
     return ODIN_DATA_VERSION_STR;
   }
 
-  /**
-   * Reset process plugin statistics
-   */
-  bool MercuryProcessorPlugin::reset_statistics(void)
-  {
-    return true;
-  }
+  // /**
+  //  * Reset process plugin statistics
+  //  */
+  // bool MercuryProcessorPlugin::reset_statistics(void)
+  // {
+  //   return true;
+  // }
 
 }

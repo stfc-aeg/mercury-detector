@@ -42,13 +42,13 @@ namespace FrameProcessor
       std::string get_version_short();
       std::string get_version_long();
 
-      virtual void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
-      virtual void requestConfiguration(OdinData::IpcMessage& reply);
-      virtual void status(OdinData::IpcMessage& status);
-      virtual bool reset_statistics();
+      virtual void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply) = 0;
+      virtual void requestConfiguration(OdinData::IpcMessage& reply) = 0;
+      virtual void status(OdinData::IpcMessage& status) = 0;
+      virtual bool reset_statistics() = 0;
 
     protected:
-      virtual void process_frame(boost::shared_ptr<Frame> frame);
+      virtual void process_frame(boost::shared_ptr<Frame> frame) = 0;
 
       /** Pointer to logger **/
       LoggerPtr logger_;
