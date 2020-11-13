@@ -6,8 +6,8 @@
         "dimensions": "3",
         "width": "80",
         "height": "80",
-        "dataset": "data",
-        "type": "uint16",
+        "dataset": "processed_frames",
+        "type": "float",
         "data": {
         }
     }

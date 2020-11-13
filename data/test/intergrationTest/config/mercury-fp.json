@@ -48,17 +48,14 @@
 
     {
         "hdf": {
-            "master": "data",
+            "dataset": "processed_frames"
+        }
+    },
+    
+    {
+        "hdf": {
             "dataset": {
-                "data" : 
-                {
-                    "cmd": "create",
-                    "datatype": "float",
-                    "dims": [80, 80],
-                    "chunks": [1, 80, 80],
-                    "compression": "none"
-                },
-                "raw_frames" : 
+                "processed_frames" : 
                 {
                     "cmd": "create",
                     "datatype": "float",
@@ -68,10 +65,10 @@
                 }
             },
             "file": {
-                "path": ""
+                "path":""
             },
-            "acquisition_id":"test_1",
             "frames": 10,
+            "acquisition_id":"test_1",
             "write": true
         }
     }
