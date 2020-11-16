@@ -42,7 +42,7 @@
     },
     {
         "reorder": {
-            "raw_data": false
+            "raw_data": true
         }
     },
 
@@ -51,12 +51,24 @@
             "dataset": "processed_frames"
         }
     },
-    
+
+    {
+        "hdf": {
+            "dataset": "raw_frames"
+        }
+    },
+
     {
         "hdf": {
             "dataset": {
-                "processed_frames" : 
-                {
+                "processed_frames" : {
+                    "cmd": "create",
+                    "datatype": "float",
+                    "dims": [80, 80],
+                    "chunks": [1, 80, 80],
+                    "compression": "none"
+                },
+                "raw_frames" : {
                     "cmd": "create",
                     "datatype": "float",
                     "dims": [80, 80],

@@ -4,19 +4,19 @@
             "process": true,
             "command": "${ODIN_PREFIX}\/bin\/frameReceiver",
             "pos-args": "",
-            "sleep": "1"
+            "sleep": 10
         },
         "processor": {
             "process": true,
             "command": "${ODIN_PREFIX}\/bin\/frameProcessor",
             "pos-args": "",
-            "sleep": "1"
+            "sleep": 10
         },
         "simulator": {
             "process": false,
             "command": "${ODIN_PREFIX}\/bin\/frameSimulator",
             "pos-args": "Mercury",
-            "sleep": 120
+            "sleep": 1
         },
         "test": {
             "process": false,
