@@ -41,6 +41,7 @@ install:
 - cd ..
 script:
 - ls -l $INSTALL_PREFIX
+- odinDataTest --json test_config/mercury.json
 after_success:
 - coveralls
 notifications:
