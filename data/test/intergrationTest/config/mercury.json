@@ -31,6 +31,7 @@
         "frames": "10",
         "dest-ip": "127.0.0.1",
         "ports": "61649",
+        "pattern-path": "${INSTALL_PREFIX}\/test_config\/img_gradient.json",
         "interval": "1"
     },
     "receiver":
