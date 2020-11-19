@@ -31,7 +31,7 @@
         "frames": "10",
         "dest-ip": "127.0.0.1",
         "ports": "61649",
-        "pattern-path": "${INSTALL_PREFIX}\/test_config\/patterns\/CSD_gradient.json",
+        "pattern-path": "${INSTALL_PREFIX}\/test_config\/patterns\/CSD_average.json",
         "interval": "1"
     },
     "receiver":
@@ -41,7 +41,7 @@
     },
     "processor":
     {
-        "json_file": "${INSTALL_PREFIX}\/test_config\/mercury-fp.json"
+        "json_file": "${INSTALL_PREFIX}\/test_config\/mercury-fp-average.json"
     },
     "test":
     {

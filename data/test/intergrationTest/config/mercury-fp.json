@@ -45,7 +45,6 @@
             "raw_data": true
         }
     },
-
     {
         "hdf": {
             "dataset": "processed_frames"

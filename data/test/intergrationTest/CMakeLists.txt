@@ -1,5 +1,6 @@
 install(FILES config/mercury.json DESTINATION test_config)
 install(FILES config/mercury-fp.json DESTINATION test_config)
+install(FILES config/mercury-fp-average.json DESTINATION test_config)
 install(FILES config/mercury-fr.json DESTINATION test_config)
 install(FILES config/test.json DESTINATION test_config)
-install(FILES config/img_gradient.json DESTINATION test_config)
+install(DIRECTORY config/patterns DESTINATION test_config)
