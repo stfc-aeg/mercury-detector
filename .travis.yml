@@ -43,7 +43,6 @@ install:
 - pip install h5py
 script:
 - ls -l $INSTALL_PREFIX
-- ${ODIN_PREFIX}/bin/odinDataTest --json=${INSTALL_PREFIX}/test_config/mercury.json
 - ${ODIN_PREFIX}/bin/odinDataTest --json=${INSTALL_PREFIX}/test_config/mercury-average.json
 - python ${INSTALL_PREFIX}/test_config/dataset_check.py --filename test_2_000001.h5
 after_success:
