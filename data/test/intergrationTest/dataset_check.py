@@ -16,15 +16,19 @@ class DatasetChecker:
             print("Keys: {}".format(data_file.keys()))
 
             self.data = np.array(data_file[args.dataset_name])
+            self.raw = np.array(data_file["raw_frames"])
             # print(self.data)
 
     def check_averages(self):
         # this is very hard coded to the specific pattern used, work out some way to generalise it
         frame = self.data[0]
+        raw_frame = self.raw[0]
         assert_equal(frame[3, 3], 11)
         assert_equal(frame[35, 30], 0)
         assert_equal(frame[35, 31], 44)
         assert_equal(frame[3, 31], 22)
+        asser_equal(raw_frame[35, 31], 11)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
