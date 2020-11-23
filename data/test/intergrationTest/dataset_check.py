@@ -27,7 +27,7 @@ class DatasetChecker:
         assert_equal(frame[35, 30], 0)
         assert_equal(frame[35, 31], 44)
         assert_equal(frame[3, 31], 22)
-        asser_equal(raw_frame[35, 31], 11)
+        assert_equal(raw_frame[35, 31], 11)
 
 
 if __name__ == "__main__":
