@@ -26,12 +26,10 @@ matrix:
     - bash .travis-install-hdf5.sh
     - bash .travis-install-odin.sh
     cache:
-      - pip
       directories:
       - "$HOME/hdf5-1.10.1"
       - "$HOME/c-blosc-1.14.2"
       - "$HOME/librdkafka-1.0.0"
-python: 3.7
 install:
 - git fetch --depth=500
 - mkdir -p build
