@@ -20,7 +20,7 @@ class DatasetChecker:
             # print(self.data)
 
     def check_averages(self):
-        # this is very hard coded to the specific pattern used, work out some way to generalise it
+
         processed_frame = self.data[0]
         raw_frame = self.raw[0]
         # go through raw_frame
@@ -30,7 +30,7 @@ class DatasetChecker:
         # suppose we could just generate what we think the processed frame should be then compare
 
         # pad with a single 0 on each axis, so that we can still look "around" every pixel
-        expected_frame = np.pad(raw_frame, 1)  # expected frame is now shaped (82, 82)
+        expected_frame = np.pad(raw_frame, 1, mode='constant')  # expected frame is now shaped (82, 82)
         cols = expected_frame.shape[1]
         rows = expected_frame.shape[0]
         for i in range(rows):
