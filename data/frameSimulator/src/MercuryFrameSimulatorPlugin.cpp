@@ -128,14 +128,6 @@ namespace FrameSimulator {
     void MercuryFrameSimulatorPlugin::create_frames(const int &num_frames) {
         LOG4CXX_DEBUG(logger_, "Creating Frames");
 
-        // Build array of pixel data used for each frame NOW COVERED IN READING JSON
-        // const int num_pixels_ = Mercury::pixel_columns_per_sensor * Mercury::pixel_rows_per_sensor;
-        // pixel_data_ = new uint16_t[num_pixels];
-
-        // for(int pixel = 0; pixel < num_pixels; pixel++) {
-        //     pixel_data[pixel] = static_cast<uint16_t>(pixel & 0xFFFF);
-        // }
-
         //calculate number of pixel image bytes in frame
         std::size_t image_bytes = num_pixels_ * sizeof(uint16_t);
 
