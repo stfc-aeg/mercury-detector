@@ -1,1 +1,1 @@
-add_subdirectory(intergrationTest)
+add_subdirectory(integrationTest)
