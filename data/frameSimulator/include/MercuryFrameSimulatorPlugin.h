@@ -25,7 +25,7 @@ namespace FrameSimulator {
     /** MercuryFrameSimulatorPlugin
      *
      *  'extract_frames' is called on setup: this takes the content of the pcap file and reproduces the
-     *  excalibur frames to store
+     *  Mercury frames to store
      *  'replay_frames' is called by simulate: this then replays the stored frames
      *  'create_frames' is called on setup if no pcap file is specified. It creates frames based on a
      *  frame pattern config provided

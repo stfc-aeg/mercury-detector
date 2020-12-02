@@ -19,7 +19,7 @@ class DatasetChecker:
             self.raw = np.array(data_file["raw_frames"])
             # print(self.data)
 
-    def check_averages(self):
+    def check_addition_averages(self):
 
         processed_frame = self.data[0]
         raw_frame = self.raw[0]
@@ -69,4 +69,4 @@ if __name__ == "__main__":
 
     checker = DatasetChecker(args)
 
-    checker.check_averages()
+    checker.check_addition_averages()
