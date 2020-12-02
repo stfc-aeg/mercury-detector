@@ -22,6 +22,8 @@ using namespace log4cxx::helpers;
 #include <boost/algorithm/string.hpp>
 #include <map>
 
+#include "version.h"
+
 namespace FrameProcessor
 {
   /** Abstract plugin class, providing common components to all Mercury plugins.
@@ -33,22 +35,25 @@ namespace FrameProcessor
   class MercuryProcessorPlugin: public FrameProcessorPlugin
   {
     public:
-      MercuryProcessorPlugin();
-      virtual ~MercuryProcessorPlugin();
+      MercuryProcessorPlugin():
+        image_width_(Mercury::pixel_columns_per_sensor),
+        image_height_(Mercury::pixel_rows_per_sensor),
+        image_pixels_(image_width_ * image_height_) {};
+      virtual ~MercuryProcessorPlugin(){};
 
-      int get_version_major();
-      int get_version_minor();
-      int get_version_patch();
-      std::string get_version_short();
-      std::string get_version_long();
+      int get_version_major() {return ODIN_DATA_VERSION_MAJOR;};
+      int get_version_minor() {return ODIN_DATA_VERSION_MINOR;};
+      int get_version_patch() {return ODIN_DATA_VERSION_PATCH;};
+      std::string get_version_short() {return ODIN_DATA_VERSION_STR_SHORT;};
+      std::string get_version_long() {return ODIN_DATA_VERSION_STR;};
 
-      virtual void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
-      virtual void requestConfiguration(OdinData::IpcMessage& reply);
-      virtual void status(OdinData::IpcMessage& status);
-      virtual bool reset_statistics();
+      virtual void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply) = 0;
+      virtual void requestConfiguration(OdinData::IpcMessage& reply) = 0;
+      virtual void status(OdinData::IpcMessage& status) = 0;
+      virtual bool reset_statistics() = 0;
 
     protected:
-      virtual void process_frame(boost::shared_ptr<Frame> frame);
+      virtual void process_frame(boost::shared_ptr<Frame> frame) = 0;
 
       /** Pointer to logger **/
       LoggerPtr logger_;

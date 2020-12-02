@@ -1,0 +1,51 @@
+{
+    "Main": {
+        "receiver": {
+            "process": true,
+            "command": "${ODIN_PREFIX}\/bin\/frameReceiver",
+            "pos-args": "",
+            "sleep": 10
+        },
+        "processor": {
+            "process": true,
+            "command": "${ODIN_PREFIX}\/bin\/frameProcessor",
+            "pos-args": "",
+            "sleep": 10
+        },
+        "simulator": {
+            "process": false,
+            "command": "${ODIN_PREFIX}\/bin\/frameSimulator",
+            "pos-args": "Mercury",
+            "sleep": 1
+        },
+        "test": {
+            "process": false,
+            "command": "${ODIN_PREFIX}\/bin\/frameTests",
+            "pos-args": "",
+            "sleep": 1
+        }
+    },
+    "simulator":
+    {
+        "lib-path": "${INSTALL_PREFIX}\/lib",
+        "frames": "10",
+        "dest-ip": "127.0.0.1",
+        "ports": "61649",
+        "pattern-path": "${INSTALL_PREFIX}\/test_config\/patterns\/CSD_gradient.json",
+        "interval": "1"
+    },
+    "receiver":
+    {
+        "json_file": "${INSTALL_PREFIX}\/test_config\/mercury-fr.json",
+        "m": "500000000"
+    },
+    "processor":
+    {
+        "json_file": "${INSTALL_PREFIX}\/test_config\/mercury-fp.json"
+    },
+    "test":
+    {
+        "json": "${INSTALL_PREFIX}\/test_config\/test.json",
+        "log_level": "ALL"
+    }
+}

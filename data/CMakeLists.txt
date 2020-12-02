@@ -21,6 +21,9 @@ set(FRAMEPROCESSOR_DIR ${MERCURY_SOURCE_DIR}/frameProcessor)
 # Set the frameSimulator directory
 set(FRAMESIMULATOR_DIR ${MERCURY_SOURCE_DIR}/frameSimulator)
 
+# set the integrationTest directory
+set(TEST_DIR ${MERCURY_SOURCE_DIR}/test)
+
 # Appends the cmake/modules path inside the MAKE_MODULE_PATH variable which stores the
 # directories of additional CMake modules (ie. MacroOutOfSourceBuild.cmake):
 set(CMAKE_MODULE_PATH ${MERCURY_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -68,6 +71,9 @@ add_subdirectory(${FRAMEPROCESSOR_DIR})
 
 # Add the frameSimulator subdirectory
 add_subdirectory(${FRAMESIMULATOR_DIR})
+
+# Add the integrationTest subdirectory
+add_subdirectory(${TEST_DIR})
 
 # Add the doc subdirectory
 #add_subdirectory(doc)

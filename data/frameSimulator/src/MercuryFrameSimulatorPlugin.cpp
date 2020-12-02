@@ -1,6 +1,7 @@
 #include <string>
 
 #include "MercuryFrameSimulatorPlugin.h"
+#include "FrameSimulatorOptionsMercury.h"
 #include "MercuryDefinitions.h"
 
 #include <cstdlib>
@@ -27,6 +28,46 @@ namespace FrameSimulator {
         total_bytes = 0;
 
         current_frame_num = -1;
+    }
+
+    void MercuryFrameSimulatorPlugin::populate_options(po::options_description& config) {
+        
+        FrameSimulatorPluginUDP::populate_options(config);
+
+        opt_image_pattern_json.add_option_to(config);
+    }
+
+    bool MercuryFrameSimulatorPlugin::setup(const po::variables_map& vm) {
+        LOG4CXX_DEBUG(logger_, "Setting Up Mercury Frame Simulator Plugin");
+
+        //Extract Optional arguments for this plugin
+        boost::optional<std::string> image_pattern_json;
+
+        opt_image_pattern_json.get_val(vm, image_pattern_json);
+        if(image_pattern_json) {
+            image_pattern_json_path_ = image_pattern_json.get();
+        }
+
+        LOG4CXX_DEBUG(logger_, "Using Image Pattern from file: " << image_pattern_json_path_);
+
+        //actually read out the data from the image file
+        boost::property_tree::ptree img_tree;
+        boost::property_tree::json_parser::read_json(image_pattern_json_path_, img_tree);
+        
+        num_pixels_ = Mercury::pixel_columns_per_sensor * Mercury::pixel_rows_per_sensor;
+        pixel_data_ = new uint16_t[num_pixels_];
+        int x = 0;
+        BOOST_FOREACH(boost::property_tree::ptree::value_type &row, img_tree.get_child("img"))
+        {
+
+            BOOST_FOREACH(boost::property_tree::ptree::value_type &cell, row.second)
+            {
+                pixel_data_[x] = cell.second.get_value<uint16_t>();
+                x++;
+            }
+        }
+
+        return FrameSimulatorPluginUDP::setup(vm);
     }
 
     /** Extracts the frames from the pcap data file buffer
@@ -78,7 +119,6 @@ namespace FrameSimulator {
 
         total_packets++;
 
-
     }
 
     /** Creates a number of frames
@@ -88,16 +128,8 @@ namespace FrameSimulator {
     void MercuryFrameSimulatorPlugin::create_frames(const int &num_frames) {
         LOG4CXX_DEBUG(logger_, "Creating Frames");
 
-        // Build array of pixel data used for each frame
-        const int num_pixels = Mercury::pixel_columns_per_sensor * Mercury::pixel_rows_per_sensor;
-        uint16_t* pixel_data = new uint16_t[num_pixels];
-
-        for(int pixel = 0; pixel < num_pixels; pixel++) {
-            pixel_data[pixel] = static_cast<uint16_t>(pixel & 0xFFFF);
-        }
-
         //calculate number of pixel image bytes in frame
-        std::size_t image_bytes = num_pixels * sizeof(uint16_t);
+        std::size_t image_bytes = num_pixels_ * sizeof(uint16_t);
 
         //allocate buffer for packet data including header
         u_char* head_packet_data = new u_char[Mercury::primary_packet_size + sizeof(Mercury::PacketHeader)];
@@ -106,7 +138,7 @@ namespace FrameSimulator {
         // Loop over specified number of frames to generate packet and frame data
         for (int frame = 0; frame < num_frames; frame++) {
             
-            u_char* data_ptr = reinterpret_cast<u_char*>(pixel_data);
+            u_char* data_ptr = reinterpret_cast<u_char*>(pixel_data_);
 
             uint32_t packet_number = 0;
             uint32_t packet_flags = 0;
@@ -147,7 +179,7 @@ namespace FrameSimulator {
 
         delete [] head_packet_data;
         delete [] tail_packet_data;
-        delete [] pixel_data;
+        delete [] pixel_data_;
 
     }
 

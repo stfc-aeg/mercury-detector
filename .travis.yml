@@ -39,8 +39,13 @@ install:
   -DODINDATA_ROOT_DIR=$ODIN_PREFIX ../data;
 - cmake --build . --target install;
 - cd ..
+- pip install numpy
+- pip install h5py
+- pip install nose
 script:
 - ls -l $INSTALL_PREFIX
+- ${ODIN_PREFIX}/bin/odinDataTest --json=${INSTALL_PREFIX}/test_config/mercury-average.json
+- python ${INSTALL_PREFIX}/test_config/dataset_check.py --filename test_2_000001.h5
 after_success:
 - coveralls
 notifications:
