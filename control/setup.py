@@ -10,7 +10,8 @@ install_requires = [
 
 extras_require = {
     'test': [
-        'pytest', 'pytest-cov', 'requests', 'tox'
+        'pytest', 'pytest-cov', 'requests', 'tox',
+        'flake8', 'flake8-docstrings', 'click'
     ]
 }
 
@@ -28,7 +29,10 @@ setup(
     author='Tim Nicholls',
     author_email='tim.nicholls@stfc.ac.uk',
     packages=find_packages('src'),
-    package_dir={'':'src'},
+    package_dir={'': 'src'},
     install_requires=install_requires,
     extras_require=extras_require,
+    entry_points={
+        'console_scripts': ['emulator_shell = mercury.asic_emulator.shell:main'],
+    }
 )
