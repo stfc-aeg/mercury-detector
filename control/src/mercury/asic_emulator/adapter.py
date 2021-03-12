@@ -73,7 +73,8 @@ class MercuryAsicEmulatorAdapter(AsyncApiAdapter):
         """
         try:
             data = json_decode(request.body)
-            response = await self.asic_emulator.set(path, data)
+            await self.asic_emulator.set(path, data)
+            response = await self.asic_emulator.get(path)
             status_code = 200
         except MercuryAsicEmulatorError as e:
             response = {'error': str(e)}
