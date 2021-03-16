@@ -100,3 +100,14 @@ class TestRegisterModel():
         transaction = 0
         test_register_model.process_transaction(transaction)
         assert "Error processing transaction" in caplog.text
+
+    def test_config1_callback_page_select(self, test_register_model, caplog):
+
+        test_register_model.page_select = 0
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG):
+            page_select = 1
+            transaction = [0x0, page_select]
+            test_register_model.process_transaction(transaction)
+            assert test_register_model.page_select == 1
+            assert f"Register page select is now {page_select}" in caplog.text
