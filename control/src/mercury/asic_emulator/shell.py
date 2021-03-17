@@ -174,10 +174,9 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
 
 
 @click.command()
-@click.option('--addr', default='127.0.0.1', help='Endpoint address')
-@click.option('--port', default=5555, help='Endpoint port')
+@click.option('--endpoint', default='tcp://127.0.0.1:5555', help='Emulator endpoint URI')
 @click.option("--test", is_flag=True, help='Run an automated set of test transactions')
-def main(addr, port, test):
+def main(endpoint, test):
     """Run the the ASIC emulator shell.
 
     This function implements the main entry point for the emulator shell and is defined
@@ -193,7 +192,7 @@ def main(addr, port, test):
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
 
     # Create a MERCURY ASIC client at the specified endpoint address and port
-    client = MercuryAsicClient(addr, port)
+    client = MercuryAsicClient(endpoint)
 
     # If in test mode, start the client test loop, otherwise enter the interactive shell
     if test:

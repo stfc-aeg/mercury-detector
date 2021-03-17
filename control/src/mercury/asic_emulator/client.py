@@ -28,14 +28,12 @@ class MercuryAsicClient():
     transaction as a basic test, or used by other code to read/write communication as necessary.
     """
 
-    def __init__(self, addr='127.0.0.1', port=5555):
+    def __init__(self, endpoint='tcp://127.0.0.1:5555'):
         """Initialise the client object.
 
-        :param addr: string IP address or hostname of the emulator server (default 127.0.0.1)
-        :param port: integer port of the emulator server
+        :param endpoint: string endpoint URI of the emulator server (default tcp://127.0.0.1:5555)
         """
-        # Construct the endpoint from the address and port
-        self.endpoint = f'tcp://{addr}:{port}'
+        self.endpoint = endpoint
         logging.info(f"Connecting client to emulator at endpoint {self.endpoint}")
 
         # Create a ZeroMQ async context and socket
