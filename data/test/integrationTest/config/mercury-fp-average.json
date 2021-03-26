@@ -11,7 +11,7 @@
             "load": {
                 "index":"hdf",
                 "name":"FileWriterPlugin",
-                "library":"${ODIN_PREFIX}/lib/libHdf5Plugin.so"
+                "library":"${INSTALL_PREFIX}/lib/libHdf5Plugin.so"
             }
         }
     },
@@ -149,9 +149,6 @@
                     "chunks": [1, 800],
                     "compression": "none"
                 }
-            },
-            "file": {
-                "path":""
             },
             "frames": 10,
             "acquisition_id":"test_2",
