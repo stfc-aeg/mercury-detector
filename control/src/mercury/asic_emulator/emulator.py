@@ -19,7 +19,7 @@ class MercuryAsicEmulatorError(Exception):
     pass
 
 
-class MercuryAsicEmulator():
+class MercuryAsicEmulator:
     """
     MERCURY ASIC emulator class.
 
@@ -35,8 +35,8 @@ class MercuryAsicEmulator():
         :param options: dictionary of emulator configuration options
         """
         # Extract the required configuration settings from the options dict
-        endpoint = options.get('endpoint', '127.0.0.1:5555')
-        log_register_writes = options.get('log_register_writes', False)
+        endpoint = options.get("endpoint", "127.0.0.1:5555")
+        log_register_writes = options.get("log_register_writes", False)
 
         # Create the ASIC register model
         self.register_model = MercuryAsicRegisterModel(self, log_register_writes)
@@ -45,13 +45,15 @@ class MercuryAsicEmulator():
         self.server = EmulatorServer(endpoint, ioloop, self.register_model)
 
         # Define the parameter tree containing register state and client status
-        self.parameters = ParameterTree({
-            'status': {
-                'connected': (self.server.connected, None),
-                'clients': (self.server.clients, None)
-            },
-            'registers': (self.register_model.registers, None),
-        })
+        self.parameters = ParameterTree(
+            {
+                "status": {
+                    "connected": (self.server.connected, None),
+                    "clients": (self.server.clients, None),
+                },
+                "registers": (self.register_model.registers, None),
+            }
+        )
 
     async def get(self, path):
         """Get values from the emulator paramter tree.

@@ -9,7 +9,8 @@ Tim Nicholls, STFC Detector Systems Software Group
 from .registers import RegisterMap
 from mercury.asic_emulator.client import MercuryAsicClient
 
-class MercuryAsicDevice():
+
+class MercuryAsicDevice:
     """
     MERCURY ASIC device control interface.
 
@@ -29,7 +30,7 @@ class MercuryAsicDevice():
 
     async def register_read(self, addr, length):
 
-        transaction = [addr] + [0]*length
+        transaction = [addr] + [0] * length
         response = await self.device.read(transaction)
         return response
 

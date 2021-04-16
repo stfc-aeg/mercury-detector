@@ -19,7 +19,7 @@ import msgpack
 from .register_model import MercuryAsicRegisterModel
 
 
-class MercuryAsicClient():
+class MercuryAsicClient:
     """
     Mercury ASIC client class.
 
@@ -28,7 +28,7 @@ class MercuryAsicClient():
     transaction as a basic test, or used by other code to read/write communication as necessary.
     """
 
-    def __init__(self, endpoint='tcp://127.0.0.1:5555'):
+    def __init__(self, endpoint="tcp://127.0.0.1:5555"):
         """Initialise the client object.
 
         :param endpoint: string endpoint URI of the emulator server (default tcp://127.0.0.1:5555)
@@ -42,8 +42,8 @@ class MercuryAsicClient():
 
         # As this is a dealer socket, define a randomised client ID and set on the socket
         identity = "{:04x}-{:04x}".format(
-                    random.randrange(0x10000), random.randrange(0x10000)
-                )
+            random.randrange(0x10000), random.randrange(0x10000)
+        )
         self.socket.setsockopt(zmq.IDENTITY, cast_bytes(identity))
 
         # Connect the socket to the server
@@ -61,7 +61,9 @@ class MercuryAsicClient():
         :param transaction: bytearray of the appropriate length (read length + 1 address byte)
         :return bytearray response from the emulator
         """
-        logging.debug(f"Executing read transaction with {len(transaction)} args: {transaction}")
+        logging.debug(
+            f"Executing read transaction with {len(transaction)} args: {transaction}"
+        )
 
         # Set the read/write bit in the address byte
         transaction[0] |= MercuryAsicRegisterModel.REGISTER_RW_MASK
@@ -81,7 +83,9 @@ class MercuryAsicClient():
         :param transaction: bytearray of the appropriate length (1 address byte + register values)
         :return bytearray response from the emulator
         """
-        logging.debug(f"Executing write transaction with {len(transaction)} args: {transaction}")
+        logging.debug(
+            f"Executing write transaction with {len(transaction)} args: {transaction}"
+        )
 
         # Ensure the read/write bit is cleared in the address byte
         transaction[0] &= MercuryAsicRegisterModel.REGISTER_ADDR_MASK
@@ -135,7 +139,12 @@ class MercuryAsicClient():
             """Inner async function for the client test loop."""
             # Define a set of transactions to loop over
             transactions = [
-                [0x80, 0], [0x0, 1], [0x80, 0], [0x0, 3], [0x7F, 1, 2, 3, 4, 5], [3]
+                [0x80, 0],
+                [0x0, 1],
+                [0x80, 0],
+                [0x0, 3],
+                [0x7F, 1, 2, 3, 4, 5],
+                [3],
             ]
 
             # Loop forever, sending and recieving transactions

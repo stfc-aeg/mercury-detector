@@ -13,7 +13,7 @@ import logging
 from mercury.asic.registers import RegisterMap
 
 
-class MercuryAsicRegisterModel():
+class MercuryAsicRegisterModel:
     """
     MERCURY ASIC Register model class.
 
@@ -37,7 +37,7 @@ class MercuryAsicRegisterModel():
         :param width: width of bitfield in bytes
         :return: a right-shifted value from the appropriate bitfield
         """
-        return (register >> index) & ((2**width) - 1)
+        return (register >> index) & ((2 ** width) - 1)
 
     def __init__(self, emulator, log_register_writes):
         """Initialise the register model.
@@ -69,9 +69,7 @@ class MercuryAsicRegisterModel():
         self.page_select = 0
 
         # Define register-specific callbacks that run when a register is modified
-        self._callbacks = {
-            RegisterMap.CONFIG1: self._do_config1
-        }
+        self._callbacks = {RegisterMap.CONFIG1: self._do_config1}
 
         # Execute all the callbacks to initialise state of model
         for callback in self._callbacks.values():
@@ -147,7 +145,9 @@ class MercuryAsicRegisterModel():
         :param transaction: transaction to check
         :return: boolean, true if this is a write transaction.
         """
-        return (transaction[0] & self.REGISTER_RW_MASK) == self.REGISTER_WRITE_TRANSACTION
+        return (
+            transaction[0] & self.REGISTER_RW_MASK
+        ) == self.REGISTER_WRITE_TRANSACTION
 
     def calc_register_addr(self, addr):
         """Calculate the true register address based on the current page select.

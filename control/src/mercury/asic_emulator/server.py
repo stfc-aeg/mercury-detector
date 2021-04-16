@@ -15,7 +15,7 @@ import zmq.utils.monitor
 import msgpack
 
 
-class EmulatorServer():
+class EmulatorServer:
     """
     MERCURY ASIC emulator server class.
 
@@ -70,27 +70,33 @@ class EmulatorServer():
             recvd_msg = await self.socket.recv_multipart()
 
             # Extract the router-dealer client ID from the message
-            client_id = recvd_msg[0].decode('utf-8')
+            client_id = recvd_msg[0].decode("utf-8")
 
             try:
 
                 # Decode the transaction
                 transaction = msgpack.unpackb(recvd_msg[1])
-                logging.info(f"Received transaction {transaction} from client ID {client_id}")
+                logging.info(
+                    f"Received transaction {transaction} from client ID {client_id}"
+                )
 
                 # Convert transaction to a bytearray in analogy to an SPI transactio and pass
                 # to the emulator register model for processing
                 transaction = bytearray(transaction)
                 response = self.register_model.process_transaction(transaction)
 
-            except (msgpack.UnpackException, msgpack.UnpackValueError, ValueError) as err:
+            except (
+                msgpack.UnpackException,
+                msgpack.UnpackValueError,
+                ValueError,
+            ) as err:
                 # Handle transaction decoding errors - in the case of an error, return the
                 # transaction unprocessed.
                 logging.error("Failed to unpack client message: %s", err)
                 response = transaction
 
             # Encode the response to the client and transmit on the socket
-            resp_msg = [client_id.encode('utf-8'), msgpack.packb(response)]
+            resp_msg = [client_id.encode("utf-8"), msgpack.packb(response)]
             await self.socket.send_multipart(resp_msg)
 
     async def _run_monitor(self):
@@ -106,12 +112,14 @@ class EmulatorServer():
 
                 # Handle the event depending on type, adding or removing the socket from
                 # the currently connected client set accordingly
-                if event['event'] == zmq.EVENT_ACCEPTED:
-                    logging.info(f"New emulator client connection on socket {event['value']}")
-                    self._clients.add(event['value'])
-                if event['event'] == zmq.EVENT_DISCONNECTED:
+                if event["event"] == zmq.EVENT_ACCEPTED:
+                    logging.info(
+                        f"New emulator client connection on socket {event['value']}"
+                    )
+                    self._clients.add(event["value"])
+                if event["event"] == zmq.EVENT_DISCONNECTED:
                     logging.info(f"Client connection on socket {event['value']} closed")
-                    self._clients.discard(event['value'])
+                    self._clients.discard(event["value"])
 
             except Exception as err:
                 logging.error("Error while handling socket monitoring event: %s", err)

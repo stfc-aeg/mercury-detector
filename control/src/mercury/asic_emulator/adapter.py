@@ -34,9 +34,9 @@ class MercuryAsicEmulatorAdapter(AsyncApiAdapter):
         # Create ASIC emulator instance, passing in options
         self.asic_emulator = MercuryAsicEmulator(self.options)
 
-        logging.debug('MercuryAsicEmulatorAdapter loaded')
+        logging.debug("MercuryAsicEmulatorAdapter loaded")
 
-    @response_types('application/json', default='application/json')
+    @response_types("application/json", default="application/json")
     async def get(self, path, request):
         """Handle an HTTP GET request.
 
@@ -51,16 +51,16 @@ class MercuryAsicEmulatorAdapter(AsyncApiAdapter):
             response = await self.asic_emulator.get(path)
             status_code = 200
         except MercuryAsicEmulatorError as e:
-            response = {'error': str(e)}
+            response = {"error": str(e)}
             status_code = 400
 
-        content_type = 'application/json'
+        content_type = "application/json"
         return ApiAdapterResponse(
             response, content_type=content_type, status_code=status_code
         )
 
-    @request_types('application/json', 'application/vnd.odin-native')
-    @response_types('application/json', default='application/json')
+    @request_types("application/json", "application/vnd.odin-native")
+    @response_types("application/json", default="application/json")
     async def put(self, path, request):
         """Handle an HTTP PUT request.
 
@@ -77,10 +77,10 @@ class MercuryAsicEmulatorAdapter(AsyncApiAdapter):
             response = await self.asic_emulator.get(path)
             status_code = 200
         except MercuryAsicEmulatorError as e:
-            response = {'error': str(e)}
+            response = {"error": str(e)}
             status_code = 400
         except (TypeError, ValueError) as e:
-            response = {'error': 'Failed to decode PUT request body: {}'.format(str(e))}
+            response = {"error": "Failed to decode PUT request body: {}".format(str(e))}
             status_code = 400
 
         return ApiAdapterResponse(response, status_code=status_code)

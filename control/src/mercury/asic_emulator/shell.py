@@ -27,7 +27,7 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
     """
 
     # Set the shell command prompt
-    prompt = '> '
+    prompt = "> "
 
     def __init__(self, client):
         """Initialise the command shell.
@@ -44,10 +44,10 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
         # `help_` method that prints a cleaned-up docstring. This avoids the default behaviour
         # where commands get a help method that shows an indented docstring.
         for item in dir(self):
-            if item.startswith('do_') and callable(getattr(self, item)):
-                cmd_name = item[len('do_'):]
-                if cmd_name != 'help':
-                    help_name = 'help_' + cmd_name
+            if item.startswith("do_") and callable(getattr(self, item)):
+                cmd_name = item[len("do_") :]
+                if cmd_name != "help":
+                    help_name = "help_" + cmd_name
                     doc_str = inspect.cleandoc(getattr(self, item).__doc__)
                     setattr(self, help_name, lambda doc_str=doc_str: print(doc_str))
 
@@ -64,7 +64,7 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
         :param **kwargs: keyword arguments
         """
         # Extract the default argument type if specified, otherwise fall back to string
-        def_type = kwargs.get('def_type', str)
+        def_type = kwargs.get("def_type", str)
 
         # Build a list of the parsed and type-coerced arguments
         args = []
@@ -120,7 +120,7 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
           radix = radix (base) to display values in: bin, dec or hex (default=hex)
         """
         # Parse the input arguments
-        args = self._parse_args(arg, 0, 1, 'hex', def_type=int)
+        args = self._parse_args(arg, 0, 1, "hex", def_type=int)
         if not args:
             return
 
@@ -131,20 +131,16 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
 
         # Decode the radix argument into a format specifier for displaying the result. Falls back
         # gracefully to decimal if the argument isn't recognised
-        radix_fmt = {
-            'dec': '03d',
-            'bin': '#010b',
-            'hex': '#04x'
-        }.get(radix, '03d')
+        radix_fmt = {"dec": "03d", "bin": "#010b", "hex": "#04x"}.get(radix, "03d")
 
         # Construct the client transaction based on the read address and length
-        transaction = [read_addr, *[0]*read_len]
+        transaction = [read_addr, *[0] * read_len]
 
         # Execute the client read task
         response = self._run_task(self.client.read(transaction))
 
         # Parse the response into formatted display values
-        vals = ' '.join(f"{val:{radix_fmt}}" for val in response[1:])
+        vals = " ".join(f"{val:{radix_fmt}}" for val in response[1:])
 
         # Print the result
         print(f"{read_addr:03d} : {vals}")
@@ -169,13 +165,15 @@ class MercuryAsicEmulatorShell(cmd.Cmd):
         response = self._run_task(self.client.write(transaction))
 
         # Parse the response into formatted display values
-        vals = ' '.join(f"{val:03d}" for val in response[1:])
+        vals = " ".join(f"{val:03d}" for val in response[1:])
         print(f"{response[0]:03d} : {vals}")
 
 
 @click.command()
-@click.option('--endpoint', default='tcp://127.0.0.1:5555', help='Emulator endpoint URI')
-@click.option("--test", is_flag=True, help='Run an automated set of test transactions')
+@click.option(
+    "--endpoint", default="tcp://127.0.0.1:5555", help="Emulator endpoint URI"
+)
+@click.option("--test", is_flag=True, help="Run an automated set of test transactions")
 def main(endpoint, test):
     """Run the the ASIC emulator shell.
 
@@ -189,7 +187,9 @@ def main(endpoint, test):
     :param test: boolean flag indicating client test mode.
     """
     # Set up message logging
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     # Create a MERCURY ASIC client at the specified endpoint address and port
     client = MercuryAsicClient(endpoint)
@@ -201,5 +201,5 @@ def main(endpoint, test):
         MercuryAsicEmulatorShell(client).cmdloop()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

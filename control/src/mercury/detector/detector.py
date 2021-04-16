@@ -10,13 +10,14 @@ from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from mercury.asic.device import MercuryAsicDevice
 from .context import SyncContext
 
+
 class MercuryDetectorError(Exception):
     """Simple exception class for the MERCURY detector class."""
 
     pass
 
 
-class MercuryDetector():
+class MercuryDetector:
     """
     MERCURY detector class.
 
@@ -29,21 +30,19 @@ class MercuryDetector():
         :param options: dictionary of configuration options
         """
         # Extract the required configuration settings from the options dict
-        emulate_hw = options.get('emulate_hw', False)
-        asic_emulator_endpoint = options.get('asic_emulator_endpoint', '')
+        emulate_hw = options.get("emulate_hw", False)
+        asic_emulator_endpoint = options.get("asic_emulator_endpoint", "")
 
         self.asic = MercuryAsicDevice(emulate_hw, asic_emulator_endpoint)
 
         # Define the parameter tree containing register state and client status
-        self.parameters = ParameterTree({
-            'status': 'hello'
-        })
+        self.parameters = ParameterTree({"status": "hello"})
 
         # Create a list of other adapters that will be populated later in the initialisation that
         # this adapter needs to communicate with
         self.adapters = {}
         self.needed_adapters = [
-            'odin_sequencer',
+            "odin_sequencer",
         ]
 
     def initialize(self, adapters):
@@ -65,15 +64,16 @@ class MercuryDetector():
         missing_adapters = set(self.needed_adapters) - set(self.adapters)
         if missing_adapters:
             logging.warning(
-                f"Not all needed adapters have been loaded, missing: {', '.join(missing_adapters)}")
+                f"Not all needed adapters have been loaded, missing: {', '.join(missing_adapters)}"
+            )
 
         # If a sequencer adapter is loaded, register the appropriate contexts with it
-        if 'odin_sequencer' in self.adapters:
+        if "odin_sequencer" in self.adapters:
             logging.debug("Registering contexts with sequencer")
-            self.adapters['odin_sequencer'].add_context('detector', self)
+            self.adapters["odin_sequencer"].add_context("detector", self)
 
             self.sync_context = SyncContext()
-            self.adapters['odin_sequencer'].add_context('asic', self.sync_context)
+            self.adapters["odin_sequencer"].add_context("asic", self.sync_context)
             self.sync_context.register_read = self.asic.register_read
             self.sync_context.register_write = self.asic.register_write
 
@@ -86,7 +86,7 @@ class MercuryDetector():
         :param path: path to retreive from the parameter tree
         :return parameter tree data from the specified path
         """
-        #result = await self.asic.register_read(0x0, 5)
+        # result = await self.asic.register_read(0x0, 5)
         try:
             return self.parameters.get(path)
         except ParameterTreeError as e:
