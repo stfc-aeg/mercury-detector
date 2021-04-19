@@ -1,6 +1,6 @@
 import logging
 
-provides = ['show_context', 'register_read_test', 'register_write_test']
+provides = ['show_context', 'register_read_test', 'register_write_test', 'sr_write_test']
 
 def show_context():
     detector = get_context('detector')
@@ -18,6 +18,18 @@ def register_write_test():
     response = asic.register_write(addr, 1, 2, 3)
     #logging.debuf("oof")
     print(f"Register write : {format_response(response)}")
+
+def sr_write_test():
+    asic = get_context('asic')
+    addr = 126
+    response = asic.register_write(addr, 1, 2, 3, 4, 5)
+
+    vals = list(range(30))
+    response = asic.register_write(addr, *vals)
+
+    vals = list(range(20))
+    addr = 120
+    response = asic.register_write(addr, *vals)
 
 def format_response(response):
 

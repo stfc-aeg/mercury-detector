@@ -28,6 +28,9 @@ class MercuryAsicRegisterModel:
     REGISTER_WRITE_TRANSACTION = 0x0
     REGISTER_PAGE_SIZE = 128
 
+    REGISTER_SR_CAL_SIZE = 20
+    REGISTER_SR_TEST_SIZE = 480
+
     @staticmethod
     def bitfield(register, index, width=1):
         """Return a bit field from a register value.
@@ -64,6 +67,12 @@ class MercuryAsicRegisterModel:
         self._registers[RegisterMap.TEST_SR] = 0b00000000
         self._registers[RegisterMap.SER_BIAS] = 0b10001000
         self._registers[RegisterMap.TDC_BIAS] = 0b10001000
+
+        # Create shift registers for calibration and test
+        self._shift_registers = {
+            RegisterMap.SR_CAL: bytearray(self.REGISTER_SR_CAL_SIZE),
+            RegisterMap.SR_TEST: bytearray(self.REGISTER_SR_TEST_SIZE),
+        }
 
         # Initialise internal state of register model
         self.page_select = 0
@@ -109,16 +118,30 @@ class MercuryAsicRegisterModel:
                     # Calcuate the address, taking into account the page select state
                     addr = self.calc_register_addr(register_addr + idx)
 
-                    # Update the register value accordingly
-                    self._registers[addr] = transaction[1 + idx]
+                    # Intercept shift-register writes where a burst mode transaction doesn't
+                    # increment the register address
+                    if addr in self._shift_registers:
+                        print("This is a shift register")
+                        print(len(self._shift_registers[addr]))
+                        print(len(transaction[1 + idx :]))
+                        sr_write_len = min(
+                            len(self._shift_registers[addr]),
+                            len(transaction[1 + idx :])
+                        )
+                        print(f"SR write to addr {addr} len {sr_write_len}")
+                        break
 
-                    # Execute a callback if defined for this register
-                    if addr in self._callbacks:
-                        self._callbacks[addr]()
+                    else:
+                        # Update the register value accordingly
+                        self._registers[addr] = transaction[1 + idx]
 
-                    # Log the register write if enabled
-                    if self.log_register_writes:
-                        self.log_register_write(addr)
+                        # Execute a callback if defined for this register
+                        if addr in self._callbacks:
+                            self._callbacks[addr]()
+
+                        # Log the register write if enabled
+                        if self.log_register_writes:
+                            self.log_register_write(addr)
 
             # Otherwise handle a read transaction.
             else:
