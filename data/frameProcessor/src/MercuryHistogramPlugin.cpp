@@ -304,6 +304,18 @@ namespace FrameProcessor
     }
   }
 
+  /** Process an EndOfAcquisitionFrame.
+   * 
+   * Write historgrams to disk on end of acquisition
+   */
+  void MercuryHistorgramPlugin::process_end_of_acquisiton()
+  {
+    LOG4CXX_INFO(logger_, "End of acquisition frame received, writing histograms to disk");
+    writeHistogramsToDisk();
+    frames_processed_ = 0;
+  }
+
+
   /**
    * Write Histogram data to disk.
    */

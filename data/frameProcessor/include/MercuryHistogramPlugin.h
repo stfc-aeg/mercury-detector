@@ -50,6 +50,7 @@ namespace FrameProcessor
     static const std::string CONFIG_PASS_PROCESSED;
 
     void process_frame(boost::shared_ptr<Frame> frame);
+    void process_end_of_acquisition();
 
     void add_frame_data_to_histogram_with_sum(float *frame);
     // function copied from MercuryGigE, but not currently in use:
