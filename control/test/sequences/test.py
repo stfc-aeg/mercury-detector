@@ -21,15 +21,17 @@ def register_write_test():
 
 def sr_write_test():
     asic = get_context('asic')
-    addr = 126
+    addr = asic.SR_CAL
     response = asic.register_write(addr, 1, 2, 3, 4, 5)
 
     vals = list(range(30))
     response = asic.register_write(addr, *vals)
 
     vals = list(range(20))
-    addr = 120
+    addr = asic.SER_CONTROL10A
     response = asic.register_write(addr, *vals)
+
+    asic.register_write(asic.TEST_SR, 4)
 
 def format_response(response):
 

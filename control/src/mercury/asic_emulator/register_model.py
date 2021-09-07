@@ -30,6 +30,7 @@ class MercuryAsicRegisterModel:
 
     REGISTER_SR_CAL_SIZE = 20
     REGISTER_SR_TEST_SIZE = 480
+    REGISTER_SR_TEST_NUM_SECTORS = 20
 
     @staticmethod
     def bitfield(register, index, width=1):
@@ -71,14 +72,19 @@ class MercuryAsicRegisterModel:
         # Create shift registers for calibration and test
         self._shift_registers = {
             RegisterMap.SR_CAL: bytearray(self.REGISTER_SR_CAL_SIZE),
-            RegisterMap.SR_TEST: bytearray(self.REGISTER_SR_TEST_SIZE),
+            RegisterMap.SR_TEST: [bytearray(self.REGISTER_SR_TEST_SIZE)]
+            * self.REGISTER_SR_TEST_NUM_SECTORS,
         }
 
         # Initialise internal state of register model
         self.page_select = 0
+        self.test_sr_sector = 0
 
         # Define register-specific callbacks that run when a register is modified
-        self._callbacks = {RegisterMap.CONFIG1: self._do_config1}
+        self._callbacks = {
+            RegisterMap.CONFIG1: self._do_config1,
+            RegisterMap.TEST_SR: self._do_test_sr,
+        }
 
         # Execute all the callbacks to initialise state of model
         for callback in self._callbacks.values():
@@ -126,7 +132,7 @@ class MercuryAsicRegisterModel:
                         print(len(transaction[1 + idx :]))
                         sr_write_len = min(
                             len(self._shift_registers[addr]),
-                            len(transaction[1 + idx :])
+                            len(transaction[1 + idx :]),
                         )
                         print(f"SR write to addr {addr} len {sr_write_len}")
                         break
@@ -207,3 +213,13 @@ class MercuryAsicRegisterModel:
         if page_select != self.page_select:
             logging.debug(f"Register page select is now {page_select}")
             self.page_select = page_select
+
+    def _do_test_sr(self):
+        """Execute callback for TESTSR register writes.
+
+        This callback is executed on writes to the TESTSR register.
+        """
+        test_sr_sector = self.bitfield(self._registers[RegisterMap.TEST_SR], 2, 5)
+        if test_sr_sector != self.test_sr_sector:
+            logging.debug(f"Test shift register sector select is now {test_sr_sector}")
+            self.test_sr_sector = test_sr_sector

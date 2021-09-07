@@ -74,8 +74,7 @@ class MercuryDetector:
 
             self.sync_context = SyncContext()
             self.adapters["odin_sequencer"].add_context("asic", self.sync_context)
-            self.sync_context.register_read = self.asic.register_read
-            self.sync_context.register_write = self.asic.register_write
+            self.asic.register_context(self.sync_context)
 
     async def get(self, path):
         """Get values from the detector paramter tree.
