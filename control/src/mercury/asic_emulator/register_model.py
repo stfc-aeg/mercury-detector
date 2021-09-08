@@ -127,14 +127,8 @@ class MercuryAsicRegisterModel:
                     # Intercept shift-register writes where a burst mode transaction doesn't
                     # increment the register address
                     if addr in self._shift_registers:
-                        print("This is a shift register")
-                        print(len(self._shift_registers[addr]))
-                        print(len(transaction[1 + idx :]))
-                        sr_write_len = min(
-                            len(self._shift_registers[addr]),
-                            len(transaction[1 + idx :]),
-                        )
-                        print(f"SR write to addr {addr} len {sr_write_len}")
+
+                        self.process_sr_transaction(transaction, idx, addr)
                         break
 
                     else:
@@ -155,15 +149,62 @@ class MercuryAsicRegisterModel:
                     f"Read transaction from register {register_addr} length {transaction_len}"
                 )
                 # Loop over the payload of the transaction, copying the relevant register
-                # values into the response.
+                # values into the response
                 for idx in range(transaction_len):
                     addr = self.calc_register_addr(register_addr + idx)
-                    transaction[1 + idx] = self._registers[addr]
+
+                    # Intercept shift-register reads where a burst mode transaction doesn't
+                    # increment the register address
+                    if addr in self._shift_registers:
+                        self.process_sr_transaction(transaction, idx, addr)
+                        break
+                    else:
+                        # Update values in the transaction with register values
+                        transaction[1 + idx] = self._registers[addr]
 
         except Exception as err:
             logging.error(f"Error processing transaction: {type(err)} {err}")
 
         return transaction
+
+    def process_sr_transaction(self, transaction, idx, addr):
+        """Process a shift register transaction.
+
+        This method handles a read or write transaction to a shift register. This may occur
+        within the range of a burst access so is indexed into the appropriate location in
+        the transaction.
+
+        :param transaction: iterable of transaction values
+        :param idx: index within the transaction where the shift register access begins
+        :param addr: address of the shift register being accessed
+        :return none, modifies the contents of the transaction passed as an argument
+        """
+        # Calcuate position of start and end of shift register in transction, taking account
+        # of the maximum length of the shift register. This behaviour may differ from that of
+        # the real ASIC.
+        trans_start = 1 + idx
+        sr_trans_len = min(
+            len(self._shift_registers[addr]),
+            len(transaction[1 + idx :]),
+        )
+        trans_end = 1 + idx + sr_trans_len
+
+        # Handle write and read transactions appropriately
+        if self.is_write_transaction(transaction):
+
+            logging.debug(
+                f"Write transaction to shift register at addr {addr} length {sr_trans_len}"
+            )
+            self._shift_registers[addr][:sr_trans_len] = transaction[trans_start:trans_end]
+            logging.debug(self._shift_registers[addr])
+
+        else:
+
+            logging.debug(
+                f"Read transaction from shift register at addr {addr} length {sr_trans_len}"
+            )
+            transaction[trans_start:trans_end] = self._shift_registers[addr][:sr_trans_len]
+            logging.debug(transaction[trans_start:trans_end])
 
     def is_write_transaction(self, transaction):
         """Determine if a transaction is a write.
