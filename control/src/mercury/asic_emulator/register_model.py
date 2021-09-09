@@ -196,7 +196,6 @@ class MercuryAsicRegisterModel:
                 f"Write transaction to shift register at addr {addr} length {sr_trans_len}"
             )
             self._shift_registers[addr][:sr_trans_len] = transaction[trans_start:trans_end]
-            logging.debug(self._shift_registers[addr])
 
         else:
 
@@ -204,7 +203,6 @@ class MercuryAsicRegisterModel:
                 f"Read transaction from shift register at addr {addr} length {sr_trans_len}"
             )
             transaction[trans_start:trans_end] = self._shift_registers[addr][:sr_trans_len]
-            logging.debug(transaction[trans_start:trans_end])
 
     def is_write_transaction(self, transaction):
         """Determine if a transaction is a write.
