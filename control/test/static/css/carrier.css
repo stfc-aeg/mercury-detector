@@ -1,0 +1,17 @@
+body {
+    padding-top: 50px;
+}
+
+.odin-server {
+    padding: 40px 15px;
+    text-align: center;
+}
+
+.contflex {
+	display: flex;
+	justify-content: space-around;
+}
+
+.text-center {
+	text-align: center
+}

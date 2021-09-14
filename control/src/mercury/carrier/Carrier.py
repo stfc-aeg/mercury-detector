@@ -24,7 +24,7 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO)
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
 _RAIL_MONITOR_DERIVE_POWER = True
 
-class Backplane_Interface():
+class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
                  pin_firefly_1, pin_firefly_2, pin_nRead_int, pin_sync,
@@ -42,7 +42,7 @@ class Backplane_Interface():
         self.pin_vreg_en = pin_vreg_en
 
 
-_interface_definition_default = Backplane_Interface(
+_interface_definition_default = Carrier_Interface(
         i2c_device_bus=1,             # TODO check
         spidev_id_mercury=(0, 1),     # TODO check
         spidev_id_ltc=(1, 0),
@@ -66,7 +66,7 @@ _LVDS_sync_idle_state = 0   # TODO Check polarity
 _LVDS_sync_duration = 0.1   # TODO Check duration
 
 
-class Backplane():
+class Carrier():
 
     class _Rail_Monitor_Mode (_Enum):
         POWER_ONLY = _auto()
@@ -542,7 +542,7 @@ class Backplane():
 
 
 
-class BackplaneAdapter(ApiAdapter):
+class CarrierAdapter(ApiAdapter):
 
     def initialize(self, adapters):
         """Initialize the ApiAdapter after it has been registered by the API Route.
@@ -552,7 +552,7 @@ class BackplaneAdapter(ApiAdapter):
         :param adapters: a dictionary of the adapters loaded by the API route.
         """
 
-        logging.debug("BackplaneAdapter initialize called to link sequencer context")
+        logging.debug("CarrierAdapter initialize called to link sequencer context")
         # Receive and store adapters
         self.adapters = dict((k, v) for k, v in adapters.items() if v is not self)
 
@@ -583,21 +583,21 @@ class BackplaneAdapter(ApiAdapter):
             exit()
         logging.debug("All objects had valid add_context when checked, proceeding...")
 
-        self.adapters['odin_sequencer'].add_context('loki_backplane', self.backplane)
+        self.adapters['odin_sequencer'].add_context('carrier', self.carrier)
 
         # Temporarily start the test sequence
         logging.debug("Starting the test sequence...")
         logging.debug("dir of odin_sequencer adapter: {}".format(dir(self.adapters['odin_sequencer'])))
         #self.adapters['odin_sequencer'].ff_channel_toggle_test(1, 5)
 
-        logging.debug("THIS IS THE END OF BACKPLANE ADAPTER INIT")
+        logging.debug("THIS IS THE END OF CARRIER ADAPTER INIT")
 
     def __init__(self, **kwargs):
 
         # Init superclass
-        super(BackplaneAdapter, self).__init__(**kwargs)
+        super(CarrierAdapter, self).__init__(**kwargs)
 
-        _interface_definition_test = Backplane_Interface(
+        _interface_definition_test = Carrier_Interface(
                 i2c_device_bus=1,
                 spidev_id_mercury=(0, 1),
                 spidev_id_ltc=(1, 0),
@@ -614,7 +614,7 @@ class BackplaneAdapter(ApiAdapter):
         si_filename = './test/loki/Si5344-RevD-200MHz_4_freerun-Registers.txt'
         use_iv = True
 
-        self.backplane = Backplane(si_filename, use_iv, interface_definition=_interface_definition_test)
+        self.carrier = Carrier(si_filename, use_iv, interface_definition=_interface_definition_test)
 
         # Call self-repeating loops for first time
         self.power_update_interval = float(1.0)
@@ -627,14 +627,14 @@ class BackplaneAdapter(ApiAdapter):
         Repeatedly monitor the power of the three buses. This can be done even with
         the enable signal off, since the PAC1921s are powererd via VDD3v3.
         """
-        self.backplane.sync_power_readings()
+        self.carrier.sync_power_readings()
 
         # Schedule the update loop to run in the IOLoop instance again after appropriate
         # interval
         IOLoop.instance().call_later(self.power_update_interval, self.power_update_loop)
 
     def firefly_update_loop(self):
-        self.backplane.sync_firefly_readings()
+        self.carrier.sync_firefly_readings()
 
         # Schedule the update loop to run in the IOLoop instance again after appropriate
         # interval
@@ -649,9 +649,9 @@ class BackplaneAdapter(ApiAdapter):
         :param request: HTTP request object
         :return: an ApiAdapterResponse object containing the appropriate response
         """
-        if not self.backplane._POWER_CYCLING:     # TODO find a neater way to do this
+        if not self.carrier._POWER_CYCLING:     # TODO find a neater way to do this
             try:
-                response = self.backplane.get(path, wants_metadata(request))
+                response = self.carrier.get(path, wants_metadata(request))
                 status_code = 200
             except ParameterTreeError as e:
                 response = {'error': str(e)}
@@ -672,16 +672,16 @@ class BackplaneAdapter(ApiAdapter):
         :return: an ApiAdapterResponse object containing the appropriate response
         """
 
-        if not self.backplane._POWER_CYCLING:     # TODO find a neater way to do this
+        if not self.carrier._POWER_CYCLING:     # TODO find a neater way to do this
             content_type = 'application/json'
             data=0
             try:
                 data = json_decode(request.body)
                 print("path, data: ", path, ", ", data)
-                self.backplane.set(path, data)
-                response = self.backplane.get(path)
+                self.carrier.set(path, data)
+                response = self.carrier.get(path)
                 status_code = 200
-            #tempexcept BackplaneError as e:
+            #tempexcept CarrierError as e:
             #temp    response = {'error': str(e)}
             #temp    status_code = 400
             except (TypeError, ValueError) as e:
@@ -701,8 +701,8 @@ class BackplaneAdapter(ApiAdapter):
         :param request: HTTP request object
         :return: an ApiAdapterResponse object containing the appropriate response
         """
-        if not self.backplane._POWER_CYCLING:     # TODO find a neater way to do this
-            response = 'BackplaneAdapter: DELETE on path {}'.format(path)
+        if not self.carrier._POWER_CYCLING:     # TODO find a neater way to do this
+            response = 'CarrierAdapter: DELETE on path {}'.format(path)
             status_code = 200
 
             logging.debug(response)
