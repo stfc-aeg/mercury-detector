@@ -201,14 +201,14 @@ function generateFireFlyChannelTable(id, num_channels, num_cols, en_state_col) {
                         <p class="lead">FireFly ${id}</p>
                     </div>
                     <div class="row contflex">
-                        <div clas="col-md-6">
+                        <div class="col-8 col-md-8">
                             <p>Manufacturer:&nbsp;
                                 <span id="firefly-${id}-venid">&nbsp;</span>
                                 , Product: 
                                 <span id="firefly-${id}-prodid">&nbsp;</span>
                             </p>
                         </div>
-                        <div clas="col-md-6">
+                        <div class="col-4 col-md-4">
                             <button type="button" class="btn btn-primary btn-sm" id="firefly-${id}-allon-button" onclick="callback_FireFly_Channel_GlobalState_Button(${id}, ${num_channels}, true)">Enable All</button>
                             <button type="button" class="btn btn-danger btn-sm" id="firefly-${id}-alloff-button" onclick="callback_FireFly_Channel_GlobalState_Button(${id}, ${num_channels}, false)">Disable All</button>
                         </div>
@@ -285,13 +285,13 @@ function update_loki_ff_static_data() {
             //console.log("Got FireFly VendorID: "+firefly_vendorid);
             $('#firefly-'+ff_id+'-venid').html(firefly_vendorid);
             $('#firefly-'+ff_id+'-venid').removeClass();
-            $('#firefly-'+ff_id+'-venid').addClass("label label-info");
+            $('#firefly-'+ff_id+'-venid').addClass("badge bg-info");
         })
         .error(function(data) {
             // If there is no response to from the FireFly query, indicate this
             $('#firefly-'+ff_id+'-venid').html('NO RESPONSE');
             $('#firefly-'+ff_id+'-venid').removeClass();
-            $('#firefly-'+ff_id+'-venid').addClass("label label-warning");
+            $('#firefly-'+ff_id+'-venid').addClass("badge bg-warning");
         });
 
         // Part Number
@@ -300,13 +300,13 @@ function update_loki_ff_static_data() {
             console.log(document.getElementById('firefly-'+ff_id+'-prodid'));
             $('#firefly-'+ff_id+'-prodid').html(firefly_product);
             $('#firefly-'+ff_id+'-prodid').removeClass();
-            $('#firefly-'+ff_id+'-prodid').addClass("label label-info");
+            $('#firefly-'+ff_id+'-prodid').addClass("badge bg-info");
         })
         .error(function(data) {
             // If there is no response to from the FireFly query, indicate this
             $('#firefly-'+ff_id+'-prodid').html('NO RESPONSE');
             $('#firefly-'+ff_id+'-prodid').removeClass();
-            $('#firefly-'+ff_id+'-prodid').addClass("label label-warning");
+            $('#firefly-'+ff_id+'-prodid').addClass("badge bg-warning");
         });
     }
 }

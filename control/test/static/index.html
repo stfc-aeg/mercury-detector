@@ -9,48 +9,50 @@
 
         <!-- Bootstrap -->
         <!-- <link href="js/bootstrap-4.5.2-dist/css/bootstrap.min.css" rel="stylesheet"> -->
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.6/dist/css/bootstrap.min.css" rel="stylesheet">
-	<!-- link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous" -->
+        <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.6/dist/css/bootstrap.min.css" rel="stylesheet"> -->
+	    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
 
 
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-switch/4.0.0-alpha.1/css/bootstrap-switch.min.css">
 
         <link href="css/carrier.css" rel="stylesheet">
 
+        <div id="global-nav"></div>
+
     </head>
     <body>
 
-        <nav class="navbar navbar-inverse navbar-fixed-top">
-            <div class="container">
-                <div class="navbar-header">
-                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
-                        <span class="sr-only">Toggle navigation</span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                        <span class="icon-bar"></span>
-                    </button>
+        <!-- <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+            <div class="navbar-nav">
                     <a class="navbar-brand" href="#">ODIN</a>
-                </div>
-                <div id="navbar" class="collapse navbar-collapse">
-                    <ul class="nav navbar-nav">
-                        <li class="active"><a data-toggle="tab" href="#home">Home</a></li>
-                        <li><a data-toggle="tab" href="#pcbcontrol">PCB Control</a></li>
-                        <li><a data-toggle="tab" href="#about">About</a></li>
-                        <li><a data-toggle="tab" href="#contact">Contact</a></li>
-                    </ul>
-                </div><!--/.nav-collapse -->
-            </div> <!-- container -->
-        </nav>
+                    <li class="nav-item">
+                        <a class="nav-link" href="sequencer.html">Sequencer</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Carrier PCB Control</a>
+                    </li>
+            </div>
+        </nav> -->
 
-        <h1 class="text-center">ODIN LOKI MERCURY Demo</h1>
+        <h1 class="text-center">MERCURY Carrier Control</h1>
+
+        <div class="container-fluid">            
+                <ul class="nav nav-tabs" role="tablist">
+                    <!-- <li class="nav-item"><a class="nav-link active" aria-selected="True"    data-bs-toggle="tab" type="button" role="tab" aria-controls="home" data-bs-target="#home">Home</a></li>   -->
+                    <!-- <li class="nav-item"><a class="nav-link active" aria-selected="True"    data-bs-toggle="tab" type="button" role="tab" aria-controls="sequencer.html" data-bs-target="sequencer.html">Home</a></li>   -->
+                    <li class="nav-link"><a class="nav-link active" aria-selected="True"    data-bs-toggle="tab" type="button" role="tab" aria-controls="pcbcontrol" data-bs-target="#pcbcontrol">PCB Control</a></li>
+                    <li class="nav-link"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="about" data-bs-target="#about">About></li>
+                    <li class="nav-link"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="contact" data-bs-target="#contact">Contact</a></li>
+                </ul>
+        </div>
 
         <div class="tab-content">
-            <div class="tab-pane fade in active" id="home" role="tabpanel">
+            <!-- <div class="tab-pane fade" id="home" role="tabpanel">
                 <h2 class="text-center">Home</h2>
                 <a data-toggle="tab" href="#pcbcontrol">PCB Control</a>
-            </div>
+            </div> -->
 
-            <div class="tab-pane fade" id="pcbcontrol" role="tabpanel">
+            <div class="tab-pane fade show active" id="pcbcontrol" role="tabpanel">
                 <h2 class="text-center">MERCURY PCB Control</h2>
 
                 <div class="container-fluid">
@@ -206,6 +208,12 @@
             </div>
         </div>
 
+        <script src="js/global-nav.js"></script>
+        <script>
+            var nav = get_navbar('index.html');
+            var demo = document.getElementById('global-nav'); // target element.
+            demo.insertAdjacentHTML('beforeend', nav);
+        </script>
 
         <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
         <!-- <script src="js/jquery-2.2.3.min.js"></script> -->
@@ -215,8 +223,8 @@
 
         <!-- Include all compiled plugins (below), or include individual files as needed -->
         <!-- <script src="js/bootstrap-4.5.2-dist/js/bootstrap.min.js"></script> -->
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.6/dist/js/bootstrap.min.js"></script>
-	<!--script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script-->
+        <!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.6/dist/js/bootstrap.min.js"></script> -->
+	    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-switch/4.0.0-alpha.1/js/bootstrap-switch.min.js"></script>
 
@@ -225,5 +233,6 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
 
         <script src="js/carrier.js"></script>
+
     </body>
 </html>
