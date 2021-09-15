@@ -3,7 +3,7 @@ let last_message_timestamp = '';
 let sequence_modules = {};
 let is_executing;
 let sequencer_endpoint;
-let detect_changes_switch  = document.getElementById('detect-module-changes-toggle');
+let detect_changes_switch  = document.getElementById('command-sequencer-detect-module-changes-toggle');
 
 const ALERT_ID = {
     'sequencer_error': '#command-sequencer-error-alert',
@@ -26,6 +26,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Initialise the sequencer adapter endpoint
     sequencer_endpoint = new AdapterEndpoint("odin_sequencer");
 
+    build_control_button_row();
+    build_alerts_row();
     build_sequence_modules_layout();
     display_log_messages();
 
@@ -347,7 +349,7 @@ function display_log_messages() {
         if (!is_empty_object(log_messages)) {
             last_message_timestamp = log_messages[log_messages.length - 1][0];
 
-            pre_scrollable = document.querySelector('#log-messages');
+            pre_scrollable = document.querySelector('#command-sequencer-log-messages');
             for (log_message in log_messages) {
                 timestamp = log_messages[log_message][0];
                 timestamp = timestamp.substr(0, timestamp.length - 3);
@@ -370,6 +372,40 @@ function get_log_messages() {
     return sequencer_endpoint.put({ 'last_message_timestamp': last_message_timestamp })
         .then(sequencer_endpoint.get('log_messages')
     );
+}
+
+/**
+ * If required, build a row of button controls that can be injected as a whole.
+ */
+function build_control_button_row() {
+    html_text = '';
+
+    html_text += `
+                    <div class="row">
+                        <div class="col-md-7">
+                            <label>&nbsp;</label><br>
+                            <button type="submit" class="btn btn-primary" onclick="reload_modules()" id="reload-btn">Reload</button>
+                        </div>
+                        <div class="col-md-5" align="center">
+                            <label><b>Detect Changes</b></label><br>
+                            <input type="checkbox" data-toggle="toggle" data-on="Enabled" data-off="Disabled" id="command-sequencer-detect-module-changes-toggle">
+                        </div>
+                    </div>
+    `;
+
+    $('#command-sequencer-control-buttons').html(html_text);
+}
+
+function build_alerts_row() {
+    html_text = '';
+
+    html_text += `
+                    <div class="row">
+                        <div class="alert alert-info mb-1 d-none" role="alert" id="command-sequencer-info-alert"></div>
+                        <div class="alert alert-danger mb-1 d-none" role="alert" id="command-sequencer-error-alert"></div>
+                    </div>
+    `
+    $('#command-sequencer-alerts-row').html(html_text)
 }
 
 /**
@@ -406,7 +442,7 @@ function build_sequence_modules_layout() {
             }
 
             html_text += '</div>';
-            document.querySelector('#sequence-modules-layout').innerHTML = html_text;
+            document.querySelector('#command-sequencer-sequence-modules-layout').innerHTML = html_text;
         } else {
             error_message = 'There are no sequence modules loaded';
             display_alert(ALERT_ID['sequencer_info'], error_message);
