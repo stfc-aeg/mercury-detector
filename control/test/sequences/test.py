@@ -8,6 +8,9 @@ def show_context():
     detector = get_context('detector')
     print(f"Loaded the detector context: {type(detector).__name__}")
 
+    carrier = get_context('carrier')
+    print(f"Loaded the carrier context: {type(carrier).__name__}")
+
 def register_read_test():
     asic = get_context('asic')
     addr = 0x0
