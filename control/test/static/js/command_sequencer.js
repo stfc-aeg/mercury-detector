@@ -1,7 +1,9 @@
-var detect_module_modifications;
-var last_message_timestamp = '';
-var sequence_modules = {};
-var is_executing;
+let detect_module_modifications;
+let last_message_timestamp = '';
+let sequence_modules = {};
+let is_executing;
+let sequencer_endpoint;
+let detect_changes_switch  = document.getElementById('detect-module-changes-toggle');
 
 const ALERT_ID = {
     'sequencer_error': '#command-sequencer-error-alert',
@@ -13,13 +15,24 @@ const BUTTON_ID = {
     'reload': '#reload-btn'
 };
 
-$(document).ready(function () {
+/**
+ * This function is called when the DOM content of the page is loaded, and initialises
+ * various elements of the sequencer page. The sequence module layout and log messages
+ * are initialised from the current state of the adapter and the current execution state
+ * is retrieved and managed appropriately.
+ */
+document.addEventListener("DOMContentLoaded", function () {
+
+    // Initialise the sequencer adapter endpoint
+    sequencer_endpoint = new AdapterEndpoint("odin_sequencer");
+
     build_sequence_modules_layout();
     display_log_messages();
 
-    apiGET('').then(function (response) {
-        is_executing = response.is_executing;
-        detect_module_modifications = response.detect_module_modifications;
+    sequencer_endpoint.get('')
+    .then(result => {
+        is_executing = result.is_executing;
+        detect_module_modifications = result.detect_module_modifications;
 
         if (is_executing) {
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
@@ -31,10 +44,11 @@ $(document).ready(function () {
         if (detect_module_modifications) {
             await_module_changes();
         }
+    })
+    .catch(error => {
+        display_alert(ALERT_ID['sequencer_error'], error.message);
     });
 });
-
-$(".my-tooltip").tooltip();
 
 /**
  * This is called when a change in the Detect Changes toggle is detected. Depending on
@@ -43,20 +57,20 @@ $(".my-tooltip").tooltip();
  * it calls the await_module_changes function to listen for module changes. It also
  * displays an alert message if an error occurs.
  */
-$('#detect-module-changes-toggle').change(function () {
-    enabled = $(this).prop('checked');
-    apiPUT({ 'detect_module_modifications': enabled }).done(function () {
+detect_changes_switch.addEventListener("change", function() {
+    enabled = detect_changes_switch.checked;
+    sequencer_endpoint.put({ 'detect_module_modifications': enabled })
+    .then(() => {
         detect_module_modifications = enabled;
         if (enabled) {
             await_module_changes();
         }
-    }).fail(function (jqXHR) {
-        error_message = extract_error_message(jqXHR);
+    })
+    .catch(error => {
         if (enabled) {
             set_detect_module_changes_toggle(false);
         }
-
-        display_alert(ALERT_ID['sequencer_error'], error_message);
+        display_alert(ALERT_ID['sequencer_error'], error.message);
     });
 });
 
@@ -65,8 +79,9 @@ $('#detect-module-changes-toggle').change(function () {
  * an alert message when it detects that the backend has reported of module changes. 
  */
 function await_module_changes() {
-    apiGET('module_modifications_detected').then(function (response) {
-        if (response.module_modifications_detected) {
+    sequencer_endpoint.get('module_modifications_detected')
+    .then(result => {
+        if (result.module_modifications_detected) {
             info_message = 'Code changes were detected, click the Reload button to load them';
             display_alert(ALERT_ID['sequencer_info'], info_message);
         }
@@ -74,6 +89,9 @@ function await_module_changes() {
         if (detect_module_modifications) {
             setTimeout(await_module_changes, 1000);
         }
+    })
+    .catch(error => {
+        display_alert(ALERT_ID['sequencer_error'], error.message);
     });
 }
 
@@ -81,13 +99,7 @@ function await_module_changes() {
  * This function enables or disables the Detect Changes toggle.
  */
 function set_detect_module_changes_toggle(detect_module_modifications) {
-    var toggle = $('#detect-module-changes-toggle').data('bs.toggle');
-    // Calling on/ off with silent as true to prevent firing of change events
-    if (detect_module_modifications) {
-        toggle.on(true);
-    } else {
-        toggle.off(true);
-    }
+    detect_changes_switch.checked = detect_module_modifications;
 }
 
 /**
@@ -103,20 +115,31 @@ function reload_modules() {
 
     alert_id = '';
     alert_message = '';
-    apiPUT({ 'reload': true }).done(function () {
+    sequencer_endpoint.put({ 'reload': true })
+    .then(() => {
         alert_id = ALERT_ID['sequencer_info'];
         alert_message = 'The sequence modules were successfully reloaded';
-    }).fail(function (jqXHR) {
+    })
+    .catch(error => {
         alert_id = ALERT_ID['sequencer_error'];
-        alert_message = extract_error_message(jqXHR);
+        alert_message = error.message
         if (!alert_message.startsWith('Cannot start the reloading')) {
             alert_message += '.<br><br>To load the missing sequences, first resolve the errors and then click the Reload button.';
         }
-    }).always(function () {
+    })
+    .then(() => {
         display_alert(alert_id, alert_message);
         build_sequence_modules_layout();
         disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, false);
     });
+}
+
+/**
+ * This function replicates the equivalent jQuery isEmptyObject, returning true if the
+ * object passed as an parameter is empty.
+ */
+function is_empty_object(obj) {
+    return Object.keys(obj).length === 0;
 }
 
 /**
@@ -135,40 +158,46 @@ function execute_sequence(button) {
     seq_name = arr[1];
     params = sequence_modules[seq_module_name][seq_name];
 
-    if (!jQuery.isEmptyObject(params)) {
+    if (!is_empty_object(params)) {
+        
         data = get_input_parameter_values(params);
-        apiPUT(data, `sequence_modules/${seq_module_name}/${seq_name}`).done(function () {
+        
+        sequencer_endpoint.put(data, `sequence_modules/${seq_module_name}/${seq_name}`)
+        .then(() => {
             hide_alerts(`${ALERT_ID['sequencer_info']},${ALERT_ID['sequencer_error']},.sequence-alert`);
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
 
-            apiPUT({ 'execute': seq_name }).fail(function (jqXHR) {
-                error_message = extract_error_message(jqXHR);
-                if (error_message.startsWith('Invalid list')) {
-                    error_message = error_message.substring(error_message.lastIndexOf(':') + 2);
+            sequencer_endpoint.put({ 'execute': seq_name })
+            .catch(error => {
+                alert_message = error.message;
+                if (alert_message.startsWith('Invalid list')) {
+                    alert_message = alert_message.substring(alert_message.lastIndexOf(':') + 2);
                 }
 
-                display_alert(`#${seq_name}-alert`, error_message);
+                display_alert(`#${seq_name}-alert`, alert_message);
             });
 
             setTimeout(await_execution_complete, 250);
             setTimeout(await_process_execution_complete, 500);
-        }).fail(function (jqXHR) {
-            error_message = extract_error_message(jqXHR);
-            if (error_message.startsWith('Type mismatch updating')) {
-                last_slash = error_message.lastIndexOf('/');
-                second_to_last_slash = error_message.lastIndexOf('/', last_slash - 1);
-                param_name = error_message.substring(second_to_last_slash + 1, last_slash);
-                error_message = `${param_name} - ${error_message.substring(error_message.lastIndexOf(':') + 2)}`;
+        })
+        .catch(error => {
+            alert_message = error.message;
+            if (alert_message.startsWith('Type mismatch updating')) {
+                last_slash = alert_message.lastIndexOf('/');
+                second_to_last_slash = alert_message.lastIndexOf('/', last_slash - 1);
+                param_name = alert_message.substring(second_to_last_slash + 1, last_slash);
+                alert_message = `${param_name} - ${alert_message.substring(alert_message.lastIndexOf(':') + 2)}`;
             }
 
-            display_alert(`#${seq_name}-alert`, error_message);
+            display_alert(`#${seq_name}-alert`, alert_message);
         });
 
     } else {
         disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true)
-        apiPUT({ 'execute': seq_name }).fail(function (jqXHR) {
-            error_message = extract_error_message(jqXHR);
-            display_alert(`#${seq_name}-alert`, error_message);
+        sequencer_endpoint.put({ 'execute': seq_name })
+        .catch(error => {
+            alert_message = error.message;
+            display_alert(`#${seq_name}-alert`, alert_message);
         });
 
         setTimeout(await_execution_complete, 250);
@@ -185,7 +214,7 @@ function execute_sequence(button) {
 function get_input_parameter_values(params) {
     data = {};
     for (param in params) {
-        param_val = $(`#${seq_name}-${param}-input`).val();
+        param_val = document.querySelector(`#${seq_name}-${param}-input`).value;
         param_type = params[param]['type'];
 
         if (param_type != 'str') {
@@ -234,9 +263,10 @@ function parse_parameter_value(param_val, param_type) {
  * process has completed.
  */
 function await_execution_complete() {
-    apiGET('is_executing').then(function (response) {
+    sequencer_endpoint.get('is_executing')
+    .then(result => {
         display_log_messages();
-        is_executing = response.is_executing
+        is_executing = result.is_executing
         if (is_executing) {
             setTimeout(await_execution_complete, 1000);
         } else {
@@ -251,9 +281,10 @@ function await_execution_complete() {
  * display any log messages.
  */
 function await_process_execution_complete() {
-    apiGET('process_tasks').then(function (response) {
+    sequencer_endpoint.get('process_tasks')
+    .then(result => {
         display_log_messages();
-        process_tasks = response.process_tasks
+        process_tasks = result.process_tasks
         if (process_tasks.length != 0) {
             setTimeout(await_process_execution_complete, 500);
         }
@@ -265,7 +296,9 @@ function await_process_execution_complete() {
  * the d-none class from the div(s).
  */
 function display_alert(alert_id, alert_message) {
-    $(alert_id).removeClass('d-none').html(alert_message);
+    let alert_elem = document.querySelector(alert_id);
+    alert_elem.innerHTML = alert_message;
+    alert_elem.classList.remove('d-none');
 }
 
 /**
@@ -273,14 +306,23 @@ function display_alert(alert_id, alert_message) {
  * class to the div(s).
  */
 function hide_alerts(alert_id_or_ids) {
-    $(alert_id_or_ids).addClass('d-none').html('');
+    alert_elems = document.querySelectorAll(alert_id_or_ids);
+    alert_elems.forEach(element => {
+        element.innerHTML = '';
+        element.classList.add('d-none');
+    });
+    //$(alert_id_or_ids).addClass('d-none').html('');
 }
 
 /**
  * This function disables the button(s) if disabled is True, otherwise it enables them.
  */
 function disable_buttons(button_id_or_ids, disabled) {
-    $(button_id_or_ids).prop('disabled', disabled);
+    button_elems = document.querySelectorAll(button_id_or_ids)
+    button_elems.forEach(element => {
+        element.disabled = disabled;
+    });
+    //$(button_id_or_ids).prop('disabled', disabled);
 }
 
 /**
@@ -299,23 +341,25 @@ function extract_error_message(jqXHR) {
  * empty and this normally happens when the page is reloaded.
  */
 function display_log_messages() {
-    get_log_messages().done(function (response) {
-        log_messages = response.log_messages;
-        if (!jQuery.isEmptyObject(log_messages)) {
+    get_log_messages()
+    .then(result => {
+        log_messages = result.log_messages;
+        if (!is_empty_object(log_messages)) {
             last_message_timestamp = log_messages[log_messages.length - 1][0];
 
-            pre_scrollable_id = '#log-messages';
+            pre_scrollable = document.querySelector('#log-messages');
             for (log_message in log_messages) {
                 timestamp = log_messages[log_message][0];
                 timestamp = timestamp.substr(0, timestamp.length - 3);
-                $(pre_scrollable_id).append(`<span style="color:#007bff">${timestamp}</span> ${log_messages[log_message][1]}<br>`);
-                // Scrolls down
-                $(pre_scrollable_id).animate({ scrollTop: $(pre_scrollable_id).prop('scrollHeight') }, 1000);
+                pre_scrollable.innerHTML += 
+                    `<span style="color:#007bff">${timestamp}</span> ${log_messages[log_message][1]}<br>`;
+                pre_scrollable.scrollTop = pre_scrollable.scrollHeight;
             }
         }
-    }).fail(function () {
-        error_message = 'A problem occurred while trying to get log messages';
-        display_alert(ALERT_ID['sequencer_info'], error_message);
+    })
+    .catch(error => {
+        alert_message = 'A problem occurred while trying to get log messages: ' + error.message;
+        display_alert(ALERT_ID['sequencer_info'], alert_message);
     });
 }
 
@@ -323,7 +367,9 @@ function display_log_messages() {
  * This function gets the log messages from the backend.
  */
 function get_log_messages() {
-    return apiPUT({ 'last_message_timestamp': last_message_timestamp }).then(apiGET('log_messages'));
+    return sequencer_endpoint.put({ 'last_message_timestamp': last_message_timestamp })
+        .then(sequencer_endpoint.get('log_messages')
+    );
 }
 
 /**
@@ -331,12 +377,14 @@ function get_log_messages() {
  * on that, it dynamically builds and injects the HTML code for the sequence modules layout.
  */
 function build_sequence_modules_layout() {
-    apiGET('sequence_modules').done(function (response) {
-        sequence_modules = response.sequence_modules;
-        if (!jQuery.isEmptyObject(sequence_modules)) {
+    sequencer_endpoint.get('sequence_modules')
+    .then(result => {
+        
+        sequence_modules = result.sequence_modules;
+        if (!is_empty_object(sequence_modules)) {
             // Sort the modules in alphabetical order
             sequence_modules = Object.fromEntries(Object.entries(sequence_modules).sort());
-            var html_text = `<div id="accordion" role="tablist">`;
+            let html_text = `<div id="accordion" role="tablist">`;
             for (seq_module in sequence_modules) {
                 sequences = sequence_modules[seq_module];
 
@@ -358,7 +406,7 @@ function build_sequence_modules_layout() {
             }
 
             html_text += '</div>';
-            $('#sequence-modules-layout').html(html_text);
+            document.querySelector('#sequence-modules-layout').innerHTML = html_text;
         } else {
             error_message = 'There are no sequence modules loaded';
             display_alert(ALERT_ID['sequencer_info'], error_message);
@@ -383,11 +431,12 @@ function build_sequences_layout(seq_module, sequences) {
                         <h5>`;
 
         sequence_params_layout = '';
-        if (jQuery.isEmptyObject(params)) {
+        if (is_empty_object(params)) {
             html_text += `${seq}`;
         } else {
             html_text += `
-            <a data-toggle="collapse" href="#${seq}-collapse" aria-expanded="false" aria-controls="${seq}-collapse" class="collapsed">
+            <a data-bs-toggle="collapse" href="#${seq}-collapse" aria-expanded="false"
+               aria-controls="${seq}-collapse" class="collapsed">
                 ${seq}
             </a>`;
             sequence_params_layout = build_sequence_parameters_layout(seq, params);
@@ -417,7 +466,7 @@ function build_sequences_layout(seq_module, sequences) {
  * provides information to users about how they need to input the list elements.
  */
 function build_sequence_parameters_layout(seq, params) {
-    var html_text = `
+    let html_text = `
     <div id="${seq}-collapse" class="collapse" role="tabpanel" aria-labelledby="${seq}-heading" data-parent="#accordion">
         <div class="card-body">`;
     for (param in params) {

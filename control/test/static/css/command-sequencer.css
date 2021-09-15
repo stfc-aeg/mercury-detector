@@ -19,7 +19,7 @@
   border: 1px solid #DDD;
 } */
 
-[data-toggle="collapse"]:after {
+[data-bs-toggle="collapse"]:after {
     display: inline-block;
     font: normal normal 600 14px/1 "Font Awesome 5 Free";
     font-size: inherit;
@@ -31,6 +31,6 @@
     transition: all linear 0.25s;
 }
 
-[data-toggle="collapse"].collapsed:after {
+[data-bs-toggle="collapse"].collapsed:after {
     transform: rotate(0deg);
 }

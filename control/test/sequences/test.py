@@ -38,7 +38,9 @@ def sr_write_test():
 
     asic.register_write(asic.TEST_SR, 4)
 
-def sr_read_test():
+def sr_read_test(val: int = 0):
+
+    print("val is {}".format(val))
 
     asic = get_context('asic')
     addr = asic.SER_CONTROL10A
