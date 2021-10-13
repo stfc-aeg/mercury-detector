@@ -362,6 +362,12 @@ class Carrier():
     def get_ambient_temperature(self):
         return self._bme280.temperature
 
+    def get_ambient_pressure(self):
+        return self._bme280.pressure
+
+    def get_ambient_humidity(self):
+        return self._bme280.humidity
+
     ''' FireFlies '''
 
     def _get_firefly(self, ff_num):
