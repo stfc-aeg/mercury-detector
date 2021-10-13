@@ -2,7 +2,7 @@ from odin_devices.gpio_bus import GPIO_ZynqMP
 from odin_devices.firefly import FireFly
 import odin_devices.pac1921 as pac1921
 from odin_devices.max5306 import MAX5306
-from odin_devices.ltc2986 import LTC2986
+from odin_devices.ltc2986 import LTC2986, LTCSensorException
 from odin_devices.si534x import SI5344
 from odin_devices.bme280 import BME280
 
@@ -25,7 +25,7 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO)
 _RAIL_MONITOR_DERIVE_POWER = True
 
 # If true, setup the LTC2986 temperature monitor
-_ENABLE_LTC2986 = False
+_ENABLE_LTC2986 = True
 
 class Carrier_Interface():
     def __init__(self, i2c_device_bus,
@@ -420,20 +420,32 @@ class Carrier():
     ''' LTC2986 '''
 
     def get_pt100_temperature(self):
-        if self._ltc2985 is not None:
-            return (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
+        if self._ltc2986 is not None:
+            try:
+                return (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
+            except LTCSensorException as e:
+                logging.error("LTC2986 sensor failure: {}".format(e))
+                return None
         else:
             return None
 
     def get_asic_temp1_temperature(self):
-        if self._ltc2985 is not None:
-            return (self._ltc2986.measure_channel(_ltc2986_temp1_channel))
+        if self._ltc2986 is not None:
+            try:
+                return (self._ltc2986.measure_channel(_ltc2986_temp1_channel))
+            except LTCSensorException as e:
+                logging.error("LTC2986 sensor failure: {}".format(e))
+                return None
         else:
             return None
 
     def get_asic_temp2_temperature(self):
-        if self._ltc2985 is not None:
-            return (self._ltc2986.measure_channel(_ltc2986_temp2_channel))
+        if self._ltc2986 is not None:
+            try:
+                return (self._ltc2986.measure_channel(_ltc2986_temp2_channel))
+            except LTCSensorException as e:
+                logging.error("LTC2986 sensor failure: {}".format(e))
+                return None
         else:
             return None
 
@@ -543,9 +555,9 @@ class Carrier():
             "FIREFLY2": firefly_tree_2,
             "TEMPERATURES":{
                 "AMBIENT":(self.get_ambient_temperature, None, {"description":"Board ambient temperature from BME280", "units":"C"}),
-                #temp"PT100":(self.get_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
-                #temp"ASIC_TEMP1":(self.get_asic_temp1_temperature, None, {"description":"ASIC internal TEMP1", "units":"C"}),
-                #temp"ASIC_TEMP2":(self.get_asic_temp2_temperature, None, {"description":"ASIC internal TEMP2", "units":"C"})
+                "PT100":(self.get_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
+                "ASIC_TEMP1":(self.get_asic_temp1_temperature, None, {"description":"ASIC internal TEMP1", "units":"C"}),
+                "ASIC_TEMP2":(self.get_asic_temp2_temperature, None, {"description":"ASIC internal TEMP2", "units":"C"})
             },
             "VCAL": (self.get_vcal_in, self.set_vcal_in, {"description":"Analogue VCAL_IN", "units":"V"}),
             "SYNC": (lambda: 0, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
