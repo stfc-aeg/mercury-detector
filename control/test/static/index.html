@@ -66,9 +66,9 @@
                 <h2 class="text-center">MERCURY PCB Control</h2>
 
                 <div class="container-fluid">
+                    <div class="row contflex row-cols-1 row-cols-md-2 g-4">
 
-                    <div class="row contflex">
-                        <div class="col-md-2 well">
+                        <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
                             <div class="row">
                                 <p class="lead text-center">System Temperatures</p>
                             </div>
@@ -112,12 +112,35 @@
                             </div>
                         </div> <!-- col-md-2 -->
 
-                        <div class="col-md-7 well">
+                        <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
+                            <div class="row">
+                                <p class="lead text-center">Board Control</p>
+                            </div> <!-- row -->
+                            <div class="row contflex">
+                                <div class="col-md-11">
+                                    <p>VCAL Voltage: <span id="vcal-voltage">&nbsp;</span>v</p>
+                                    <div class="input-group mb-3">
+                                        <span class="input-group-text">VCAL (V)</span>
+                                        <input type="number" class="form-control" id="vcal-input"/>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
+                                    </div>
+                                    <!-- <p><input type="button" value="Update" id="vcal-submit" onclick="change_vcal()"/></p> -->
+                                </div> <!-- col-md-11 -->
+                            </div> <!-- row -->
+                            <div class="row contflex">
+                                <div class="col-md-11">
+                                    <p>Regulator Power Control:</p>
+                                    <p><input type="button" value="Power Cycle&#13;&#10;VREG EN" id="vreg-cycle-submit" onclick="run_vreg_cycle()"/></p>
+                                </div> <!-- col-md-11 -->
+                            </div> <!-- row -->
+                        </div> <!-- vol-md-2 -->
+
+                        <div class="col-xxl-7 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
                             <div class="row">
                                 <p class="lead text-center">System Power Rails</p>
                             </div>
                             <div class="row contflex">
-                                <div class="col-md-5">
+                                <div class="col-lg-5 col-md-12 col-sm-12">
                                     <table class="table table-striped"style="width=100%">
                                         <thead>
                                             <tr>
@@ -149,7 +172,7 @@
                                         </tbody>
                                     </table>
                                 </div> <!-- col -->
-                                <div class="col-md-5">
+                                <div class="col-lg-5 col-md-12 col-sm-12">
                                     <div class="row">
                                         <h4>Voltage</h4>
                                         <canvas id="voltage-chart"></canvas>
@@ -162,38 +185,19 @@
                             </div> <!-- row -->
                         </div> <!-- col-md-4 -->
 
-                        <div class="col-md-2 well">
-                            <div class="row">
-                                <p class="lead text-center">Board Control</p>
-                            </div> <!-- row -->
-                            <div class="row contflex">
-                                <div class="col-md-11">
-                                    <p>VCAL Voltage: <span id="vcal-voltage">&nbsp;</span>v</p>
-                                    <p><input type="number" id="vcal-input"/></p>
-                                    <p><input type="button" value="Update" id="vcal-submit" onclick="change_vcal()"/></p>
-                                </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
-                            <div class="row contflex">
-                                <div class="col-md-11">
-                                    <p>Regulator Power Control: <span id="vreg-cycle">&nbsp;</span>v</p>
-                                    <p><input type="button" value="Power Cycle VREG EN" id="vreg-cycle-submit" onclick="run_vreg_cycle()"/></p>
-                                </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
-                        </div> <!-- vol-md-2 -->
+                    <!-- </div> -->
 
-                    </div> <!-- row -->
-
-                    <div class="row contflex">
-                        <div class="col-md-11 well">
+                    <!-- <div class="row contflex"> -->
+                        <div class="col-md-11">
                             <div class="row">
                                 <h3 class="text-center">FireFly Channel Control</h3>
                             </div>
                             <div class="row contflex">
-                                <div class="col-md-5">
+                                <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12 card">
                                     <div id='ff1_chtable'></div>
                                 </div> <!-- col-md-6 -->
 
-                                <div class="col-md-5">
+                                <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12 card">
                                     <div id='ff2_chtable'></div>
                                 </div> <!-- col-md-6 -->
                             </div> <!-- row -->
