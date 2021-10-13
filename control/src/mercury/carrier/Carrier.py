@@ -24,6 +24,9 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO)
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
 _RAIL_MONITOR_DERIVE_POWER = True
 
+# If true, setup the LTC2986 temperature monitor
+_ENABLE_LTC2986 = False
+
 class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
@@ -253,16 +256,19 @@ class Carrier():
         self._max5306.set_output(1, self._vcal)
 
         # Init LTC2986
-        ltc2986_bus, ltc2986_device = self._interface_definition.spidev_id_ltc
-        self._ltc2986 = LTC2986(bus=ltc2986_bus, device=ltc2986_device)
-        self._ltc2986.add_rtd_channel(LTC2986.Sensor_Type.SENSOR_TYPE_RTD_PT100,
-                                      LTC2986.RTD_RSense_Channel.CH4_CH3,
-                                      2000,
-                                      LTC2986.RTD_Num_Wires.NUM_2_WIRES,
-                                      LTC2986.RTD_Excitation_Mode.NO_ROTATION_NO_SHARING,
-                                      LTC2986.RTD_Excitation_Current.CURRENT_500UA,
-                                      LTC2986.RTD_Curve.EUROPEAN,
-                                      _ltc2986_pt100_channel)
+        if _ENABLE_LTC2986:
+            ltc2986_bus, ltc2986_device = self._interface_definition.spidev_id_ltc
+            self._ltc2986 = LTC2986(bus=ltc2986_bus, device=ltc2986_device)
+            self._ltc2986.add_rtd_channel(LTC2986.Sensor_Type.SENSOR_TYPE_RTD_PT100,
+                                          LTC2986.RTD_RSense_Channel.CH4_CH3,
+                                          2000,
+                                          LTC2986.RTD_Num_Wires.NUM_2_WIRES,
+                                          LTC2986.RTD_Excitation_Mode.NO_ROTATION_NO_SHARING,
+                                          LTC2986.RTD_Excitation_Current.CURRENT_500UA,
+                                          LTC2986.RTD_Curve.EUROPEAN,
+                                          _ltc2986_pt100_channel)
+        else:
+            self._ltc2986 = None
         # TODO add diode sensor channels for ASIC once more info available. Use _ltc2986_temp1_channel,_ltc2986_temp2_channel
 
         # Init SI5344 with clocks specified on the schematic. This requires a config file
@@ -414,13 +420,22 @@ class Carrier():
     ''' LTC2986 '''
 
     def get_pt100_temperature(self):
-        return (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
+        if self._ltc2985 is not None:
+            return (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
+        else:
+            return None
 
     def get_asic_temp1_temperature(self):
-        return (self._ltc2986.measure_channel(_ltc2986_temp1_channel))
+        if self._ltc2985 is not None:
+            return (self._ltc2986.measure_channel(_ltc2986_temp1_channel))
+        else:
+            return None
 
     def get_asic_temp2_temperature(self):
-        return (self._ltc2986.measure_channel(_ltc2986_temp2_channel))
+        if self._ltc2985 is not None:
+            return (self._ltc2986.measure_channel(_ltc2986_temp2_channel))
+        else:
+            return None
 
     ''' MAX5306 '''
 
