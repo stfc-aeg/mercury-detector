@@ -208,52 +208,60 @@ class Carrier():
             self._firefly_2 = None
 
         # Init PAC1921 monitors in power mode (generic settings)
-        self._pac1921_u3 = pac1921.PAC1921(address_resistance=470,
-                                           name='VDDDCNTRL',
-                                           r_sense=0.02,
-                                           measurement_type=pac1921.Measurement_Type.POWER)
-        self._pac1921_u2 = pac1921.PAC1921(address_resistance=620,
-                                           name='VDDD ASIC',
-                                           r_sense=0.02,
-                                           measurement_type=pac1921.Measurement_Type.POWER)
-        self._pac1921_u1 = pac1921.PAC1921(address_resistance=820,
-                                           name='VDDA ASIC',
-                                           r_sense=0.02,
-                                           measurement_type=pac1921.Measurement_Type.POWER)
-        self._pac1921_u3.config_gain(8, 8)
-        self._pac1921_u2.config_gain(8, 8)
-        self._pac1921_u1.config_gain(8, 8)
+        try:
+            self._pac1921_u3 = pac1921.PAC1921(address_resistance=470,
+                                               name='VDDDCNTRL',
+                                               r_sense=0.02,
+                                               measurement_type=pac1921.Measurement_Type.POWER)
+            self._pac1921_u2 = pac1921.PAC1921(address_resistance=620,
+                                               name='VDDD ASIC',
+                                               r_sense=0.02,
+                                               measurement_type=pac1921.Measurement_Type.POWER)
+            self._pac1921_u1 = pac1921.PAC1921(address_resistance=820,
+                                               name='VDDA ASIC',
+                                               r_sense=0.02,
+                                               measurement_type=pac1921.Measurement_Type.POWER)
+            self._pac1921_u3.config_gain(8, 8)
+            self._pac1921_u2.config_gain(8, 8)
+            self._pac1921_u1.config_gain(8, 8)
 
-        # PAC1921 Rail monitor mode settings
-        if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
-            # Init PAC1921 devices to cycle readings in free-run mode (V and I are free-run only)
-            # TODO
-            # Use a simple array of instances rather than the array class
-            self._pac1921_array = [self._pac1921_u3, self._pac1921_u2, self._pac1921_u1]
+            # PAC1921 Rail monitor mode settings
+            if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
+                # Init PAC1921 devices to cycle readings in free-run mode (V and I are free-run only)
+                # TODO
+                # Use a simple array of instances rather than the array class
+                self._pac1921_array = [self._pac1921_u3, self._pac1921_u2, self._pac1921_u1]
 
-            # Initially, devices will all be set in power mode.
-            self._pac1921_array_current_measurement = pac1921.Measurement_Type.POWER
+                # Initially, devices will all be set in power mode.
+                self._pac1921_array_current_measurement = pac1921.Measurement_Type.POWER
 
-            # Start all devices free-running
-            free_run_sample_num = 512
-            self._pac1921_u3.config_freerun_integration_mode(free_run_sample_num)
-            self._pac1921_u2.config_freerun_integration_mode(free_run_sample_num)
-            self._pac1921_u1.config_freerun_integration_mode(free_run_sample_num)
+                # Start all devices free-running
+                free_run_sample_num = 512
+                self._pac1921_u3.config_freerun_integration_mode(free_run_sample_num)
+                self._pac1921_u2.config_freerun_integration_mode(free_run_sample_num)
+                self._pac1921_u1.config_freerun_integration_mode(free_run_sample_num)
 
-        elif self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_ONLY:
-            # Init PAC1921 Power Monitors as a pin-controlled array ready for readings
-            self._pac1921_array = pac1921.PAC1921_Synchronised_Array(integration_time_ms=750,
-                                                                     nRead_int_pin=self._gpiod_nRead_int)
-            self._pac1921_array.add_device(self._pac1921_u3)
-            self._pac1921_array.add_device(self._pac1921_u2)
-            self._pac1921_array.add_device(self._pac1921_u1)
-        else:
-            logging.error("Rail monitor mode not recognised")
+            elif self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_ONLY:
+                # Init PAC1921 Power Monitors as a pin-controlled array ready for readings
+                self._pac1921_array = pac1921.PAC1921_Synchronised_Array(integration_time_ms=750,
+                                                                         nRead_int_pin=self._gpiod_nRead_int)
+                self._pac1921_array.add_device(self._pac1921_u3)
+                self._pac1921_array.add_device(self._pac1921_u2)
+                self._pac1921_array.add_device(self._pac1921_u1)
+            else:
+                logging.error("Rail monitor mode not recognised")
+        except Exception as e:
+            logging.error("PAC1921 power monitors could not be init: {}".format(e))
+            self._pac1921_array = None
 
         # Init MAX5306
-        max5306_bus, max5306_device = self._interface_definition.spidev_id_max
-        self._max5306 = MAX5306(Vref=2.048, bus=max5306_bus, device=max5306_device)
-        self._max5306.set_output(1, self._vcal)
+        try:
+            max5306_bus, max5306_device = self._interface_definition.spidev_id_max
+            self._max5306 = MAX5306(Vref=2.048, bus=max5306_bus, device=max5306_device)
+            self._max5306.set_output(1, self._vcal)
+        except Exception as e:
+            logging.error("MAX5306 init failed: {}".format(e))
+            self._max5306 = None
 
         # Init LTC2986
         if _ENABLE_LTC2986:
@@ -279,7 +287,11 @@ class Carrier():
             raise
 
         # Init BME280 as I2C device on address 0x77
-        self._bme280 = BME280(use_spi=False, bus=self._interface_definition.i2c_device_bus)
+        try:
+            self._bme280 = BME280(use_spi=False, bus=self._interface_definition.i2c_device_bus)
+        except Exception as e:
+            logging.error("BME280 failed init: {}".format(e))
+            self._bme280 = None
 
         logging.debug("Devices Init: FF1: {}, FF2: {}, LTC: {}, MAX: {}, BME: {}, PACs: {}, SI: {}".format(
             self._firefly_1,
@@ -300,6 +312,10 @@ class Carrier():
     ''' PAC1921 '''
 
     def _sync_power_supply_readings(self):
+        if self._pac1921_array is None:
+            logging.error("PAC1921 array is not present, cannot read")
+            return
+
         if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
             current_meas = self._pac1921_array_current_measurement
             logging.warning("mode was POWER_AND_IV, current meas set to {}".format(current_meas))
@@ -360,12 +376,18 @@ class Carrier():
     ''' BME280 '''
 
     def get_ambient_temperature(self):
+        if self._bme280 is None:
+            return None
         return self._bme280.temperature
 
     def get_ambient_pressure(self):
+        if self._bme280 is None:
+            return None
         return self._bme280.pressure
 
     def get_ambient_humidity(self):
+        if self._bme280 is None:
+            return None
         return self._bme280.humidity
 
     ''' FireFlies '''
@@ -458,9 +480,17 @@ class Carrier():
     ''' MAX5306 '''
 
     def get_vcal_in(self):
+        if self._max5306 is None:
+            logging.error("Could not get MAX5306, was not init")
+            return
+
         return self._vcal
 
     def set_vcal_in(self, value):
+        if self._max5306 is None:
+            logging.error("Could not set MAX5306, was not init")
+            return
+
         if value <= self.vcal_limit:
             self._max5306.set_output(1, value)
             self._vcal = value
@@ -470,13 +500,13 @@ class Carrier():
 
     def send_sync(self):
         LVDS_sync_active_state = 0 if (_LVDS_sync_idle_state == 1) else 1
-        self._gpiod_sync.set_value(_LvDS_sync_idle_state)
+        self._gpiod_sync.set_value(LVDS_sync_active_state)
         time.sleep(_LVDS_sync_duration)
         self._gpiod_sync.toggle()
 
     def set_sync_sel_aux(self, value):
         self._sync_sel_aux_state = bool(value)
-        pin_state =  0 if (value) else 1
+        pin_state = 0 if (value) else 1
         self._gpiod_sync_sel.set_value(pin_state)
 
     def get_sync_sel_aux(self):
