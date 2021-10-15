@@ -18,9 +18,6 @@ logging.basicConfig(encoding='utf-8', level=logging.INFO)
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
 _RAIL_MONITOR_DERIVE_POWER = True
 
-# If true, setup the LTC2986 temperature monitor
-_ENABLE_LTC2986 = True
-
 class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
@@ -258,7 +255,7 @@ class Carrier():
             self._max5306 = None
 
         # Init LTC2986
-        if _ENABLE_LTC2986:
+        try:
             ltc2986_bus, ltc2986_device = self._interface_definition.spidev_id_ltc
             self._ltc2986 = LTC2986(bus=ltc2986_bus, device=ltc2986_device)
             self._ltc2986.add_rtd_channel(LTC2986.Sensor_Type.SENSOR_TYPE_RTD_PT100,
@@ -269,9 +266,10 @@ class Carrier():
                                           LTC2986.RTD_Excitation_Current.CURRENT_500UA,
                                           LTC2986.RTD_Curve.EUROPEAN,
                                           _ltc2986_pt100_channel)
-        else:
+            # TODO add diode sensor channels for ASIC once more info available. Use _ltc2986_temp1_channel,_ltc2986_temp2_channel
+        except Exception as e:
+            logging.error("LTC2986 init failed: {}".format(e))
             self._ltc2986 = None
-        # TODO add diode sensor channels for ASIC once more info available. Use _ltc2986_temp1_channel,_ltc2986_temp2_channel
 
         # Init SI5344 with clocks specified on the schematic. This requires a config file
         self._si5344 = SI5344(i2c_address=0x68)
