@@ -660,6 +660,10 @@ class CarrierAdapter(ApiAdapter):
         # Init superclass
         super(CarrierAdapter, self).__init__(**kwargs)
 
+        # Parse options
+        si_config_location = self.options.get('clk_config_location')
+        si_filename = self.options.get('clk_default_config_filename')
+
         _interface_definition_test = Carrier_Interface(
                 i2c_device_bus=1,
                 spidev_id_mercury=(0, 1),
@@ -674,10 +678,9 @@ class CarrierAdapter(ApiAdapter):
                 pin_vreg_en=11,
         )
 
-        si_filename = './test/loki/Si5344-RevD-200MHz_4_freerun-Registers.txt'
         use_iv = True
 
-        self.carrier = Carrier(si_filename, use_iv, interface_definition=_interface_definition_test)
+        self.carrier = Carrier(si_config_location + si_filename, use_iv, interface_definition=_interface_definition_test)
 
         # Call self-repeating loops for first time
         self.power_update_interval = float(1.0)
