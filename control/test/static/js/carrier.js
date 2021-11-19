@@ -365,19 +365,34 @@ function update_loki_temps() {
     }
 
 	// Other System Temperatures
-	$.getJSON('/api/' + api_version + '/' + adapter_name + '/TEMPERATURES', function(response) {
-		// Ambient Temperature
-		var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2)
-		$('#temp-ambient').html(temp_ambient)
+	//$.getJSON('/api/' + api_version + '/' + adapter_name + '/TEMPERATURES', function(response) {
+	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/TEMPERATURES',
+		async: false,
+		dataType: 'json',
+		timeout: 600,
+		success: function(response) {
+			// Zynq PS Temperature
+			var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
+			$('#temp-zynqps').html(temp_zynqps);
 
-		// PT100 Temperature
-		// TODO
+			// Ambient Temperature
+			var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
+			$('#temp-ambient').html(temp_ambient);
 
-		// ASIC TEMP1 Temperature
-		// TODO
+			// PT100 Temperature
+			// TODO
 
-		// ASIC TEMP2 Temperature
-		// TODO
+			// ASIC TEMP1 Temperature
+			// TODO
+
+			// ASIC TEMP2 Temperature
+			// TODO
+		},
+		error: function() {
+			console.log('PCB Temperature reading error');
+		}
+	}).fail(function(xhr, status) {
+		console.log('fail');
 	});
 }
 

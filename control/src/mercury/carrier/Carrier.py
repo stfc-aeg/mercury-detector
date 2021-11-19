@@ -11,6 +11,7 @@ from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 import logging
 import time
 import sys
+import os
 from enum import Enum as _Enum, auto as _auto
 
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
@@ -301,6 +302,21 @@ class Carrier():
         self._sync_firefly_tx_channels_disabled(1)
         self._sync_firefly_tx_channels_disabled(2)
 
+    ''' Zynq System '''
+
+    def get_zynq_ams_temp(self, temp_name):
+        # Temp sensor name should be 0_ps, 1_remote, or 2_pl.
+        with open('/sys/bus/iio/devices/iio:device0/in_temp{}_temp_raw'.format(temp_name), 'r') as f:
+            temp_raw = int(f.read())
+
+        with open('/sys/bus/iio/devices/iio:device0/in_temp{}_temp_offset'.format(temp_name), 'r') as f:
+            temp_offset = int(f.read())
+
+        with open('/sys/bus/iio/devices/iio:device0/in_temp{}_temp_scale'.format(temp_name), 'r') as f:
+            temp_scale = float(f.read())
+
+        return round(((temp_raw+temp_offset)*temp_scale)/1000, 2)
+
     ''' PAC1921 '''
 
     def _sync_power_supply_readings(self):
@@ -582,6 +598,11 @@ class Carrier():
             "FIREFLY1": firefly_tree_1,
             "FIREFLY2": firefly_tree_2,
             "TEMPERATURES":{
+                "ZYNQ": {
+                    "PS":(lambda: self.get_zynq_ams_temp('0_ps'), None, {"description":"Zynq system PS Temperature", "units":"C"}),
+                    "REMOTE":(lambda: self.get_zynq_ams_temp('1_remote'), None, {"description":"Zynq system Remote Temperature", "units":"C"}),
+                    "PL":(lambda: self.get_zynq_ams_temp('2_pl'), None, {"description":"Zynq system PL Temperature", "units":"C"}),
+                },
                 "AMBIENT":(self.get_ambient_temperature, None, {"description":"Board ambient temperature from BME280", "units":"C"}),
                 "PT100":(self.get_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
                 "ASIC_TEMP1":(self.get_asic_temp1_temperature, None, {"description":"ASIC internal TEMP1", "units":"C"}),
