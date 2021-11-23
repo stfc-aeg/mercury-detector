@@ -20,6 +20,7 @@
 using namespace FrameReceiver;
 
 const std::string MercuryFrameDecoder::CONFIG_FEM_PORT_MAP = "fem_port_map";
+const std::string MercuryFrameDecoder::CONFIG_PACKET_HEADER_EXTENDED = "packet_header_extended";
 
 #define MAX_IGNORED_PACKET_REPORTS 10
 
@@ -30,17 +31,23 @@ const std::string MercuryFrameDecoder::CONFIG_FEM_PORT_MAP = "fem_port_map";
 //!
 MercuryFrameDecoder::MercuryFrameDecoder() :
     FrameDecoderUDP(),
-		current_frame_seen_(Mercury::default_frame_number),
+    packet_header_extended_(true),
+    current_frame_seen_(Mercury::default_frame_number),
     current_frame_buffer_id_(Mercury::default_frame_number),
     current_frame_buffer_(0),
     current_frame_header_(0),
     dropping_frame_data_(false),
     packets_ignored_(0),
     packets_lost_(0),
-	  fem_packets_lost_(0)
+    fem_packets_lost_(0)
 {
+  if (packet_header_extended_)
+    packet_header_size_ = sizeof(Mercury::PacketExtendedHeader);
+  else
+    packet_header_size_ = sizeof(Mercury::PacketHeader);
+
   // Allocate buffers for packet header, dropped frames and scratched packets
-  current_packet_header_.reset(new uint8_t[sizeof(Mercury::PacketHeader)]);
+  current_packet_header_.reset(new uint8_t[packet_header_size_]);
   dropped_frame_buffer_.reset(new uint8_t[Mercury::max_frame_size()]);
   ignored_packet_buffer_.reset(new uint8_t[Mercury::primary_packet_size]);
 }
@@ -111,19 +118,52 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
 
   parse_fem_port_map(fem_port_map_str_);
 
+  // Determine whether 8 or 16 byte packet header size
+  if (config_msg.has_param(CONFIG_PACKET_HEADER_EXTENDED))
+  {
+    int extended = config_msg.get_param<int>(CONFIG_PACKET_HEADER_EXTENDED);
+    if (extended)
+    {
+      packet_header_extended_ = true;
+      packet_header_size_ = sizeof(Mercury::PacketExtendedHeader);
+    }
+    else
+    {
+      packet_header_extended_ = false;
+      packet_header_size_ = sizeof(Mercury::PacketHeader);
+    }
+    current_packet_header_.reset(new uint8_t[packet_header_size_]);
+  }
+  
   // Print a packet logger header to the appropriate logger if enabled
   if (enable_packet_logging_)
   {
-    LOG4CXX_INFO(packet_logger_, "PktHdr: SourceAddress");
-    LOG4CXX_INFO(packet_logger_, "PktHdr: |               SourcePort");
-    LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     DestinationPort");
-    LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     |      FrameCounter  [4 Bytes]");
-    LOG4CXX_INFO(packet_logger_,
-        "PktHdr: |               |     |      |           PacketCounter&Flags [4 Bytes]");
-    LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     |      |           |");
-    LOG4CXX_INFO(packet_logger_, "PktHdr: |-------------- |---- |----  |---------- |----------");
+    if (packet_header_extended_)
+    {
+      // Extended (16 byte) header size
+      LOG4CXX_INFO(packet_logger_, "PktHdr: SourceAddress");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               SourcePort");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     DestinationPort");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     |      FrameCounter  [8 Bytes]");
+      LOG4CXX_INFO(packet_logger_,
+          "PktHdr: |               |     |      |                         PacketCounter&Flags [8 Bytes]");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     |      |                         |");
+      LOG4CXX_INFO(packet_logger_,
+          "PktHdr: |-------------- |---- |----  |----------------------   |----------------------");
+    }
+    else
+    {
+      // Original (8 byte) header size
+      LOG4CXX_INFO(packet_logger_, "PktHdr: SourceAddress");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               SourcePort");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     DestinationPort");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     |      FrameCounter  [4 Bytes]");
+      LOG4CXX_INFO(packet_logger_,
+          "PktHdr: |               |     |      |           PacketCounter&Flags [4 Bytes]");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     |      |           |");
+      LOG4CXX_INFO(packet_logger_, "PktHdr: |-------------- |---- |----  |---------- |----------");
+    }
   }
-
   // Reset the scratched and lost packet counters
   packets_ignored_ = 0;
   packets_lost_ = 0;
@@ -138,6 +178,7 @@ void MercuryFrameDecoder::request_configuration(const std::string param_prefix,
 
   // Add current configuration parameters to reply
   config_reply.set_param(param_prefix + CONFIG_FEM_PORT_MAP, fem_port_map_str_);
+  config_reply.set_param(param_prefix + CONFIG_PACKET_HEADER_EXTENDED, packet_header_extended_);
 }
 
 //! Get the size of the frame buffers required for current operation mode.
@@ -173,7 +214,7 @@ const size_t MercuryFrameDecoder::get_frame_header_size(void) const
 //!
 const size_t MercuryFrameDecoder::get_packet_header_size(void) const
 {
-  return sizeof(Mercury::PacketHeader);
+  return packet_header_size_;
 }
 
 //! Get a pointer to the packet header buffer.
@@ -213,7 +254,7 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
         << std::right << " " << std::setw (5) << ntohs (from_addr->sin_port) << " " << std::setw(5)
         << port << std::hex;
 
-    for (unsigned int hdr_byte = 0; hdr_byte < sizeof(Mercury::PacketHeader); hdr_byte++)
+    for (unsigned int hdr_byte = 0; hdr_byte < packet_header_size_; hdr_byte++)
     {
       if (hdr_byte % 8 == 0)
       {
@@ -245,13 +286,22 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
     }
   }
 
+  int frame = 0;
   // Extract fields from packet header
-  uint32_t frame_counter = get_frame_counter ();
-  uint32_t packet_number = get_packet_number ();
-  bool start_of_frame_marker = get_start_of_frame_marker ();
-  bool end_of_frame_marker = get_end_of_frame_marker ();
-
-  int frame = static_cast<int> (frame_counter);
+  if (packet_header_extended_)
+  {
+    uint64_t frame_counter = get_64b_frame_counter();
+    int frame = static_cast<int>(frame_counter);
+  }
+  else
+  {
+    uint32_t frame_counter = get_32b_frame_counter();
+    int frame = static_cast<int>(frame_counter);
+  }
+  uint32_t packet_number = get_packet_number();
+  bool start_of_frame_marker = get_start_of_frame_marker();
+  bool end_of_frame_marker = get_end_of_frame_marker();
+  
 
   LOG4CXX_DEBUG_LEVEL(3, logger_, "Got packet header:" << " packet: " << packet_number
       << " SOF: " << (int) start_of_frame_marker << " EOF: " << (int) end_of_frame_marker
@@ -571,15 +621,26 @@ void MercuryFrameDecoder::get_status(const std::string param_prefix,
   status_msg.set_param(param_prefix + "fem_packets_lost", fem_packets_lost_array);
 }
 
-//! Get the current frame counter.
+//! Get the current frame counter from a normal sized packet header.
 //!
-//! This method extracts and returns the frame counter from the current UDP packet header.
+//! This method extracts and returns a 32-bit frame counter from the current UDP packet header.
 //!
 //! \return current frame counter
 //!
-uint32_t MercuryFrameDecoder::get_frame_counter(void) const
+uint32_t MercuryFrameDecoder::get_32b_frame_counter(void) const
 {
   return reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->frame_counter;
+}
+
+//! Get the current frame counter from an extended packet header.
+//!
+//! This method extracts and returns a 64-bit frame counter from the current UDP packet header.
+//!
+//! \return current frame counter
+//!
+uint64_t MercuryFrameDecoder::get_64b_frame_counter(void) const
+{
+  return reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->frame_counter;
 }
 
 //! Get the current packet number.
@@ -590,8 +651,16 @@ uint32_t MercuryFrameDecoder::get_frame_counter(void) const
 //!
 uint32_t MercuryFrameDecoder::get_packet_number(void) const
 {
-  return reinterpret_cast<Mercury::PacketHeader*>(
-      current_packet_header_.get())->packet_number_flags & Mercury::packet_number_mask;
+  if (packet_header_extended_)
+  {
+    return reinterpret_cast<Mercury::PacketExtendedHeader*>(
+        current_packet_header_.get())->packet_number & Mercury::packet_number_mask;
+  }
+  else
+  {
+    return reinterpret_cast<Mercury::PacketHeader*>(
+        current_packet_header_.get())->packet_number_flags & Mercury::packet_number_mask;
+  }
 }
 
 //! Get the current packet start of frame (SOF) marker.
@@ -602,9 +671,13 @@ uint32_t MercuryFrameDecoder::get_packet_number(void) const
 //!
 bool MercuryFrameDecoder::get_start_of_frame_marker(void) const
 {
-  uint32_t packet_number_flags =
-      reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->packet_number_flags;
-  return ((packet_number_flags & Mercury::start_of_frame_mask) != 0);
+  uint32_t packet_flags = 0;
+  if (packet_header_extended_)
+    packet_flags = reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->packet_flags;
+  else
+    packet_flags = reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->packet_number_flags;
+
+  return ((packet_flags & Mercury::start_of_frame_mask) != 0);
 }
 
 //! Get the current packet end of frame (EOF) marker.
@@ -615,9 +688,13 @@ bool MercuryFrameDecoder::get_start_of_frame_marker(void) const
 //!
 bool MercuryFrameDecoder::get_end_of_frame_marker(void) const
 {
-  uint32_t packet_number_flags =
-      reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->packet_number_flags;
-  return ((packet_number_flags & Mercury::end_of_frame_mask) != 0);
+  uint32_t packet_flags = 0;
+  if (packet_header_extended_)
+    packet_flags = reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->packet_flags;
+  else
+    packet_flags = reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->packet_number_flags;
+
+  return ((packet_flags & Mercury::end_of_frame_mask) != 0);
 }
 
 //! Calculate and return an elapsed time in milliseconds.

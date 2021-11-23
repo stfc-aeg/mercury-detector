@@ -113,6 +113,7 @@
 
     {
         "hdf": {
+            "master":"raw_frames",
             "dataset": {
                 "processed_frames" : {
                     "cmd": "create",
