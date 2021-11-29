@@ -83,12 +83,12 @@ namespace FrameSimulator {
     void MercuryFrameSimulatorPlugin::extract_frames(const u_char *data, const int &size) {
 
         LOG4CXX_DEBUG(logger_, "Extracting Frame(s) from packet");
-        // Get first 8 or 16 (extended header) bytes, turn into header
+        // Get first 8 or 64 (extended header) bytes, turn into header
         //check header flags
         if (packet_header_extended_)
-            extract_16_byte_header(data);
+            extract_extended_header(data);
         else
-            extract_8_byte_header(data);
+            extract_normal_header(data);
 
         // Create new packet, copy packet data and push into frame
         boost::shared_ptr<Packet> pkt(new Packet());
@@ -101,7 +101,7 @@ namespace FrameSimulator {
         total_packets++;
     }
 
-    void MercuryFrameSimulatorPlugin::extract_8_byte_header(const u_char *data) {
+    void MercuryFrameSimulatorPlugin::extract_normal_header(const u_char *data) {
 
         const Mercury::PacketHeader* packet_hdr = reinterpret_cast<const Mercury::PacketHeader*>(data);
 
@@ -134,7 +134,7 @@ namespace FrameSimulator {
         }
     }
 
-    void MercuryFrameSimulatorPlugin::extract_16_byte_header(const u_char *data) {
+    void MercuryFrameSimulatorPlugin::extract_extended_header(const u_char *data) {
 
         const Mercury::PacketExtendedHeader* packet_hdr = reinterpret_cast<const Mercury::PacketExtendedHeader*>(data);
 
@@ -258,11 +258,11 @@ namespace FrameSimulator {
         delete [] pixel_data_;
     }
 
-   /**
-    * Get the plugin major version number.
-    *
-    * \return major version number as an integer
-    */
+    /**
+     * Get the plugin major version number.
+     *
+     * \return major version number as an integer
+     */
     int MercuryFrameSimulatorPlugin::get_version_major() {
         return ODIN_DATA_VERSION_MAJOR;
     }

@@ -118,7 +118,7 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
 
   parse_fem_port_map(fem_port_map_str_);
 
-  // Determine whether 8 or 16 byte packet header size
+  // Determine whether 8 or 64 byte packet header
   if (config_msg.has_param(CONFIG_PACKET_HEADER_EXTENDED))
   {
     int extended = config_msg.get_param<int>(CONFIG_PACKET_HEADER_EXTENDED);
@@ -140,7 +140,7 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
   {
     if (packet_header_extended_)
     {
-      // Extended (16 byte) header size
+      // Extended (64 byte) header
       LOG4CXX_INFO(packet_logger_, "PktHdr: SourceAddress");
       LOG4CXX_INFO(packet_logger_, "PktHdr: |               SourcePort");
       LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     DestinationPort");
@@ -153,7 +153,7 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
     }
     else
     {
-      // Original (8 byte) header size
+      // Original (8 byte) header
       LOG4CXX_INFO(packet_logger_, "PktHdr: SourceAddress");
       LOG4CXX_INFO(packet_logger_, "PktHdr: |               SourcePort");
       LOG4CXX_INFO(packet_logger_, "PktHdr: |               |     DestinationPort");

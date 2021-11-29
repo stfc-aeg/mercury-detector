@@ -64,6 +64,7 @@ namespace FrameProcessor
       frame_number_ = config.get_param<int>(MercuryReorderPlugin::CONFIG_FRAME_NUMBER);
       LOG4CXX_DEBUG(logger_, " *** RESET frame_number to be " << frame_number_);
     }
+  
   }
 
   void MercuryReorderPlugin::requestConfiguration(OdinData::IpcMessage& reply)

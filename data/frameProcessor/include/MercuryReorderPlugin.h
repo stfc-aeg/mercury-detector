@@ -49,8 +49,6 @@ namespace FrameProcessor
 
       bool write_raw_data_;
 
-      /** Config of sensor(s) **/
-      int sensors_config_;
       /** Packet loss counter **/
       int packets_lost_;
       /** Overwrite UDP frame number until firmware fixed to reset
