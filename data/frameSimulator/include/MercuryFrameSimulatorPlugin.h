@@ -66,7 +66,7 @@ namespace FrameSimulator {
 
         void extract_normal_header(const u_char *data);
         void extract_extended_header(const u_char *data);
-        bool packet_header_extended_;
+        bool extended_packet_header_;
         int packet_header_size_;
     };
 

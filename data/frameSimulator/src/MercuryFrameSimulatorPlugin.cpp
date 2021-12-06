@@ -28,9 +28,9 @@ namespace FrameSimulator {
         total_bytes = 0;
 
         current_frame_num = -1;
-        packet_header_extended_ = true;
+        extended_packet_header_ = true;
 
-        if (packet_header_extended_)
+        if (extended_packet_header_)
             packet_header_size_ = sizeof(Mercury::PacketExtendedHeader);
         else
             packet_header_size_ = sizeof(Mercury::PacketHeader);
@@ -85,7 +85,7 @@ namespace FrameSimulator {
         LOG4CXX_DEBUG(logger_, "Extracting Frame(s) from packet");
         // Get first 8 or 64 (extended header) bytes, turn into header
         //check header flags
-        if (packet_header_extended_)
+        if (extended_packet_header_)
             extract_extended_header(data);
         else
             extract_normal_header(data);
@@ -105,7 +105,7 @@ namespace FrameSimulator {
 
         const Mercury::PacketHeader* packet_hdr = reinterpret_cast<const Mercury::PacketHeader*>(data);
 
-        uint32_t frame_number = packet_hdr->frame_counter;
+        uint32_t frame_number = packet_hdr->frame_number;
         uint32_t packet_number_flags = packet_hdr->packet_number_flags;
 
         bool is_SOF = packet_number_flags & Mercury::start_of_frame_mask;
@@ -138,7 +138,7 @@ namespace FrameSimulator {
 
         const Mercury::PacketExtendedHeader* packet_hdr = reinterpret_cast<const Mercury::PacketExtendedHeader*>(data);
 
-        uint64_t frame_number = packet_hdr->frame_counter;
+        uint64_t frame_number = packet_hdr->frame_number;
         uint32_t packet_flags = packet_hdr->packet_flags;
         uint32_t packet_number = packet_hdr->packet_number & Mercury::packet_number_mask;
 
@@ -190,7 +190,7 @@ namespace FrameSimulator {
             uint32_t packet_flags = 0;
 
             // Setup Head Packet Header
-            if (packet_header_extended_)
+            if (extended_packet_header_)
             {
                 Mercury::PacketExtendedHeader* head_packet_header = 
                     reinterpret_cast<Mercury::PacketExtendedHeader*>(head_packet_data);
@@ -199,7 +199,7 @@ namespace FrameSimulator {
                 if (packet_number == 0)
                     packet_flags = packet_flags | Mercury::start_of_frame_mask;
                 
-                head_packet_header->frame_counter = frame;
+                head_packet_header->frame_number = frame;
                 head_packet_header->packet_number = packet_number;
                 head_packet_header->packet_flags = packet_flags;
             }
@@ -212,7 +212,7 @@ namespace FrameSimulator {
                 if (packet_number == 0)
                     packet_flags = packet_flags | Mercury::start_of_frame_mask;
 
-                head_packet_header->frame_counter = frame;
+                head_packet_header->frame_number = frame;
                 head_packet_header->packet_number_flags = packet_flags;
             }
 
@@ -227,12 +227,12 @@ namespace FrameSimulator {
             data_ptr += Mercury::primary_packet_size;
 
             // Repeat for the Tail Packet Header and Data
-            if (packet_header_extended_)
+            if (extended_packet_header_)
             {
                 Mercury::PacketExtendedHeader* tail_packet_header = 
                     reinterpret_cast<Mercury::PacketExtendedHeader*>(tail_packet_data);
                 packet_flags = Mercury::end_of_frame_mask;
-                tail_packet_header->frame_counter = frame;
+                tail_packet_header->frame_number = frame;
                 tail_packet_header->packet_number = packet_number;
                 tail_packet_header->packet_flags = packet_flags;
             }
@@ -242,7 +242,7 @@ namespace FrameSimulator {
                     reinterpret_cast<Mercury::PacketHeader*>(tail_packet_data);
                 packet_flags =
                     (packet_number & Mercury::packet_number_mask) | Mercury::end_of_frame_mask;
-                tail_packet_header->frame_counter = frame;
+                tail_packet_header->frame_number = frame;
                 tail_packet_header->packet_number_flags = packet_flags;
             }
 

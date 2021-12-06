@@ -20,7 +20,7 @@
 using namespace FrameReceiver;
 
 const std::string MercuryFrameDecoder::CONFIG_FEM_PORT_MAP = "fem_port_map";
-const std::string MercuryFrameDecoder::CONFIG_PACKET_HEADER_EXTENDED = "packet_header_extended";
+const std::string MercuryFrameDecoder::CONFIG_EXTENDED_PACKET_HEADER = "extended_packet_header";
 
 #define MAX_IGNORED_PACKET_REPORTS 10
 
@@ -31,7 +31,7 @@ const std::string MercuryFrameDecoder::CONFIG_PACKET_HEADER_EXTENDED = "packet_h
 //!
 MercuryFrameDecoder::MercuryFrameDecoder() :
     FrameDecoderUDP(),
-    packet_header_extended_(true),
+    extended_packet_header_(true),
     current_frame_seen_(Mercury::default_frame_number),
     current_frame_buffer_id_(Mercury::default_frame_number),
     current_frame_buffer_(0),
@@ -41,7 +41,7 @@ MercuryFrameDecoder::MercuryFrameDecoder() :
     packets_lost_(0),
     fem_packets_lost_(0)
 {
-  if (packet_header_extended_)
+  if (extended_packet_header_)
     packet_header_size_ = sizeof(Mercury::PacketExtendedHeader);
   else
     packet_header_size_ = sizeof(Mercury::PacketHeader);
@@ -119,17 +119,17 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
   parse_fem_port_map(fem_port_map_str_);
 
   // Determine whether 8 or 64 byte packet header
-  if (config_msg.has_param(CONFIG_PACKET_HEADER_EXTENDED))
+  if (config_msg.has_param(CONFIG_EXTENDED_PACKET_HEADER))
   {
-    int extended = config_msg.get_param<int>(CONFIG_PACKET_HEADER_EXTENDED);
+    int extended = config_msg.get_param<int>(CONFIG_EXTENDED_PACKET_HEADER);
     if (extended)
     {
-      packet_header_extended_ = true;
+      extended_packet_header_ = true;
       packet_header_size_ = sizeof(Mercury::PacketExtendedHeader);
     }
     else
     {
-      packet_header_extended_ = false;
+      extended_packet_header_ = false;
       packet_header_size_ = sizeof(Mercury::PacketHeader);
     }
     current_packet_header_.reset(new uint8_t[packet_header_size_]);
@@ -138,7 +138,7 @@ void MercuryFrameDecoder::init(LoggerPtr& logger, OdinData::IpcMessage& config_m
   // Print a packet logger header to the appropriate logger if enabled
   if (enable_packet_logging_)
   {
-    if (packet_header_extended_)
+    if (extended_packet_header_)
     {
       // Extended (64 byte) header
       LOG4CXX_INFO(packet_logger_, "PktHdr: SourceAddress");
@@ -178,7 +178,7 @@ void MercuryFrameDecoder::request_configuration(const std::string param_prefix,
 
   // Add current configuration parameters to reply
   config_reply.set_param(param_prefix + CONFIG_FEM_PORT_MAP, fem_port_map_str_);
-  config_reply.set_param(param_prefix + CONFIG_PACKET_HEADER_EXTENDED, packet_header_extended_);
+  config_reply.set_param(param_prefix + CONFIG_EXTENDED_PACKET_HEADER, extended_packet_header_);
 }
 
 //! Get the size of the frame buffers required for current operation mode.
@@ -286,23 +286,13 @@ void MercuryFrameDecoder::process_packet_header(size_t bytes_received, int port,
     }
   }
 
-  int frame = 0;
   // Extract fields from packet header
-  if (packet_header_extended_)
-  {
-    uint64_t frame_counter = get_64b_frame_counter();
-    int frame = static_cast<int>(frame_counter);
-  }
-  else
-  {
-    uint32_t frame_counter = get_32b_frame_counter();
-    int frame = static_cast<int>(frame_counter);
-  }
+  uint64_t frame_number = get_frame_number();
   uint32_t packet_number = get_packet_number();
   bool start_of_frame_marker = get_start_of_frame_marker();
   bool end_of_frame_marker = get_end_of_frame_marker();
-  
-
+  int frame = static_cast<int>(frame_number);
+ 
   LOG4CXX_DEBUG_LEVEL(3, logger_, "Got packet header:" << " packet: " << packet_number
       << " SOF: " << (int) start_of_frame_marker << " EOF: " << (int) end_of_frame_marker
       << " port: " << port << " fem idx: " << current_packet_fem_map_.fem_idx_
@@ -621,26 +611,20 @@ void MercuryFrameDecoder::get_status(const std::string param_prefix,
   status_msg.set_param(param_prefix + "fem_packets_lost", fem_packets_lost_array);
 }
 
-//! Get the current frame counter from a normal sized packet header.
+//! Get the current frame counter.
 //!
-//! This method extracts and returns a 32-bit frame counter from the current UDP packet header.
-//!
-//! \return current frame counter
-//!
-uint32_t MercuryFrameDecoder::get_32b_frame_counter(void) const
-{
-  return reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->frame_counter;
-}
-
-//! Get the current frame counter from an extended packet header.
-//!
-//! This method extracts and returns a 64-bit frame counter from the current UDP packet header.
+//! This method extracts and returns the frame counter from the current UDP packet header.
 //!
 //! \return current frame counter
 //!
-uint64_t MercuryFrameDecoder::get_64b_frame_counter(void) const
+uint64_t MercuryFrameDecoder::get_frame_number(void) const
 {
-  return reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->frame_counter;
+  uint64_t frame_number;
+  if (extended_packet_header_)
+    frame_number = reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->frame_number;
+  else
+    frame_number = reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->frame_number;
+  return frame_number;
 }
 
 //! Get the current packet number.
@@ -651,7 +635,7 @@ uint64_t MercuryFrameDecoder::get_64b_frame_counter(void) const
 //!
 uint32_t MercuryFrameDecoder::get_packet_number(void) const
 {
-  if (packet_header_extended_)
+  if (extended_packet_header_)
   {
     return reinterpret_cast<Mercury::PacketExtendedHeader*>(
         current_packet_header_.get())->packet_number & Mercury::packet_number_mask;
@@ -672,7 +656,7 @@ uint32_t MercuryFrameDecoder::get_packet_number(void) const
 bool MercuryFrameDecoder::get_start_of_frame_marker(void) const
 {
   uint32_t packet_flags = 0;
-  if (packet_header_extended_)
+  if (extended_packet_header_)
     packet_flags = reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->packet_flags;
   else
     packet_flags = reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->packet_number_flags;
@@ -689,7 +673,7 @@ bool MercuryFrameDecoder::get_start_of_frame_marker(void) const
 bool MercuryFrameDecoder::get_end_of_frame_marker(void) const
 {
   uint32_t packet_flags = 0;
-  if (packet_header_extended_)
+  if (extended_packet_header_)
     packet_flags = reinterpret_cast<Mercury::PacketExtendedHeader*>(current_packet_header_.get())->packet_flags;
   else
     packet_flags = reinterpret_cast<Mercury::PacketHeader*>(current_packet_header_.get())->packet_number_flags;
