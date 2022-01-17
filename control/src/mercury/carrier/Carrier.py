@@ -73,7 +73,7 @@ class Carrier():
         POWER_ONLY = _auto()
         POWER_AND_IV = _auto()
 
-    def __init__(self, si5344_config_filename,
+    def __init__(self, si5344_config_directory, si5344_config_filename,
                  power_monitor_IV,
                  interface_definition=_interface_definition_default,
                  vcal=_vcal_default):
@@ -86,6 +86,7 @@ class Carrier():
         else:
             self._rail_monitor_mode = self._Rail_Monitor_Mode.POWER_ONLY
 
+        self._si5344_config_directory = si5344_config_directory
         self._si5344_config_filename = si5344_config_filename
 
         # Set VCAL to default or argument
@@ -281,7 +282,7 @@ class Carrier():
         # Init SI5344 with clocks specified on the schematic. This requires a config file
         self._si5344 = SI5344(i2c_address=0x68)
         try:
-            self._si5344.apply_register_map(self._si5344_config_filename)
+            self._si5344.apply_register_map(self._si5344_config_directory + self._si5344_config_filename)
         except FileNotFoundError:
             raise
 
@@ -644,5 +645,13 @@ class Carrier():
             "SYNC_SEL_AUX": (self.get_sync_sel_aux, self.set_sync_sel_aux, {"description":"Set true to get sync signal externally"}),
             "ASIC_RST":(self.get_asic_rst, self.set_asic_rst, {"description":"Set true to enter ASIC reset"}),
             #"VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set true to enable on-board power supplies"})
-            "VREG_CYCLE":(None, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices"})
+            "VREG_CYCLE":(None, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices"}),
+            "CLKGEN":{
+                "CONFIG_AVAIL":(self.get_clk_config_avail, None, {"description":"Available SI5344 config files"}),
+                "CONFIG_SELECT":(self.get_clk_config, self.set_clk_config, {"description":"Currently selected SI5344 config"}),
+                "CKTDC_STEP":(None, lambda dir: self.step_clk(0, dir), {"description": "Step frequency of TDC clock up or down"}),
+                "CKSER_STEP":(None, lambda dir: self.step_clk(1, dir), {"description": "Step frequency of SER clock up or down"}),
+                "CK200_STEP":(None, lambda dir: self.step_clk(2, dir), {"description": "Step frequency of 200 clock up or down"}),
+                "CKDBG_STEP":(None, lambda dir: self.step_clk(3, dir), {"description": "Step frequency of the debug header clock up or down"}),
+            }
         })
