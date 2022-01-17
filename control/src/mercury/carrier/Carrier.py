@@ -2,9 +2,15 @@ from odin_devices.gpio_bus import GPIO_ZynqMP
 from odin_devices.firefly import FireFly
 import odin_devices.pac1921 as pac1921
 from odin_devices.max5306 import MAX5306
-from odin_devices.ltc2986 import LTC2986, LTCSensorException
 from odin_devices.si534x import SI5344
 from odin_devices.bme280 import BME280
+
+try:
+    from odin_devices.ltc2986 import LTC2986, LTCSensorException
+except ModuleNotFoundError:
+    # Allow init to continue without LTC2987 temperature sensor support build in
+    # (driver not progressed due to hardware fault)
+    pass
 
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
@@ -90,8 +96,8 @@ class Carrier():
         self._gpio_bus = GPIO_ZynqMP
 
         # Claim standalone control pins
-        self._pin_sync = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync,
-                                             GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_sync = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync,
+                                               GPIO_ZynqMP.DIR_OUTPUT)
 
         # Define device-specific control pins
         self._gpiod_firefly_1 = GPIO_ZynqMP.get_pin(self._interface_definition.pin_firefly_1,
@@ -110,7 +116,7 @@ class Carrier():
                                                   GPIO_ZynqMP.DIR_OUTPUT)
 
         # Set default pin states
-        #tempself._gpiod_sync.set_value(_LVDS_sync_idle_state)
+        self._gpiod_sync.set_value(_LVDS_sync_idle_state)
         self.set_sync_sel_aux(False)                        # Set sync Zynq-controlled
         self.set_asic_rst(True)                             # Init device in reset
         self.vreg_power_cycle_init(None)                    # Contains device setup
@@ -504,13 +510,38 @@ class Carrier():
             self._vcal = value
             logging.debug("Vcal changed to {}".format(value))
 
+    ''' SI5344 Clock Generator Control '''
+
+    def get_clk_config_avail(self):
+        configlist = []
+        for configfile in os.listdir(self._si5344_config_directory):
+            if configfile.endswith('.txt'):
+                configlist.append(configfile)
+        return configlist
+
+    def set_clk_config(self, value):
+        try:
+            self._si5344.apply_register_map(self._si5344_config_directory + value)
+            self._si5344_config_filename = value
+        except Exception as e:
+            logging.error('Failed to set SI5344 config: {}'.format(e))
+
+    def get_clk_config(self):
+        return self._si5344_config_filename
+
+    def step_clk(self, clock_num, direction_upwards):
+        if direction_upwards:
+            self._si5344.increment_channel_frequency(clock_num)
+        else:
+            self._si5344.decrement_channel_frequency(clock_num)
+
     ''' Direct GPIO Control '''
 
     def send_sync(self):
         LVDS_sync_active_state = 0 if (_LVDS_sync_idle_state == 1) else 1
         self._gpiod_sync.set_value(LVDS_sync_active_state)
         time.sleep(_LVDS_sync_duration)
-        self._gpiod_sync.toggle()
+        self._gpiod_sync.set_value(_LVDS_sync_idle_state)
 
     def set_sync_sel_aux(self, value):
         self._sync_sel_aux_state = bool(value)
