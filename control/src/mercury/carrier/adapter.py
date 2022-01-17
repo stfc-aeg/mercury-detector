@@ -81,9 +81,23 @@ class CarrierAdapter(ApiAdapter):
                 pin_vreg_en=11,
         )
 
+        _interface_definition_ribbon = Carrier_Interface(
+                i2c_device_bus=1,
+                spidev_id_mercury=(0, 1),
+                spidev_id_ltc=(1, 0),
+                spidev_id_max=(1, 1),
+                pin_firefly_1=6,
+                pin_firefly_2=7,
+                pin_nRead_int=11,
+                pin_sync=0,
+                pin_sync_sel=10,
+                pin_asic_nrst=3,
+                pin_vreg_en=2,
+        )
+
         use_iv = True
 
-        self.carrier = Carrier(si_config_location + si_filename, use_iv, interface_definition=_interface_definition_test)
+        self.carrier = Carrier(si_config_location, si_filename, use_iv, interface_definition=_interface_definition_ribbon)
 
         # Call self-repeating loops for first time
         self.power_update_interval = float(1.0)
