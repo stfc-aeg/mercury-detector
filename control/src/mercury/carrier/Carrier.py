@@ -191,7 +191,7 @@ class Carrier():
 
         # Init FireFlies and power down all channels
         try:
-            self._firefly_1 = FireFly(0x50, self._gpiod_firefly_1)
+            self._firefly_1 = FireFly(base_address=0x50, select_line=self._gpiod_firefly_1)
             self._firefly_1.disable_tx_channels(FireFly.CHANNEL_ALL)
         except OSError:
             logging.error("Error init FireFly 1 with GPIO {}: {}".format(
@@ -199,7 +199,7 @@ class Carrier():
             self._firefly_1 = None
 
         try:
-            self._firefly_2 = FireFly(0x50, self._gpiod_firefly_2)
+            self._firefly_2 = FireFly(base_address=0x50, select_line=self._gpiod_firefly_2)
             self._firefly_2.disable_tx_channels(FireFly.CHANNEL_ALL)
         except OSError:
             logging.error("Error init FireFly 2: with GPIO {}: {}".format(
