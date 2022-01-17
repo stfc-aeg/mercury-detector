@@ -354,14 +354,22 @@ function update_loki_ff_data() {
 function update_loki_temps() {
 	// FireFly Temperatures
     for (let ff_id = 1; ff_id <=2; ff_id++) {
-        $.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE/', function(response) {
-            var firefly_temp = response.TEMPERATURE.toFixed(2);
-            console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
-            $('#temp-firefly'+ff_id).html(firefly_temp);
-        })
-        .error(function(data) {
-            $('#temp-firefly'+ff_id).html("N/A");
-        });
+        //$.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE/', function(response) {
+	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE',
+		async: false,
+		dataType: 'json',
+		timeout: 600,
+		success: function(response) {
+		    var firefly_temp = response.TEMPERATURE.toFixed(2);
+		    console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
+		    $('#temp-firefly'+ff_id).html(firefly_temp);
+		},
+		error: function() {
+		    $('#temp-firefly'+ff_id).html("N/A");
+	    	}
+        }).fail(function(xhr, status) {
+	console.log('fail')
+	});
     }
 
 	// Other System Temperatures
