@@ -4,6 +4,7 @@ import odin_devices.pac1921 as pac1921
 from odin_devices.max5306 import MAX5306
 from odin_devices.si534x import SI5344
 from odin_devices.bme280 import BME280
+from odin_devices.i2c_device import I2CException
 
 try:
     from odin_devices.ltc2986 import LTC2986, LTCSensorException
@@ -193,7 +194,7 @@ class Carrier():
         try:
             self._firefly_1 = FireFly(base_address=0x50, select_line=self._gpiod_firefly_1)
             self._firefly_1.disable_tx_channels(FireFly.CHANNEL_ALL)
-        except OSError:
+        except (OSError, I2CException):
             logging.error("Error init FireFly 1 with GPIO {}: {}".format(
                 self._gpiod_firefly_1, sys.exc_info()[1]))
             self._firefly_1 = None
@@ -201,7 +202,7 @@ class Carrier():
         try:
             self._firefly_2 = FireFly(base_address=0x50, select_line=self._gpiod_firefly_2)
             self._firefly_2.disable_tx_channels(FireFly.CHANNEL_ALL)
-        except OSError:
+        except (OSError, I2CException):
             logging.error("Error init FireFly 2: with GPIO {}: {}".format(
                 self._gpiod_firefly_2, sys.exc_info()[1]))
             self._firefly_2 = None
