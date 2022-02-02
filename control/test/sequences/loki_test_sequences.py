@@ -1,7 +1,7 @@
 import time
 
 # loki_test_sequences.py
-provides = ['ff_channel_toggle_test', 'mercury_carrier_init']
+provides = ['ff_channel_toggle_test', 'mercury_carrier_init', 'enable_asic', 'disable_asic', 'set_sync_active', 'set_sync_idle', 'sync_toggle','sync_sel_aux', 'enable_vreg', 'disable_vreg', 'get_vreg']
 
 def ff_channel_toggle_test(firefly = 1, channel_min = 5, channel_max = 5, toggle_loops=2):
     print("SEQUENCE TEST: ff_channel_toggle_test begin")
@@ -47,3 +47,48 @@ def mercury_carrier_init():
 
     print("Bringing ASIC out of reset")
     mercury_carrier.set_asic_rst(False)
+
+    mercury_carrier.set_asic_rst(False)
+
+def enable_asic():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier._gpiod_asic_nrst.set_value(1)
+
+def disable_asic():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier._gpiod_asic_nrst.set_value(0)
+
+def enable_vreg():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier.set_vreg_en(True)
+
+def disable_vreg():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier.set_vreg_en(False)
+
+def get_vreg():
+    mercury_carrier = get_context('carrier')
+    vreg_enabled = False if (mercury_carrier._gpiod_vreg_en.get_value() == 1) else True
+    print ("Vreg enabled: ", vreg_enabled)
+
+def set_sync_idle():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier._gpiod_sync.set_value(0)
+
+def set_sync_active():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier._gpiod_sync.set_value(1)
+
+def sync_toggle():
+    mercury_carrier = get_context('carrier')
+    print("starting sync toggle")
+    for i in range(0, 100):
+        time.sleep(0.1)
+        mercury_carrier._gpiod_sync.set_value(1)
+        time.sleep(0.1)
+        mercury_carrier._gpiod_sync.set_value(0)
+    print("finished")
+
+def sync_sel_aux():
+    mercury_carrier = get_context('carrier')
+    mercury_carrier.set_sync_sel_aux(True)
