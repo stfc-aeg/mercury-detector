@@ -153,16 +153,16 @@ def set_global_mode():
     # Use internal sync
     mercury_carrier.set_sync_sel_aux(False)
 
-    mercury_carrier._gpiod_sync.set_value(0)
+    mercury_carrier._gpiod_sync.set_value(1)
 
     asic_reset()
-    time.sleep(1.0)
+    # time.sleep(1.0)
 
     _spi_write_reg(0x01, 0x7F)
 
     _spi_write_reg(0x02, 0x63)
 
-    mercury_carrier._gpiod_sync.set_value(1)
+    mercury_carrier._gpiod_sync.set_value(0)
 
     _spi_write_reg(0x03, 0x08)
 
