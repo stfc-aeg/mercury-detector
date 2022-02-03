@@ -126,11 +126,12 @@ class Asic():
     def disable(self):
         self.gpio_nrst.set_value(0)
 
-    def set_sync(self, value):
-        self.gpio_sync.set_value(value)
+    def set_sync(self, is_en):
+        pin_state = 0 if (is_en) else 1
+        self.gpio_sync.set_value(pin_state)
 
     def get_sync(self):
-        return self.gpio_sync.get_value()
+        return True if self.gpio_sync.get_value() == 0 else False
 
     def set_sync_source_aux(self, is_aux):
         pin_state = 0 if (is_aux) else 1

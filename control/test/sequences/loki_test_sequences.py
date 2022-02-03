@@ -72,23 +72,35 @@ def get_vreg():
     print ("Vreg enabled: ", vreg_enabled)
 
 def set_sync_idle():
-    mercury_carrier = get_context('carrier')
-    mercury_carrier._gpiod_sync.set_value(0)
+    asic = get_context('asic')
+
+    # Use internal sync
+    asic.set_sync_source_aux(False)
+
+    asic.set_sync(False)
+
+    print("Sync set inactive")
 
 def set_sync_active():
-    mercury_carrier = get_context('carrier')
-    mercury_carrier._gpiod_sync.set_value(1)
+    asic = get_context('asic')
+
+    # Use internal sync
+    asic.set_sync_source_aux(False)
+
+    asic.set_sync(True)
+
+    print("Sync set active")
 
 def sync_toggle():
-    mercury_carrier = get_context('carrier')
+    asic = get_context('asic')
     print("starting sync toggle")
     for i in range(0, 100):
         time.sleep(0.1)
-        mercury_carrier._gpiod_sync.set_value(1)
+        asic.set_sync_source_aux(False)
         time.sleep(0.1)
-        mercury_carrier._gpiod_sync.set_value(0)
+        asic.set_sync_source_aux(True)
     print("finished")
 
 def sync_sel_aux():
-    mercury_carrier = get_context('carrier')
-    mercury_carrier.set_sync_sel_aux(True)
+    asic = get_context('asic')
+    asic.set_sync_source_aux(True)

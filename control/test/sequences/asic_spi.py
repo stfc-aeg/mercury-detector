@@ -65,17 +65,16 @@ def set_global_mode():
     asic = get_context('asic')
 
     # Use internal sync
-    mercury_carrier.set_sync_sel_aux(False)
+    asic.set_sync_source_aux(False)
 
-    mercury_carrier._gpiod_sync.set_value(1)
-
+    asic.set_sync(False)
     asic.reset()
 
     asic.write_register(0x01, 0x7F)
 
     asic.write_register(0x02, 0x63)
 
-    mercury_carrier._gpiod_sync.set_value(0)
+    asic.set_sync(True)
 
     asic.write_register(0x03, 0x08)
 
