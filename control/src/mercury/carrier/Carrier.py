@@ -5,6 +5,9 @@ from odin_devices.max5306 import MAX5306
 from odin_devices.si534x import SI5344
 from odin_devices.bme280 import BME280
 from odin_devices.i2c_device import I2CException
+from odin_devices.spi_device import SPIDevice
+
+from .asic import Asic
 
 try:
     from odin_devices.ltc2986 import LTC2986, LTCSensorException
@@ -100,6 +103,12 @@ class Carrier():
         # Claim standalone control pins
         self._gpiod_sync = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync,
                                                GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_sync_sel = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync_sel,
+                                                   GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_asic_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_asic_nrst,
+                                                    GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_vreg_en = GPIO_ZynqMP.get_pin(self._interface_definition.pin_vreg_en,
+                                                  GPIO_ZynqMP.DIR_OUTPUT)
 
         # Define device-specific control pins
         self._gpiod_firefly_1 = GPIO_ZynqMP.get_pin(self._interface_definition.pin_firefly_1,
@@ -108,14 +117,6 @@ class Carrier():
                                                     GPIO_ZynqMP.DIR_OUTPUT)
         self._gpiod_nRead_int = GPIO_ZynqMP.get_pin(self._interface_definition.pin_nRead_int,
                                                     GPIO_ZynqMP.DIR_OUTPUT)
-        #tempself._gpiod_sync = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync,
-        #temp                                       GPIO_ZynqMP.DIR_OUTPUT)
-        self._gpiod_sync_sel = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync_sel,
-                                                   GPIO_ZynqMP.DIR_OUTPUT)
-        self._gpiod_asic_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_asic_nrst,
-                                                    GPIO_ZynqMP.DIR_OUTPUT)
-        self._gpiod_vreg_en = GPIO_ZynqMP.get_pin(self._interface_definition.pin_vreg_en,
-                                                  GPIO_ZynqMP.DIR_OUTPUT)
 
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
@@ -123,6 +124,19 @@ class Carrier():
         self.set_asic_rst(True)                             # Init device in reset
         self.vreg_power_cycle_init(None)                    # Contains device setup
 
+        # Init ASIC SPI
+        # self.asic_spidev = SPIDevice(
+        #    bus=interface_definition.spidev_id_mercury[0],
+        #    device=interface_definition.spidev_id_mercury[1],
+        #    hz=2000000)
+        # self.asic_spidev.set_mode(0)
+        # self.asic_spidev.set_cs_active_high(False)
+
+        self.asic = Asic(
+                self._gpiod_asic_nrst, self._gpiod_sync_sel, self._gpiod_sync,
+                bus=interface_definition.spidev_id_mercury[0],
+                device=interface_definition.spidev_id_mercury[1],
+                hz=2000000)
 
     def _gen_FireFly_Tree(self, ff_num):
         channels_tree = self._gen_FireFlyChannels_Tree(ff_num)
@@ -623,7 +637,7 @@ class Carrier():
                 self._rail_monitor_mode,
                 self.get_power_supply_readings)
 
-        logging.error(rail_monitor_tree)
+        logging.info(rail_monitor_tree)
 
         # Define the ParameterTree
         self._param_tree = ParameterTree({

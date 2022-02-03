@@ -50,6 +50,8 @@ class CarrierAdapter(ApiAdapter):
         logging.debug("All objects had valid add_context when checked, proceeding...")
 
         self.adapters['odin_sequencer'].add_context('carrier', self.carrier)
+        self.adapters['odin_sequencer'].add_context('asic', self.carrier.asic)
+        # self.adapters['odin_sequencer'].add_context('asic', self.carrier.asic_spidev)
 
         # Temporarily start the test sequence
         logging.debug("Starting the test sequence...")
