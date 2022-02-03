@@ -280,10 +280,6 @@ def write_test_pattern2(sector=0):
 def tdc_enable_local_vcal():
     asic = get_context('asic')
 
-    reg_04 = asic.read_register(0x04)[1]
-
-    reg_04 |= 0x40  # Set bit 6
-
-    asic.write_register(0x04, reg_04)
+    asic.set_register_bit(0x04, 0b1 << 6)   # Set bit 6
 
     print("TDC local VCAL enabled")

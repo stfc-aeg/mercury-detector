@@ -72,9 +72,7 @@ class Asic():
         transfer_buffer = [command]
         transfer_buffer.append(value)
 
-        readback = self.spi.transfer(transfer_buffer)
-
-        return readback
+        self.spi.transfer(transfer_buffer)
 
     def burst_read(self, start_register, num_bytes):
 
@@ -109,6 +107,14 @@ class Asic():
             transfer_buffer.append(values[i])
 
         self.spi.transfer(transfer_buffer)
+
+    def set_register_bit(self, register, bit):
+        original = self.read_register(register)[1]
+        self.write_register(register, original | bit)
+
+    def clear_register_bit(self, register, bit):
+        original = self.read_register(register)[1]
+        self.write_register(register, original & (~bit))
 
     def enable(self):
         self.gpio_nrst.set_value(1)
