@@ -221,9 +221,9 @@ class Carrier():
                                                name='VDDA ASIC',
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
-            self._pac1921_u3.config_gain(8, 8)
-            self._pac1921_u2.config_gain(8, 8)
-            self._pac1921_u1.config_gain(8, 8)
+            self._pac1921_u3.config_gain(di_gain=1, dv_gain=8)
+            self._pac1921_u2.config_gain(di_gain=1, dv_gain=8)
+            self._pac1921_u1.config_gain(di_gain=1, dv_gain=8)
 
             # PAC1921 Rail monitor mode settings
             if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
@@ -580,9 +580,9 @@ class Carrier():
 
         # Perform the power cycle
         logging.debug("\n\n\n\nPower cycling board VREG")
-        self.set_vreg_en(False)                              # Power up regulators
+        #self.set_vreg_en(False)                              # Power up regulators
         time.sleep(2)
-        self.set_vreg_en(True)                              # Power up regulators
+        #self.set_vreg_en(True)                              # Power up regulators
 
         # Allow time for devices to come up
         time.sleep(1)
