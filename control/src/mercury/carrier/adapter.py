@@ -83,7 +83,7 @@ class CarrierAdapter(ApiAdapter):
 
         _interface_definition_ribbon = Carrier_Interface(
                 i2c_device_bus=1,
-                spidev_id_mercury=(0, 1),
+                spidev_id_mercury=(2, 0),
                 spidev_id_ltc=(1, 0),
                 spidev_id_max=(1, 1),
                 pin_firefly_1=6,
