@@ -118,25 +118,19 @@ class Carrier():
         self._gpiod_nRead_int = GPIO_ZynqMP.get_pin(self._interface_definition.pin_nRead_int,
                                                     GPIO_ZynqMP.DIR_OUTPUT)
 
+        # Init ASIC
+        self.asic = Asic(
+            self._gpiod_asic_nrst, self._gpiod_sync_sel, self._gpiod_sync,
+            bus=interface_definition.spidev_id_mercury[0],
+            device=interface_definition.spidev_id_mercury[1],
+            hz=2000000)
+
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
         self.set_sync_sel_aux(False)                        # Set sync Zynq-controlled
         self.set_asic_rst(True)                             # Init device in reset
         self.vreg_power_cycle_init(None)                    # Contains device setup
 
-        # Init ASIC SPI
-        # self.asic_spidev = SPIDevice(
-        #    bus=interface_definition.spidev_id_mercury[0],
-        #    device=interface_definition.spidev_id_mercury[1],
-        #    hz=2000000)
-        # self.asic_spidev.set_mode(0)
-        # self.asic_spidev.set_cs_active_high(False)
-
-        self.asic = Asic(
-                self._gpiod_asic_nrst, self._gpiod_sync_sel, self._gpiod_sync,
-                bus=interface_definition.spidev_id_mercury[0],
-                device=interface_definition.spidev_id_mercury[1],
-                hz=2000000)
 
     def _gen_FireFly_Tree(self, ff_num):
         channels_tree = self._gen_FireFlyChannels_Tree(ff_num)
@@ -568,12 +562,15 @@ class Carrier():
         return self._sync_sel_aux_state
 
     def set_asic_rst(self, value):
-        self._asic_rst_state = bool(value)
-        pin_state = 0 if (value) else 1     # Reverse logic for nRst
-        self._gpiod_asic_nrst.set_value(pin_state)
+        # Will eventually be called by ASIC paramtree?
+        if (value):
+            self.asic.disable()
+        else:
+            self.asic.enable()
 
     def get_asic_rst(self):
-        return self._asic_rst_state
+        # Will eventually be called by ASIC paramtree?
+        return not self.asic.get_enabled()
 
     def set_vreg_en(self, value):
         self._vreg_en_state = bool(value)
@@ -592,11 +589,14 @@ class Carrier():
         # Deactivate any tasks that might attempt to communicate with devices
         self._POWER_CYCLING = True
 
+        # Put ASIC GPIO in safe state (low for CMOS)
+        self._gpiod_asic_nrst.set_value(0)
+
         # Perform the power cycle
         logging.debug("\n\n\n\nPower cycling board VREG")
-        #self.set_vreg_en(False)                              # Power up regulators
+        self.set_vreg_en(False)                              # Power up regulators
         time.sleep(2)
-        #self.set_vreg_en(True)                              # Power up regulators
+        self.set_vreg_en(True)                              # Power up regulators
 
         # Allow time for devices to come up
         time.sleep(1)
