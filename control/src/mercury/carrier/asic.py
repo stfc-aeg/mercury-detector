@@ -137,7 +137,8 @@ class Asic():
         self.gpio_nrst.set_value(0)
 
     def set_sync(self, is_en):
-        pin_state = 0 if (is_en) else 1
+        # pin_state = 0 if (is_en) else 1         # High is GPIO 0
+        pin_state = 1 if (is_en) else 0         # High is GPIO 1
         self.gpio_sync.set_value(pin_state)
 
     def get_sync(self):
