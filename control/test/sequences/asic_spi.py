@@ -14,9 +14,14 @@ provides = ['spi_read_reg',
 'write_test_pattern',
 'write_test_pattern2',
 'tdc_enable_local_vcal',
-'read_test_pattern_edit',
 'paged_register_test',
-'shift_register_test']
+'shift_register_test',
+'lower_serialiser_bias',
+'test_12bit_output',
+'calibration_set_firstpixel',
+'vcal_noise_test',
+'read_all_sector_gradient',
+'all_sector_cal_capture']
 
 REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
@@ -51,7 +56,7 @@ def spi_read_burst(start_register="0", num_bytes=1):
     # Sanitise input
     start_register = int(str(start_register), 0)
 
-    readback = asic.burst_read(start_register, num_bytes)
+    readback = asic.burst_read(start_register, num_bytes)[1:]
 
     print("Read {} bytes from address {} as {}".format(num_bytes, hex(start_register), [hex(x) for x in readback]))
 
@@ -66,14 +71,18 @@ def set_global_mode():
 
     # Use internal sync
     asic.set_sync_source_aux(False)
+    # asic.set_sync_source_aux(True)
 
+    print("Sync inactive")
     asic.set_sync(False)
+    print("ASIC reset")
     asic.reset()
 
     asic.write_register(0x01, 0x7F)
 
     asic.write_register(0x02, 0x63)
 
+    print("Sync active")
     asic.set_sync(True)
 
     asic.write_register(0x03, 0x08)
@@ -96,51 +105,68 @@ def set_global_mode():
 
     asic.write_register(0x00, 0x54)
 
-    _spi_write_reg(36, 0x04)
-    _spi_write_reg(37, 0x04)
-    _spi_write_reg(38, 0x04)
-    _spi_write_reg(39, 0x04)
-    _spi_write_reg(40, 0x04)
-    _spi_write_reg(41, 0x04)
-    _spi_write_reg(42, 0x04)
-    _spi_write_reg(43, 0x04)
-    _spi_write_reg(44, 0x04)
-    _spi_write_reg(45, 0x04)
+    # _spi_write_reg(36, 0x04)
+    # _spi_write_reg(37, 0x04)
+    # _spi_write_reg(38, 0x04)
+    # _spi_write_reg(39, 0x04)
+    # _spi_write_reg(40, 0x04)
+    # _spi_write_reg(41, 0x04)
+    # _spi_write_reg(42, 0x04)
+    # _spi_write_reg(43, 0x04)
+    # _spi_write_reg(44, 0x04)
+    # _spi_write_reg(45, 0x04)
+
+    print("Set global mode complete")
 
 def sequence_2():
     mercury_carrier = get_context('carrier')
     asic = get_context('asic')
     mercury_carrier._gpiod_sync.set_value(0)
 
-    # asic_reset()
+    asic.reset()
     # time.sleep(1)
 
-    asic.write_register(0x03, 0x08)
-    asic.write_register(36, 0x04)
-    asic.write_register(37, 0x04)
-    asic.write_register(38, 0x04)
-    asic.write_register(39, 0x04)
-    asic.write_register(40, 0x04)
-    asic.write_register(41, 0x04)
-    asic.write_register(42, 0x04)
-    asic.write_register(43, 0x04)
-    asic.write_register(44, 0x04)
-    asic.write_register(45, 0x04)
+    # asic.write_register(0x03, 0x08)
+
+    print("Setting to local control")
+
+    asic.set_register_bit(0x03, 0b00001000)
+    asic.set_register_bit(0x03, 0b00000001)
+    asic.set_register_bit(0x03, 0b00000100)
+    print("Register 3: {}".format(hex(asic.read_register(0x03)[1])))
+
+    for register in range(36, 46):
+        print("Setting register {} to 44".format(register))
+        time.sleep(10)
+        asic.write_register(register, 44)
+
+    # asic.write_register(36, 0x04)
+    # asic.write_register(37, 0x04)
+    # asic.write_register(38, 0x04)
+    # asic.write_register(39, 0x04)
+    # asic.write_register(40, 0x04)
+    # asic.write_register(41, 0x04)
+    # asic.write_register(42, 0x04)
+    # asic.write_register(43, 0x04)
+    # asic.write_register(44, 0x04)
+    # asic.write_register(45, 0x04)
 
 def change_to_external_bias():
     mercury_carrier = get_context('carrier')
     asic = get_context('asic')
 
-    asic.reset()
+    # asic.reset()
 
     time.sleep(1)
 
-    asic.write_register(0x00, 0xD0)
-    asic.write_register(0x00, 0xD1)  # Select page 2
-    asic.write_register(0x02, 0x00)  # Register 130
+    asic.write_register(130, 0x00)
+
+    print("Selected external ibias resistor")
 
 def reset_safe_time():
     asic = get_context('asic')
+
+    print("Testing SPI W/R for stable post-reset delay")
 
     for delay_time in [x * 0.001 for x in range(1, 20)]:
         asic.disable()
@@ -282,3 +308,162 @@ def tdc_enable_local_vcal():
     asic.set_register_bit(0x04, 0b1 << 6)   # Set bit 6
 
     print("TDC local VCAL enabled")
+
+def lower_serialiser_bias():
+    asic = get_context('asic')
+
+    print("Lowering serialiser biases")
+
+    for register in range(131, 141):
+        print("Setting register {} to 00".format(register))
+        time.sleep(10)
+        asic.write_register(register, 0)
+
+def calibration_set_firstpixel(pattern=0):
+    asic = get_context('asic')
+
+    calibration_y = [0]*10
+    calibration_x = [0]*10
+
+    if pattern == 0:
+        calibration_y [9] = 0b00000010  # Set LSB
+        calibration_x [0] = 0b01000000  # Set MSB
+    elif pattern == 1:
+        calibration_y [9] = 0b00000001  # Set LSB
+        calibration_x [0] = 0b10000000  # Set MSB
+    elif pattern == 2:
+        calibration_y [9] = 0b00000011  # Set LSB
+        calibration_x [0] = 0b11000000  # Set MSB
+
+
+    calibration_pattern = calibration_y + calibration_x
+    print("Calibrating with pattern {}: {}".format(pattern, calibration_pattern))
+
+    # Burst write to the calibration register
+    asic.burst_write(126, calibration_pattern)
+
+def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False):
+    mercury_carrier = get_context('carrier')
+
+    if local_vcal:
+        print("Enable TDC local vcal mode")
+        tdc_enable_local_vcal()
+        title = 'vcal_noise'
+    else:
+        title = 'calibration_noise'
+
+    if all_sectors:
+        sector_array = range(0,20)
+    else:
+        sector_array = [0, 9, 19]
+
+    time_now = time.gmtime()
+    filename = "read-tests/" + title + "_{:04d}{:02d}{:02d}_{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec) + '.csv'
+    print("Will write to {}".format(filename))
+    time.sleep(3)
+
+    with open(filename, 'w') as file:
+        for vcal_setting in [0.2, 0.5, 1.0]:
+            # Set the new VCAL voltage
+            mercury_carrier.set_vcal_in(vcal_setting)
+
+            # Read out the results from select sectors
+            for sector in sector_array:
+                print("Begin reading samples for sector {} with VCAL: {}".format(sector, vcal_setting))
+
+                # Sample the sector 50 times
+                samples_out = read_test_pattern(sector=sector, num_samples=sector_samples, store=False, printout=False)
+
+                # Write a line for each sample, with sample number, sector and vcal setting
+                for i in range(0,len(samples_out)):
+                    sample = samples_out[i]
+                    first_columns = [vcal_setting, sector, i]
+                    file.write(','.join([str(x) for x in (first_columns + sample)]))
+                    file.write('\n')
+
+    print("VCAL samples gathered and stored in {}".format(filename))
+
+def read_all_sector_gradient(SAMPLE_NUM=50):
+    mercury_carrier = get_context('carrier')
+
+    # Enable VCAL TDC Input
+    # tdc_enable_local_vcal()
+
+    # Set VCAL to 0.8v
+    mercury_carrier.set_vcal_in(0.8)
+
+    title = 'all-sector-gradient'
+
+    time_now = time.gmtime()
+    filename = "read-tests/" + title + "_{:04d}{:02d}{:02d}_{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec) + '.csv'
+    print("Will write to {}".format(filename))
+    time.sleep(3)
+
+    with open(filename, 'w') as file:
+        for sector_number in range(0,20):
+            print("Begin reading samples for sector {} with VCAL: {}".format(sector_number, 0.8))
+
+            # Sample the sector 50 times
+            samples_out = read_test_pattern(sector=sector_number, num_samples=SAMPLE_NUM, store=False, printout=False)
+
+            # Write a line for each sample, with sample number, sector and vcal setting
+            for i in range(0,len(samples_out)):
+                sample = samples_out[i]
+                first_columns = [0.8, sector_number, i]
+                file.write(','.join([str(x) for x in (first_columns + sample)]))
+                file.write('\n')
+
+def all_sector_cal_capture(vcal_setting=0.8, acceptable_threshold=1000):
+    # Wait for 'valid' calibration readouts (only the 'high' version)
+    # for each sector before recording a single record for each sector,
+    # SIMULATING a full single capture of one calibration frame.
+    mercury_carrier = get_context('carrier')
+
+    # Enable VCAL TDC Input
+    # tdc_enable_local_vcal()
+
+    # Set VCAL
+    mercury_carrier.set_vcal_in(vcal_setting)
+
+    sector_tries = 100
+
+    title = 'all-sector-cal-capture'
+
+    time_now = time.gmtime()
+    filename = "read-tests/" + title + "_{:04d}{:02d}{:02d}_{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec) + '.csv'
+    print("Will write to {}".format(filename))
+    time.sleep(3)
+
+    with open(filename, 'w') as file:
+        for sector_number in range(0,20):
+            print("Begin reading samples for sector {} with VCAL: {}".format(sector_number, vcal_setting))
+
+            valid_sample_found = False
+
+            for sector_try_num in range(sector_tries):
+                # Sample the sector 1 time
+                samples_out = read_test_pattern(sector=sector_number, num_samples=1, store=False, printout=False)
+
+                # Determine if sector is valid
+                if any([sample >= acceptable_threshold for sample in samples_out[0]]):
+                    # Valid sample, store
+                    first_columns = [vcal_setting, sector_number, sector_try_num]
+
+                    # write
+                    print("Found a valid sample read for sector {} on try {}".format(sector_number, sector_try_num))
+                    file.write(','.join([str(x) for x in (first_columns + samples_out[0])]))
+                    file.write('\n')
+                    valid_sample_found = True
+                    break
+                
+                time.sleep(0.002)
+            
+            if not valid_sample_found:
+                print("Failed to find a sample set for sector {}, filling with 0".format(sector_number))
+                sample_null = [0]*320
+                first_columns = [vcal_setting, sector_number, 100]
+
+                file.write(','.join([str(x) for x in (first_columns + sample_null)]))
+                file.write('\n')
+
+    print("Wrote to {}".format(filename))

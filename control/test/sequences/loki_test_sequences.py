@@ -1,7 +1,20 @@
 import time
 
 # loki_test_sequences.py
-provides = ['ff_channel_toggle_test', 'mercury_carrier_init', 'enable_asic', 'disable_asic', 'set_sync_active', 'set_sync_idle', 'sync_toggle','sync_sel_aux', 'enable_vreg', 'disable_vreg', 'get_vreg']
+provides = ['ff_channel_toggle_test',
+'mercury_carrier_init',
+'enable_asic',
+'disable_asic',
+'set_sync_active',
+'set_sync_idle',
+'sync_toggle',
+'sync_sel_aux',
+'enable_vreg',
+'disable_vreg',
+'get_vreg',
+'disable_clock_channel',
+'enable_clock_channel',
+'get_gpio_raw_states']
 
 def ff_channel_toggle_test(firefly = 1, channel_min = 5, channel_max = 5, toggle_loops=2):
     print("SEQUENCE TEST: ff_channel_toggle_test begin")
@@ -104,3 +117,21 @@ def sync_toggle():
 def sync_sel_aux():
     asic = get_context('asic')
     asic.set_sync_source_aux(True)
+
+def disable_clock_channel(channel=3):
+    mercury_carrier = get_context('carrier')
+
+    mercury_carrier._si5344.set_channel_output_enabled(channel, False)
+
+def enable_clock_channel(channel=3):
+    mercury_carrier = get_context('carrier')
+
+    mercury_carrier._si5344.set_channel_output_enabled(channel, True)
+
+def get_gpio_raw_states():
+    mercury_carrier = get_context('carrier')
+
+    print("SYNC (LVDS): ", mercury_carrier._gpiod_sync.get_value())
+    print("SYNC select: ", mercury_carrier._gpiod_sync_sel.get_value())
+    print("ASIC nRST: ", mercury_carrier._gpiod_asic_nrst.get_value())
+    print("Regulator Enable (active low): ", mercury_carrier._gpiod_vreg_en.get_value())

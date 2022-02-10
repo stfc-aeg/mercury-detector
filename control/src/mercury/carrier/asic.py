@@ -20,6 +20,12 @@ class Asic():
         self.gpio_sync_sel = gpio_sync_sel
         self.gpio_sync = gpio_sync
 
+        # Set up store for local serialiser configs
+        self._serialiser_block_configs = []
+        for i in range(0, 11):
+            new_serialiser_block = SerialiserBlockConfig()
+            self._serialiser_block_configs.append(new_serialiser_block)
+
     def reset_page(self):
         self.page = 1
 
@@ -100,7 +106,7 @@ class Asic():
             self.set_page(1)
         start_register = start_register & REGISTER_ADDRESS_MASK
 
-        command = start_register | REGISTER_READ_TRANSACTION
+        command = start_register | REGISTER_WRITE_TRANSACTION
 
         transfer_buffer = [command]
         for i in range(0, len(values)):
@@ -119,6 +125,10 @@ class Asic():
     def enable(self):
         self.gpio_nrst.set_value(1)
         self.reset_page()    # Page is now default value
+
+        # Read into local copies of serialiser config
+        for i in range(0, 11):
+            self._read_serialiser_config(i)
 
     def get_enabled(self):
         return True if self.gpio_nrst.get_value() == 0 else False
@@ -148,3 +158,87 @@ class Asic():
         self.reset_page()   # Page is now default value
         time.sleep(0.1)     # Allow ASIC time to come out of reset
         print("ASIC reset complete")
+
+    def _write_serialiser_config(self, serialiser_block_num):
+        ser_index = serialiser_block_num - 1    # Datasheet numbering starts at 1
+        base_address = 66 + (ser_index) * 6
+
+        # Pack the structure values into the local array and export
+        config_block = self._serialiser_block_configs[ser_index].pack()
+
+        # Write to the ASIC
+        self.burst_write(base_address, config_block)
+
+        # Assume the write succeeded and re-import the config bytes
+        self._serialiser_block_configs[ser_index].unpack(config_block)
+
+    def _read_serialiser_config(self, serialiser_block_num):
+        ser_index = serialiser_block_num - 1    # Datasheet numbering starts at 1
+        base_address = 66 + (ser_index) * 6
+
+        config_block = self.burst_read(base_address, 6)[1:]
+
+        self._serialiser_block_configs[ser_index].unpack(config_block)
+
+    def set_serialiser_patternControl(self, serialiser_block_num, pattern, holdoff=False):
+        ser_index = serialiser_block_num - 1    # Datasheet numbering starts at 1
+        self._serialiser_block_configs[ser_index].patternControl = pattern
+        if not holdoff:
+            self._write_serialiser_config(serialiser_block_num)
+
+
+class SerialiserBlockConfig():
+
+    def __init__(self):
+        # Simply do not return valid data if read before unpack()
+        # self.data_invalid = True
+        
+        self._local_state_bytes = bytearray(6)
+
+    def __repr__(self):
+        outstr= ""
+        try:
+            outstr += "Enable CCP: {}".format(self.enable_ccp)
+            outstr += ", Pattern Control: {}".format(self.patternControl)
+        except AttributeError as e:
+            outstr = "No read (failed on with {})".format(e)
+
+        return outstr
+
+    def unpack(self, bytes_in):
+        # Unpack the 6-byte field supplied as read out into config items
+        bytes_in = bytearray(bytes_in)
+        self._local_state_bytes = bytes_in
+
+        # Reverse byte order so that fields spanning bytes are aligned, and
+        # pack into a single value for easier slicing
+        combined_fields = int.from_bytes(bytes_in, byteorder='little')
+
+        # Slice config items
+        self.enable_ccp = (combined_fields & (0b1 << 46)) >> 46
+        self.patternControl = (combined_fields & (0b111 << 38)) >> 38
+        self.power = {}
+        self.power['Ser'] = (combined_fields & (0xF))
+
+    def pack(self):
+        # Pack config items into combined fields, without overwriting any
+        # currently unsupported fields
+
+        try:
+            # Fill integer representation using current local register copy
+            combined_fields = int.from_bytes(self._local_state_bytes, byteorder='little')
+
+            # Mask off bits where supported fields exist (manually)
+            combined_fields &= int.from_bytes(bytearray([0xFF, 0xFF, 0xFF, 0xFF, 0b00111111, 0b10111110]), byteorder='little')
+
+            # Overwrite supported fields
+            combined_fields |= (self.enable_ccp & 0b1) << 46
+            combined_fields |= (self.patternControl & 0b111) << 38
+
+        except AttributeError as e:
+            raise AttributeError("Invalid pack; config has not been read: {} (structure: {})".format(e, self.__repr__()))
+
+        # Repack into 6-byte little-endian config register set
+        bytes_out = int.to_bytes(combined_fields, byteorder='little', length=6)
+
+        return bytes_out
