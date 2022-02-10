@@ -60,6 +60,35 @@ def spi_read_burst(start_register="0", num_bytes=1):
 
     print("Read {} bytes from address {} as {}".format(num_bytes, hex(start_register), [hex(x) for x in readback]))
 
+def convert_8bit_12bit(values_8bit):
+    val1 = 0
+    val2 = 0
+    val_index = 0
+    output_array = []
+
+    for i in range(len(values_8bit)):
+        if val_index == 0:      # First byte
+            val1 = values_8bit[i]
+        elif val_index == 1:    # Second byte
+            val2 = values_8bit[i]
+        else:                   # Third byte
+            val3 = values_8bit[i]
+
+            output_12bit_1 = (val1 << 4) + ((val2 & 0xF0) >> 4)
+            output_12bit_2 = ((val2 & 0x0F) << 8) + val3
+            output_array.append(output_12bit_1)
+            output_array.append(output_12bit_2)
+
+        if val_index == 2:
+            val_index = 0
+        else:
+            val_index += 1
+
+    return output_array
+
+def test_12bit_output():
+    print([hex(x) for x in convert_8bit_12bit([0xaa,0xbb,0xcc])])
+
 def asic_reset():
     asic = get_context('asic')
     asic.reset()
@@ -228,51 +257,49 @@ def shift_register_test():
 
     print("Shift register test successful")
 
-def read_test_pattern(sector=0):
+def read_test_pattern(sector=0, num_samples=1, store=False, printout=True):
     asic = get_context('asic')
     # Run global enable first
 
-    # _spi_read_reg(0x00)
+    readout_samples = []
+    time_now = time.gmtime()
+    filename = 'read-tests/' + '-'.join( [str(x) for x in [time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec]]) + '.csv'
 
-    # Set test register read mode with trigger 0
-    asic.write_register(0x07, 0x02 | (sector<<2))
+    if not store:
+        filename = '/dev/null'
 
-    # Keep test register read mode with trigger 1
-    asic.write_register(0x07, 0x82 | (sector<<2))
-    time.sleep(0.001)
+    with open(filename, 'w') as f:
 
-    # Put test shift register into shift mode
-    asic.write_register(0x07, 0x81 | (sector<<2))
+        for sample_num in range(0, num_samples):
+            if printout:
+                print("Begin read test shift register sector {}, sample {}".format(sector, sample_num))
 
-    # Read the test shift register
-    readout = asic.burst_read(127, 480)
-    
-    print("Test pattern: {}".format(readout))
+            # Set test register read mode with trigger 0
+            asic.write_register(0x07, 0x02 | (sector<<2))
 
-def read_test_pattern_edit(sector=0):
-    asic = get_context('asic')
-    # Run global enable first
+            # Keep test register read mode with trigger 1
+            asic.write_register(0x07, 0x82 | (sector<<2))
+            time.sleep(0.001)
 
-    # _spi_read_reg(0x00)
+            # Put test shift register into shift mode
+            asic.write_register(0x07, 0x81 | (sector<<2))
 
-    # Set test register read mode with trigger 0
-    asic.write_register(0x07, 0x02 | (sector<<2))
+            # Read the test shift register
+            readout = asic.burst_read(127, 480)
+            
+            # print("Test pattern: {}".format(readout))
+            readout_12bit = convert_8bit_12bit(readout[1:])
+            readout_samples.append(readout_12bit)
+            if printout:
+                print("Test pattern 12bit: {}".format(convert_8bit_12bit(readout[1:])))
 
-    # Keep test register read mode with trigger 1
-    asic.write_register(0x07, 0x82 | (sector<<2))
+            f.write(','.join([str(x) for x in readout_12bit]))
+            f.write('\n')
 
-    # Set trigger 0
-    asic.write_register(0x07, 0x02 | (sector<<2))
+    if printout:
+        print("Write out to {} complete".format(filename))
 
-    time.sleep(0.001)
-
-    # Put test shift register into shift mode
-    asic.write_register(0x07, 0x01 | (sector<<2))
-
-    # Read the test shift register
-    readout = asic.burst_read(127, 480)
-
-    print("Test pattern: {}".format(readout))
+    return readout_samples
 
 def write_test_pattern(sector=0):
     asic = get_context('asic')
