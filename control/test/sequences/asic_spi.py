@@ -21,7 +21,10 @@ provides = ['spi_read_reg',
 'calibration_set_firstpixel',
 'vcal_noise_test',
 'read_all_sector_gradient',
-'all_sector_cal_capture']
+'all_sector_cal_capture',
+'set_all_ram_bias',
+'set_clock_config',
+'test_meta_20220211_TDC_frequency']
 
 REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
@@ -494,3 +497,22 @@ def all_sector_cal_capture(vcal_setting=0.8, acceptable_threshold=1000):
                 file.write('\n')
 
     print("Wrote to {}".format(filename))
+
+def set_all_ram_bias(bias=0b1000):
+    asic = get_context('asic')
+
+    for register in range(46, 66):
+        asic.write_register(register, (bias << 4) | bias)   # Set for both nibbles
+
+def set_clock_config(config=205):
+    carrier = get_context('carrier')
+
+    if config == 205:
+        carrier.set_clk_config('Si5344-RevD-merc0000-Registers2.txt')
+    elif config in [210, 215, 220, 225]:
+        carrier.set_clk_config('Si5344-RevD-merc0000-FastTDC-Registers-' + str(config) + 'M.txt')
+    elif config == 243:
+        carrier.set_clk_config('Si5344-RevD-merc0000-243MHz-Registers.txt')
+    else:
+        raise Exception("No matching config")
+    carrier.set_clk_config(config)
