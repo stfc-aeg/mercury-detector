@@ -24,7 +24,7 @@ import sys
 import os
 from enum import Enum as _Enum, auto as _auto
 
-logging.basicConfig(encoding='utf-8', level=logging.INFO)
+logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
 _RAIL_MONITOR_DERIVE_POWER = True
@@ -342,14 +342,14 @@ class Carrier():
 
         if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
             current_meas = self._pac1921_array_current_measurement
-            logging.warning("mode was POWER_AND_IV, current meas set to {}".format(current_meas))
+            logging.debug("mode was POWER_AND_IV, current meas set to {}".format(current_meas))
 
             # Get Parameter Tree measurement type name
             current_meas_name = {pac1921.Measurement_Type.POWER: 'POWER',
                         pac1921.Measurement_Type.CURRENT: 'CURRENT',
                         pac1921.Measurement_Type.VBUS: 'VOLTAGE'}[current_meas]
 
-            logging.warning("Measurement name is {}".format(current_meas_name))
+            logging.debug("Measurement name is {}".format(current_meas_name))
 
             # Get readings from current measurement for all monitors
             for monitor in self._pac1921_array:
@@ -362,7 +362,7 @@ class Carrier():
                             self._power_supply_readings[monitor.get_name()]['CURRENT'])
 
 
-            logging.warning("Readings taken, {}".format(self._power_supply_readings))
+            logging.info("Readings taken, {}".format(self._power_supply_readings))
 
             # Advance to next measurement
             if _RAIL_MONITOR_DERIVE_POWER:
@@ -384,7 +384,7 @@ class Carrier():
             self._pac1921_array_current_measurement = next_measurement
 
         elif self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_ONLY:
-            logging.warning("mode was POWER ONLY")
+            logging.debug("mode was POWER ONLY")
 
             # Read power from all devices with pin controlled integration
             psr_titles, psr_values = self._pac1921_array.read_devices()
