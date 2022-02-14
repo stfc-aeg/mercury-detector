@@ -22,7 +22,7 @@ class Asic():
 
         # Set up store for local serialiser configs
         self._serialiser_block_configs = []
-        for i in range(0, 11):
+        for i in range(1, 11):
             new_serialiser_block = SerialiserBlockConfig()
             self._serialiser_block_configs.append(new_serialiser_block)
 
@@ -199,8 +199,10 @@ class SerialiserBlockConfig():
     def __repr__(self):
         outstr= ""
         try:
-            outstr += "Enable CCP: {}".format(self.enable_ccp)
+            outstr += "Enable CCP: {}".format(bool(self.enable_ccp))
             outstr += ", Pattern Control: {}".format(self.patternControl)
+            outstr += ", Bypass Scramble: {}".format(bool(self.bypassScramble))
+            outstr += ", CML EN: {}".format(bool(self.cml_en))
         except AttributeError as e:
             outstr = "No read (failed on with {})".format(e)
 
@@ -218,8 +220,9 @@ class SerialiserBlockConfig():
         # Slice config items
         self.enable_ccp = (combined_fields & (0b1 << 46)) >> 46
         self.patternControl = (combined_fields & (0b111 << 38)) >> 38
-        self.power = {}
-        self.power['Ser'] = (combined_fields & (0xF))
+        self.bypassScramble = (combined_fields & (0b1 << 42)) >> 42
+        self.cml_en = (combined_fields & (0b11 << 28)) >> 28
+        self.dll_phase_config = (combined_fields & (0b1 << 33)) >> 33
 
     def pack(self):
         # Pack config items into combined fields, without overwriting any
@@ -230,11 +233,16 @@ class SerialiserBlockConfig():
             combined_fields = int.from_bytes(self._local_state_bytes, byteorder='little')
 
             # Mask off bits where supported fields exist (manually)
-            combined_fields &= int.from_bytes(bytearray([0xFF, 0xFF, 0xFF, 0xFF, 0b00111111, 0b10111110]), byteorder='little')
+            #               |7     |0   |15    |8   |23    |16  |31    |24  |39    |32  |47    |40
+            mask_bytes = [0b11111111, 0b11111111, 0b11111111, 0b11001111, 0b00111111, 0b10111010]
+            combined_fields &= int.from_bytes(bytearray(mask_bytes), byteorder='little')
 
             # Overwrite supported fields
             combined_fields |= (self.enable_ccp & 0b1) << 46
             combined_fields |= (self.patternControl & 0b111) << 38
+            combined_fields |= (self.bypassScramble & 0b1) << 42
+            combined_fields |= (self.cml_en & 0b11) << 28
+            combined_fields |= (self.dll_phase_config & 0b1) << 33
 
         except AttributeError as e:
             raise AttributeError("Invalid pack; config has not been read: {} (structure: {})".format(e, self.__repr__()))
