@@ -372,7 +372,7 @@ def calibration_set_firstpixel(pattern=0):
     # Burst write to the calibration register
     asic.burst_write(126, calibration_pattern)
 
-def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False):
+def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False, vcal_values=[0.2, 0.5, 1.0]):
     mercury_carrier = get_context('carrier')
 
     if local_vcal:
@@ -388,12 +388,12 @@ def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False):
         sector_array = [0, 9, 19]
 
     time_now = time.gmtime()
-    filename = "read-tests/" + title + "_{:04d}{:02d}{:02d}_{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec) + '.csv'
+    filename = "read-tests/" + title + "_{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec, int((time.time() % 1) * 1000)) + '.csv'
     print("Will write to {}".format(filename))
     time.sleep(3)
 
     with open(filename, 'w') as file:
-        for vcal_setting in [0.2, 0.5, 1.0]:
+        for vcal_setting in vcal_values:
             # Set the new VCAL voltage
             mercury_carrier.set_vcal_in(vcal_setting)
 
@@ -412,6 +412,8 @@ def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False):
                     file.write('\n')
 
     print("VCAL samples gathered and stored in {}".format(filename))
+
+    return filename
 
 def read_all_sector_gradient(SAMPLE_NUM=50):
     mercury_carrier = get_context('carrier')
@@ -516,3 +518,77 @@ def set_clock_config(config=205):
     else:
         raise Exception("No matching config")
     carrier.set_clk_config(config)
+
+def test_meta_20220211_TDC_frequency():
+    # 20220211 Test to determine the effect of changing ramp bias
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    # Create reference sample of slow slew ramping, limited sectors
+    set_all_ram_bias(0b1000)        # Slow ramp slew (default)
+    set_clock_config(205)           # Use default 205Mhz TDC clock
+    test1 = vcal_noise_test(local_vcal=False,
+                            sector_samples=1000,
+                            all_sectors=False,
+                            vcal_values=[0, 0.5, 1.0])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Increase resolution and test decreased range
+    set_all_ram_bias(0b1111)        # Fast ramp slew
+    set_clock_config(205)           # Use default 205Mhz TDC clock
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=1000,
+                            all_sectors=False,
+                            vcal_values=[0, 0.5, 1.0])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Increase measured resolution and look at high/low linearity
+    set_all_ram_bias(0b1111)        # Fast ramp slew
+    set_clock_config(225)           # Use 225Mhz TDC clock
+    test3 = vcal_noise_test(local_vcal=False,
+                            sector_samples=1000,
+                            all_sectors=False,
+                            vcal_values=[0.0, 0.1, 0.2, 0.3, 0.4,
+                                         1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Measure uniformity across array of noise, resolution, range & speed. All sectors.
+    set_all_ram_bias(0b1111)        # Fast ramp slew
+    set_clock_config(225)           # Use 225Mhz TDC clock
+    test4 = vcal_noise_test(local_vcal=False,
+                            sector_samples=1000,
+                            all_sectors=True,
+                            vcal_values=[0, 0.5, 1.0])
+    timenow = time.localtime()
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Check effect of CDS reset, with reset on full time, still at 225 and 0b1111. Only one VCAL necessary
+    set_all_ram_bias(0b1111)        # Fast ramp slew
+    set_clock_config(225)           # Use 225Mhz TDC clock
+    asic.write_register(13, 12)     # Set CDS reset on time
+    asic.write_register(14, 0)     # Set CDS reset off time
+    test5 = vcal_noise_test(local_vcal=False,
+                            sector_samples=1000,
+                            all_sectors=True,
+                            vcal_values=[0, 0.5, 1.0])
+    timenow = time.localtime()
+    print("Test 5 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    print("!!! All tests complete:")
+    print("\t1) Reference test stored in {}".format(test1))
+    print("\t2) Resolution test stored in {}".format(test2))
+    print("\t3) Linearity test stored in {}".format(test3))
+    print("\t4) Uniformity test stored in {}".format(test4))
+    print("\t5) CDS RST test stored in {}".format(test5))
