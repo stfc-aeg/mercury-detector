@@ -273,6 +273,16 @@ class Asic():
         bitval = {True: 0b1, False: 0b0}[local_vcal_en]
         self.set_register_bit(0x04, bitval << 6)
 
+    def set_all_ramp_bias(self, bias):
+        # Set the ramp bias value for all 40 ramps in the ASIC.
+        if not bias in range(0, 16):     # 4-bit field
+            raise ValueError("bias must be in range 0-15")
+
+        for register in range(46, 66):
+            self.write_register(register, (bias << 4) | bias)   # Set for both nibbles
+
+        self._logger.info("Set ramp bias for all 40 ASIC ramps to {}".format(bias))
+
     """ Serialiser Functions """
     def get_serialiserblk_from_channel(channel):
         block_num, driver_num = self._block_drv_channel_map[channel]

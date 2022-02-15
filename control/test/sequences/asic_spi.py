@@ -6,7 +6,7 @@ provides = ['spi_read_reg',
 'spi_write_reg',
 'spi_read_burst',
 'set_global_mode',
-'sequence_2',
+# 'sequence_2',
 'change_to_external_bias', 
 'reset_safe_time',
 'asic_reset',
@@ -14,10 +14,10 @@ provides = ['spi_read_reg',
 'write_test_pattern',
 'write_test_pattern2',
 'tdc_enable_local_vcal',
-'paged_register_test',
-'shift_register_test',
+# 'paged_register_test',
+# 'shift_register_test',
 'lower_serialiser_bias',
-'test_12bit_output',
+# 'test_12bit_output',
 'calibration_set_firstpixel',
 'vcal_noise_test',
 'read_all_sector_gradient',
@@ -412,9 +412,8 @@ def all_sector_cal_capture(vcal_setting=0.8, acceptable_threshold=1000):
 
 def set_all_ram_bias(bias=0b1000):
     asic = get_context('asic')
-
-    for register in range(46, 66):
-        asic.write_register(register, (bias << 4) | bias)   # Set for both nibbles
+    asic.set_all_ramp_bias(bias)
+    print("Set all ramp bias to {}".format(bias))
 
 def set_clock_config(config=205):
     carrier = get_context('carrier')
@@ -444,7 +443,7 @@ def test_meta_20220211_TDC_frequency():
     asic.set_register_bit(  0, 0b00001000)
 
     # Create reference sample of slow slew ramping, limited sectors
-    set_all_ram_bias(0b1000)        # Slow ramp slew (default)
+    asic.set_all_ram_bias(0b1000)        # Slow ramp slew (default)
     set_clock_config(205)           # Use default 205Mhz TDC clock
     test1 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -454,7 +453,7 @@ def test_meta_20220211_TDC_frequency():
     print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
 
     # Increase resolution and test decreased range
-    set_all_ram_bias(0b1111)        # Fast ramp slew
+    asic.set_all_ram_bias(0b1111)        # Fast ramp slew
     set_clock_config(205)           # Use default 205Mhz TDC clock
     test2 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -464,7 +463,7 @@ def test_meta_20220211_TDC_frequency():
     print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
 
     # Increase measured resolution and look at high/low linearity
-    set_all_ram_bias(0b1111)        # Fast ramp slew
+    asic.set_all_ram_bias(0b1111)        # Fast ramp slew
     set_clock_config(225)           # Use 225Mhz TDC clock
     test3 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -475,7 +474,7 @@ def test_meta_20220211_TDC_frequency():
     print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
 
     # Measure uniformity across array of noise, resolution, range & speed. All sectors.
-    set_all_ram_bias(0b1111)        # Fast ramp slew
+    asic.set_all_ram_bias(0b1111)        # Fast ramp slew
     set_clock_config(225)           # Use 225Mhz TDC clock
     test4 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -485,7 +484,7 @@ def test_meta_20220211_TDC_frequency():
     print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
 
     # Check effect of CDS reset, with reset on full time, still at 225 and 0b1111. Only one VCAL necessary
-    set_all_ram_bias(0b1111)        # Fast ramp slew
+    asic.set_all_ram_bias(0b1111)        # Fast ramp slew
     set_clock_config(225)           # Use 225Mhz TDC clock
     asic.write_register(13, 12)     # Set CDS reset on time
     asic.write_register(14, 0)     # Set CDS reset off time
