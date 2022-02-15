@@ -593,7 +593,7 @@ class Carrier():
         self._gpiod_asic_nrst.set_value(0)
 
         # Perform the power cycle
-        logging.debug("\n\n\n\nPower cycling board VREG")
+        logging.warning("\n\n\n\nPower cycling board VREG")
         self.set_vreg_en(False)                              # Power up regulators
         time.sleep(2)
         self.set_vreg_en(True)                              # Power up regulators
@@ -602,7 +602,7 @@ class Carrier():
         time.sleep(1)
 
         # Re-init the board devices
-        logging.debug("Board VREG power cycled, re-init devices")
+        logging.info("Board VREG power cycled, re-init devices")
         self.POR_init_devices()
 
         # Re-configure the device tree (some things depend on up-to-date device info

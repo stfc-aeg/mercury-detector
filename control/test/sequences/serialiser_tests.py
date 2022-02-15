@@ -9,7 +9,9 @@ provides = ['ser_set_pattern',
 'ser_exit_reset',
 'set_single_cml',
 'cycle_cml_drivers',
-'bypass_scramble_all']
+'bypass_scramble_all',
+'set_dll_phase_config',
+'set_dll_phase_config_next']
 
 def ser_set_pattern(serialiser_number=1, pattern=7):
     asic = get_context('asic')
@@ -82,20 +84,7 @@ def set_pattern_all(pattern=7):
 
 def set_cml_en_all(enable=True):
     asic = get_context('asic')
-    mercury_carrier = get_context('carrier')
-
-    # Ensure global reset completed (so that sync is asserted)
-
-    # Configure all serialisers
-    print("Enabling CML {} for serialisers".format(enable))
-    i = 1
-    for serialiser in asic._serialiser_block_configs:
-        print("Setting serialiser {}".format(i))
-        serialiser.cml_en = 0b11 if enable else 0b00            # Enable CML drivers 1 & 2
-
-        asic._write_serialiser_config(i)    # Force pack and write to config
-        i += 1
-        # time.sleep(3)
+    asic.set_ser_enable_CML_drivers(enable, holdoff=False)
 
 def set_reg_bit_serialiser(register, bit):
     asic = get_context('asic')
@@ -117,8 +106,28 @@ def set_bit_serialiser(ser_number, bit_number):
     register_offset = bit_number % 8
     register_bit_number = int(bit_number / 8)
 
-def set_dll_phase_config(ser_number=1, bitval=0):
-    asic._serialiser_block_configs
+def set_dll_phase_config(dll_config=0b001, dll_phase_invert=False):
+    asic = get_context('asic')
+    asic.set_all_serialiser_DLL_Config(dll_config)
+    asic.set_all_serialiser_DLL_phase_invert(dll_phase_invert)
+    print("dll config set {} and dll phase invert: {}".format(dll_config, dll_phase_invert))
+
+def set_dll_phase_config_next():
+    # Assumes that all dll phase configs and dll configs are the same
+    asic = get_context('asic')
+
+    # get the old config (from block 1)
+    serialiserblk = asic._serialiser_block_configs[0]
+    combined_value = ((serialiserblk.dll_phase_config << 3) | 
+                      (serialiserblk.dll_config))
+    
+    # Cycle the value within 4 bits
+    combined_value = (combined_value + 1) & 0xF
+
+    # Write the new config
+    phaseinv = False if (combined_value > 7) else True
+    set_dll_phase_config(dll_config=(combined_value & 0b111),
+                         dll_phase_invert = phaseinv)
 
 def ser_enter_reset():
     asic = get_context('asic')
