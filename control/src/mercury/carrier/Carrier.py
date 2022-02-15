@@ -107,8 +107,16 @@ class Carrier():
                                                    GPIO_ZynqMP.DIR_OUTPUT)
         self._gpiod_asic_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_asic_nrst,
                                                     GPIO_ZynqMP.DIR_OUTPUT)
+
+        # Put nRST in safe state before vreg_en forced off (may occur after allocation when run after failure)
+        self._gpiod_asic_nrst.set_value(0)
+
+        # Claim vreg enable control pin, as pull-up (will set disabled until written)
+        #TODO add the pull-up
         self._gpiod_vreg_en = GPIO_ZynqMP.get_pin(self._interface_definition.pin_vreg_en,
-                                                  GPIO_ZynqMP.DIR_OUTPUT)
+                                                  GPIO_ZynqMP.DIR_OUTPUT,
+                                                #   pull_up=True)     # Do not power up immediately
+                                                    )
 
         # Define device-specific control pins
         self._gpiod_firefly_1 = GPIO_ZynqMP.get_pin(self._interface_definition.pin_firefly_1,
@@ -572,9 +580,14 @@ class Carrier():
         # Will eventually be called by ASIC paramtree?
         return not self.asic.get_enabled()
 
-    def set_vreg_en(self, value):
-        self._vreg_en_state = bool(value)
-        pin_state = 0 if (value) else 1     # Reverse logic
+    def set_vreg_en(self, enable):
+        self._vreg_en_state = bool(enable)
+
+        # Always Put ASIC GPIO in safe state (low for CMOS) if VREG is being disabled
+        if not enable:
+            self._gpiod_asic_nrst.set_value(0)  # nRST low
+
+        pin_state = 0 if (enable) else 1     # Reverse logic
         self._gpiod_vreg_en.set_value(pin_state)
 
     def get_vreg_en(self):
@@ -588,9 +601,6 @@ class Carrier():
 
         # Deactivate any tasks that might attempt to communicate with devices
         self._POWER_CYCLING = True
-
-        # Put ASIC GPIO in safe state (low for CMOS)
-        self._gpiod_asic_nrst.set_value(0)
 
         # Perform the power cycle
         logging.warning("\n\n\n\nPower cycling board VREG")

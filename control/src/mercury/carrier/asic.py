@@ -30,6 +30,7 @@ class Asic():
             self._serialiser_block_configs.append(new_serialiser_block)
         self._logger.info("ASIC init complete")
 
+    """ SPI Register Access Functions """
     def reset_page(self):
         self.page = 1
 
@@ -52,7 +53,6 @@ class Asic():
 
             self.page = page
 
-    """ SPI Register Access Functions """
     def read_register(self, address):
 
         if (address > 127):     # Page 2
