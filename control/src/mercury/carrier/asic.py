@@ -52,6 +52,7 @@ class Asic():
 
             self.page = page
 
+    """ SPI Register Access Functions """
     def read_register(self, address):
 
         if (address > 127):     # Page 2
@@ -130,6 +131,34 @@ class Asic():
         original = self.read_register(register)[1]
         self.write_register(register, original & (~bit))
 
+    @staticmethod
+    def convert_8bit_12bit(values_8bit):
+        val1 = 0
+        val2 = 0
+        val_index = 0
+        output_array = []
+
+        for i in range(len(values_8bit)):
+            if val_index == 0:      # First byte
+                val1 = values_8bit[i]
+            elif val_index == 1:    # Second byte
+                val2 = values_8bit[i]
+            else:                   # Third byte
+                val3 = values_8bit[i]
+
+                output_12bit_1 = (val1 << 4) + ((val2 & 0xF0) >> 4)
+                output_12bit_2 = ((val2 & 0x0F) << 8) + val3
+                output_array.append(output_12bit_1)
+                output_array.append(output_12bit_2)
+
+            if val_index == 2:
+                val_index = 0
+            else:
+                val_index += 1
+
+        return output_array
+
+    """ Pin and power control """
     def enable(self):
         self.gpio_nrst.set_value(1)
         self.reset_page()    # Page is now default value
@@ -174,7 +203,85 @@ class Asic():
         self.enable()
         self.reset_page()   # Page is now default value
         time.sleep(0.1)     # Allow ASIC time to come out of reset
-        print("ASIC reset complete")
+        self._logger.debug("ASIC reset complete")
+
+    """ Device function control """
+    def enter_global_mode(self):
+        # Ensure that the sync is under zynq control
+        self.set_sync_source_aux(False)
+
+        # Set the sync line low before reset
+        self.set_sync(False)
+
+        # Reset the ASIC
+        self.reset()
+
+        # Enable global control of readout, digital signals, analogue signals,
+        # analogue bias enable, TDC oscillator enable, serialiser PLL enable,
+        # TDC PLL enable, VCAL select, serialiser mode, serialiser analogue/
+        # digital reset.
+        self.write_register(0x01, 0x7F)
+        self.write_register(0x02, 0x63)
+
+        # Set the sync active
+        self.set_sync(True)
+
+        # Enter further settings post sync raise
+        self.write_register(0x03, 0x08)     # Enable pixel bias
+        self.write_register(0x03, 0x09)     # Enable TDC PLLs
+        self.write_register(0x03, 0x0D)     # Enable TDC oscillators
+        self.write_register(0x03, 0x0F)     # Enable Serialiser PLLs
+        self.write_register(0x03, 0x1F)     # Enable pixel analogue signals
+        self.write_register(0x03, 0x3F)     # Enable pixel digital signals
+
+        # Remove serialiser digital and analogue reset
+        self.write_register(0x04, 0x01)
+        self.write_register(0x04, 0x03)
+
+        # Enable readout
+        self.write_register(0x03, 0x7F)
+
+        # Enable calibrate
+        self.write_register(0x00, 0x54)
+
+    def read_test_pattern(self, sector):
+        # Read out a test pattern from a specificed sector using the 480
+        # byte test shift register (320 12-bit pixels). The result is
+        # returned as an array of 320 12-bit pixel values.
+
+        # Set test register read mode with trigger 0
+        self.write_register(0x07, 0x02 | (sector<<2))
+
+        # Keep test register read mode with trigger 1
+        self.write_register(0x07, 0x82 | (sector<<2))
+        time.sleep(0.001)
+
+        # Put test shift register into shift mode
+        self.write_register(0x07, 0x81 | (sector<<2))
+
+        # Read the test shift register
+        readout = self.burst_read(127, 480)
+
+        # Convert to 12-bit data and remove first byte (not part of read)        
+        readout_12bit = Asic.convert_8bit_12bit(readout[1:])
+
+        return readout_12bit
+
+    def set_tdc_local_vcal(self, local_vcal_en=True):
+        # Enable to use VCAL as the direct comparator input rather than the
+        # default.
+        bitval = {True: 0b1, False: 0b0}[local_vcal_en]
+        self.set_register_bit(0x04, bitval << 6)
+
+    """ Serialiser Functions """
+    def get_serialiserblk_from_channel(channel):
+        block_num, driver_num = self._block_drv_channel_map[channel]
+        serialiser = self._serialiser_block_configs[block_num]
+
+        self._logger.debug('Channel {} decoded to serialiser {} driver {}'.format(
+            channel, block_num, driver_num))
+
+        return (serialiser, block_num, driver_num)
 
     def _write_serialiser_config(self, serialiser_block_num):
         ser_index = serialiser_block_num - 1    # Datasheet numbering starts at 1

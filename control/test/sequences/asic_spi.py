@@ -63,34 +63,9 @@ def spi_read_burst(start_register="0", num_bytes=1):
 
     print("Read {} bytes from address {} as {}".format(num_bytes, hex(start_register), [hex(x) for x in readback]))
 
-def convert_8bit_12bit(values_8bit):
-    val1 = 0
-    val2 = 0
-    val_index = 0
-    output_array = []
-
-    for i in range(len(values_8bit)):
-        if val_index == 0:      # First byte
-            val1 = values_8bit[i]
-        elif val_index == 1:    # Second byte
-            val2 = values_8bit[i]
-        else:                   # Third byte
-            val3 = values_8bit[i]
-
-            output_12bit_1 = (val1 << 4) + ((val2 & 0xF0) >> 4)
-            output_12bit_2 = ((val2 & 0x0F) << 8) + val3
-            output_array.append(output_12bit_1)
-            output_array.append(output_12bit_2)
-
-        if val_index == 2:
-            val_index = 0
-        else:
-            val_index += 1
-
-    return output_array
-
 def test_12bit_output():
-    print([hex(x) for x in convert_8bit_12bit([0xaa,0xbb,0xcc])])
+    asic = get_context('asic')
+    print([hex(x) for x in asic.convert_8bit_12bit([0xaa,0xbb,0xcc])])
 
 def asic_reset():
     asic = get_context('asic')
@@ -98,56 +73,8 @@ def asic_reset():
     print("ASIC reset")
 
 def set_global_mode():
-    mercury_carrier = get_context('carrier')
     asic = get_context('asic')
-
-    # Use internal sync
-    asic.set_sync_source_aux(False)
-    # asic.set_sync_source_aux(True)
-
-    print("Sync inactive")
-    asic.set_sync(False)
-    print("ASIC reset")
-    asic.reset()
-
-    asic.write_register(0x01, 0x7F)
-
-    asic.write_register(0x02, 0x63)
-
-    print("Sync active")
-    asic.set_sync(True)
-
-    asic.write_register(0x03, 0x08)
-
-    asic.write_register(0x03, 0x09)
-
-    asic.write_register(0x03, 0x0D)
-
-    asic.write_register(0x03, 0x0F)
-
-    asic.write_register(0x03, 0x1F)
-
-    asic.write_register(0x03, 0x3F)
-
-    asic.write_register(0x04, 0x01)
-
-    asic.write_register(0x04, 0x03)
-
-    asic.write_register(0x03, 0x7F)
-
-    asic.write_register(0x00, 0x54)
-
-    # _spi_write_reg(36, 0x04)
-    # _spi_write_reg(37, 0x04)
-    # _spi_write_reg(38, 0x04)
-    # _spi_write_reg(39, 0x04)
-    # _spi_write_reg(40, 0x04)
-    # _spi_write_reg(41, 0x04)
-    # _spi_write_reg(42, 0x04)
-    # _spi_write_reg(43, 0x04)
-    # _spi_write_reg(44, 0x04)
-    # _spi_write_reg(45, 0x04)
-
+    asic.enter_global_mode()
     print("Set global mode complete")
 
 def sequence_2():
@@ -276,25 +203,11 @@ def read_test_pattern(sector=0, num_samples=1, store=False, printout=True):
         for sample_num in range(0, num_samples):
             if printout:
                 print("Begin read test shift register sector {}, sample {}".format(sector, sample_num))
-
-            # Set test register read mode with trigger 0
-            asic.write_register(0x07, 0x02 | (sector<<2))
-
-            # Keep test register read mode with trigger 1
-            asic.write_register(0x07, 0x82 | (sector<<2))
-            time.sleep(0.001)
-
-            # Put test shift register into shift mode
-            asic.write_register(0x07, 0x81 | (sector<<2))
-
-            # Read the test shift register
-            readout = asic.burst_read(127, 480)
             
-            # print("Test pattern: {}".format(readout))
-            readout_12bit = convert_8bit_12bit(readout[1:])
+            readout_12bit = asic.read_test_pattern(sector)
             readout_samples.append(readout_12bit)
             if printout:
-                print("Test pattern 12bit: {}".format(convert_8bit_12bit(readout[1:])))
+                print("Test pattern 12bit: {}".format(readout_12bit))
 
             f.write(','.join([str(x) for x in readout_12bit]))
             f.write('\n')
@@ -331,13 +244,10 @@ def write_test_pattern2(sector=0):
     # Test reg to write mode and select image sector 0
     asic.write_register(0x07, 0x03 | (sector<<2))
 
-
-def tdc_enable_local_vcal():
+def tdc_enable_local_vcal(local_vcal_en=True):
     asic = get_context('asic')
-
-    asic.set_register_bit(0x04, 0b1 << 6)   # Set bit 6
-
-    print("TDC local VCAL enabled")
+    asic.set_tdc_local_vcal(local_vcal_en)
+    print("TDC local VCAL enabled: {}".format(local_vcal_en))
 
 def lower_serialiser_bias():
     asic = get_context('asic')
