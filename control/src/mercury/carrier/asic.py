@@ -244,6 +244,8 @@ class Asic():
         # Enable calibrate
         self.write_register(0x00, 0x54)
 
+        self._logger.info("Global mode configured")
+
     def read_test_pattern(self, sector):
         # Read out a test pattern from a specificed sector using the 480
         # byte test shift register (320 12-bit pixels). The result is

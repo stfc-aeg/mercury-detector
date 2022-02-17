@@ -98,14 +98,21 @@ class CarrierAdapter(ApiAdapter):
         )
 
         use_iv = True
+        critical_temperature = 20       #TODO set lower once using ASIC temp
 
-        self.carrier = Carrier(si_config_location, si_filename, use_iv, interface_definition=_interface_definition_ribbon)
+        self.carrier = Carrier(si_config_location,
+                               si_filename,
+                               use_iv,
+                               critical_temperature,
+                               interface_definition=_interface_definition_ribbon)
 
         # Call self-repeating loops for first time
         self.power_update_interval = float(1.0)
         self.power_update_loop()
         self.firefly_update_interval = float(1.0)
         self.firefly_update_loop()
+        self.temperature_update_interval = float(3.0)
+        self.temperature_update_loop()
 
     def power_update_loop(self):
         """
@@ -125,6 +132,12 @@ class CarrierAdapter(ApiAdapter):
         # interval
         IOLoop.instance().call_later(self.firefly_update_interval, self.firefly_update_loop)
 
+    def temperature_update_loop(self):
+        #TODO eventually this should sync all temp readings so that request rate is not
+        # UI-bound.
+        self.carrier._sync_critical_temp_monitor()
+        IOLoop.instance().call_later(self.temperature_update_interval, self.temperature_update_loop)
+
 
     @response_types('application/json', default='application/json')
     def get(self, path, request):
@@ -134,18 +147,17 @@ class CarrierAdapter(ApiAdapter):
         :param request: HTTP request object
         :return: an ApiAdapterResponse object containing the appropriate response
         """
-        if not self.carrier._POWER_CYCLING:     # TODO find a neater way to do this
-            try:
-                response = self.carrier.get(path, wants_metadata(request))
-                status_code = 200
-            except ParameterTreeError as e:
-                response = {'error': str(e)}
-                status_code = 400
+        try:
+            response = self.carrier.get(path, wants_metadata(request))
+            status_code = 200
+        except ParameterTreeError as e:
+            response = {'error': str(e)}
+            status_code = 400
 
-            content_type = 'application/json'
+        content_type = 'application/json'
 
-            return ApiAdapterResponse(response, content_type=content_type,
-                                      status_code=status_code)
+        return ApiAdapterResponse(response, content_type=content_type,
+                                    status_code=status_code)
 
     @request_types('application/json')
     @response_types('application/json', default='application/json')
@@ -157,27 +169,26 @@ class CarrierAdapter(ApiAdapter):
         :return: an ApiAdapterResponse object containing the appropriate response
         """
 
-        if not self.carrier._POWER_CYCLING:     # TODO find a neater way to do this
-            content_type = 'application/json'
-            data=0
-            try:
-                data = json_decode(request.body)
-                print("path, data: ", path, ", ", data)
-                self.carrier.set(path, data)
-                response = self.carrier.get(path)
-                status_code = 200
-            #tempexcept CarrierError as e:
-            #temp    response = {'error': str(e)}
-            #temp    status_code = 400
-            except (TypeError, ValueError) as e:
-                response = {'error': 'Failed to decode PUT request body: {}'.format(str(e))}
-                status_code = 400
+        content_type = 'application/json'
+        data=0
+        try:
+            data = json_decode(request.body)
+            print("path, data: ", path, ", ", data)
+            self.carrier.set(path, data)
+            response = self.carrier.get(path)
+            status_code = 200
+        #tempexcept CarrierError as e:
+        #temp    response = {'error': str(e)}
+        #temp    status_code = 400
+        except (TypeError, ValueError) as e:
+            response = {'error': 'Failed to decode PUT request body: {}'.format(str(e))}
+            status_code = 400
 
-            logging.debug(data)
-            #logging.debug(response)
+        logging.debug(data)
+        #logging.debug(response)
 
-            return ApiAdapterResponse(response, content_type=content_type,
-                                      status_code=status_code)
+        return ApiAdapterResponse(response, content_type=content_type,
+                                    status_code=status_code)
 
     def delete(self, path, request):
         """Handle an HTTP DELETE request.
@@ -186,10 +197,9 @@ class CarrierAdapter(ApiAdapter):
         :param request: HTTP request object
         :return: an ApiAdapterResponse object containing the appropriate response
         """
-        if not self.carrier._POWER_CYCLING:     # TODO find a neater way to do this
-            response = 'CarrierAdapter: DELETE on path {}'.format(path)
-            status_code = 200
+        response = 'CarrierAdapter: DELETE on path {}'.format(path)
+        status_code = 200
 
-            logging.debug(response)
+        logging.debug(response)
 
-            return ApiAdapterResponse(response, status_code=status_code)
+        return ApiAdapterResponse(response, status_code=status_code)
