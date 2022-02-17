@@ -114,9 +114,9 @@ def sync_toggle():
         asic.set_sync_source_aux(True)
     print("finished")
 
-def sync_sel_aux():
+def sync_sel_aux(aux_en=True):
     asic = get_context('asic')
-    asic.set_sync_source_aux(True)
+    asic.set_sync_source_aux(aux_en)
 
 def disable_clock_channel(channel=3):
     mercury_carrier = get_context('carrier')

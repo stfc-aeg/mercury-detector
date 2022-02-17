@@ -137,7 +137,7 @@ class Carrier():
             self._gpiod_asic_nrst, self._gpiod_sync_sel, self._gpiod_sync,
             bus=interface_definition.spidev_id_mercury[0],
             device=interface_definition.spidev_id_mercury[1],
-            hz=2000000)
+            hz=20000000)    # 20M -> 10M
 
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
@@ -610,6 +610,10 @@ class Carrier():
 
     ''' Direct GPIO Control '''
 
+    def get_sync(self):
+        # Convert to int
+        return 1 if self.asic.get_sync() else 0
+
     def send_sync(self):
         LVDS_sync_active_state = 0 if (_LVDS_sync_idle_state == 1) else 1
         self._gpiod_sync.set_value(LVDS_sync_active_state)
@@ -617,12 +621,11 @@ class Carrier():
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
 
     def set_sync_sel_aux(self, value):
-        self._sync_sel_aux_state = bool(value)
-        pin_state = 0 if (value) else 1
-        self._gpiod_sync_sel.set_value(pin_state)
+        self.asic.set_sync_source_aux(value)
 
     def get_sync_sel_aux(self):
-        return self._sync_sel_aux_state
+        # Convert to int
+        return 1 if self.asic.get_sync_source_aux() else 0
 
     def set_asic_rst(self, value):
         # Will eventually be called by ASIC paramtree?
@@ -633,7 +636,8 @@ class Carrier():
 
     def get_asic_rst(self):
         # Will eventually be called by ASIC paramtree?
-        return not self.asic.get_enabled()
+        asic_enabled = self.asic.get_enabled()
+        return not asic_enabled
 
     def set_vreg_en(self, enable):
         self._vreg_en_state = bool(enable)
@@ -641,6 +645,7 @@ class Carrier():
         # Always Put ASIC GPIO in safe state (low for CMOS) if VREG is being disabled
         if not enable:
             self._gpiod_asic_nrst.set_value(0)  # nRST low
+            self._gpiod_sync.set_value(0)       # sync low
 
         pin_state = 0 if (enable) else 1     # Reverse logic
         self._gpiod_vreg_en.set_value(pin_state)
@@ -723,7 +728,7 @@ class Carrier():
             },
             "CRITICAL_TEMP": (self.get_critical_temp_status, None, {"description":"Read 1 if system has a critical temperature"}),
             "VCAL": (self.get_vcal_in, self.set_vcal_in, {"description":"Analogue VCAL_IN", "units":"V"}),
-            "SYNC": (lambda: 0, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
+            "SYNC": (self.get_sync, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
             "SYNC_SEL_AUX": (self.get_sync_sel_aux, self.set_sync_sel_aux, {"description":"Set true to get sync signal externally"}),
             "ASIC_RST":(self.get_asic_rst, self.set_asic_rst, {"description":"Set true to enter ASIC reset"}),
             #"VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set true to enable on-board power supplies"})

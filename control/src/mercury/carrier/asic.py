@@ -8,6 +8,29 @@ REGISTER_ADDRESS_MASK = 0b01111111
 
 class Asic():
 
+    # Maps MERCURY logical channel to (serialiser block, driver number)
+    _block_drv_channel_map = {  0   :   (1, 2),
+                                1   :   (1, 1),
+                                2   :   (2, 1),
+                                3   :   (2, 2),
+                                4   :   (3, 2),
+                                5   :   (3, 1),
+                                6   :   (4, 1),
+                                7   :   (4, 2),
+                                8   :   (5, 2),
+                                9   :   (5, 1),
+                                10  :   (6, 1),
+                                11  :   (6, 2),
+                                12  :   (7, 2),
+                                13  :   (7, 1),
+                                14  :   (8, 1),
+                                15  :   (8, 2),
+                                16  :   (9, 2),
+                                17  :   (9, 1),
+                                18  :   (10, 1),
+                                19  :   (10, 2),
+                                  }
+
     def __init__(self, gpio_nrst, gpio_sync_sel, gpio_sync, bus=2, device=0, hz=2000000):
 
         # super(Asic, self).__init__(bus, device, hz)
@@ -170,7 +193,7 @@ class Asic():
         self._logger.info('ASIC enabled')
 
     def get_enabled(self):
-        return True if self.gpio_nrst.get_value() == 0 else False
+        return True if self.gpio_nrst.get_value() == 1 else False
 
     def disable(self):
         self.gpio_nrst.set_value(0)
@@ -182,7 +205,8 @@ class Asic():
         self._logger.info('ASIC SYNC set: {}'.format(is_en))
 
     def get_sync(self):
-        return True if self.gpio_sync.get_value() == 0 else False
+        enabled = True if self.gpio_sync.get_value() == 1 else False
+        return enabled
 
     def set_sync_source_aux(self, is_aux):
         pin_state = 0 if (is_aux) else 1
