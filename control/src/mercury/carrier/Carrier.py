@@ -682,6 +682,16 @@ class Carrier():
         # Re-activate any tasks that might attempt to communicate with devices
         self._POWER_CYCLING = False
 
+    ''' ASIC Control '''
+    def set_asic_mode(self, value):
+        if value == "global":
+            self.asic.enter_global_mode()
+            logging.info("Entering global mode")
+        #elif value == "local":
+        #    pass
+        else:
+            logging.warning("Mode {} is not supported by ASIC".format(value))
+
     def _paramtree_setup(self):
 
         # Sync single-read items
@@ -731,6 +741,7 @@ class Carrier():
             "SYNC": (self.get_sync, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
             "SYNC_SEL_AUX": (self.get_sync_sel_aux, self.set_sync_sel_aux, {"description":"Set true to get sync signal externally"}),
             "ASIC_RST":(self.get_asic_rst, self.set_asic_rst, {"description":"Set true to enter ASIC reset"}),
+            "ASIC_MODE":(None, self.set_asic_mode, {"description":"Init the ASIC with a specific mode (e.g. global)"}),
             #"VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set true to enable on-board power supplies"})
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{

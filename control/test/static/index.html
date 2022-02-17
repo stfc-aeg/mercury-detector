@@ -118,10 +118,15 @@
 
                         <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
                             <div class="row">
-                                <p class="lead text-center">Board Control</p>
+                                <p class="lead text-center">ASIC Control</p>
                             </div> <!-- row -->
-                            <div class="row contflex">
-                                <div class="col-md-11">
+			    <div class="row contflex">
+                                <div class="card mb-3 text-center">
+				    <div class="card-header">
+					VCAL Control
+				    </div>
+				    <div class="card-body">
+		                        <div class="row contflex">
                                     <p>VCAL Voltage: <span id="vcal-voltage">&nbsp;</span>v</p>
                                     <div class="input-group mb-3">
                                         <span class="input-group-text">VCAL (V)</span>
@@ -129,14 +134,66 @@
                                         <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
                                     </div>
                                     <!-- <p><input type="button" value="Update" id="vcal-submit" onclick="change_vcal()"/></p> -->
-                                </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
-                            <div class="row contflex">
-                                <div class="col-md-11">
-                                    <p>Regulator Power Control:</p>
-                                    <p><input type="button" value="Power Cycle&#13;&#10;VREG EN" id="vreg-cycle-submit" onclick="run_vreg_cycle()"/></p>
-                                </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
+
+					</div>
+				    </div>
+				</div>
+                                <div class="card mb-3 text-center">
+				    <div class="card-header">
+					ASIC Mode
+				    </div>
+				    <div class="card-body">
+					<div class="row contflex">
+						<div class="col">
+							<button type="button" class="btn btn-primary"  onclick="run_vreg_cycle()">Power Cycle Regulators</button>
+						</div>
+						<div class="col">
+							<button type="button" class="btn btn-primary"  onclick="change_asic_mode('global')">Enable Global Mode</button>
+						</div>
+						<div class="col">
+						    <p>Reset State: </p>
+						    <span id="asic-rst-state">&nbsp;</span>
+						</div>
+						<div class="col">
+						    <p>Regulator Enable State: </p>
+						    <span id="vreg-en-state">&nbsp;</span>
+						</div>
+					</div>
+				    </div>
+                                </div>
+                                <div class="card w-75 text-center">
+				    <div class="card-header">
+					Sync Control
+				    </div>
+				    <div class="card-body">
+					<div class="row contflex">
+					    <div class="col">
+						<p>Sync Source: </p>
+						<div class="btn-group-vertical" role="group" aria-label="Basic radio toggle button group" id="sync_aux_radio">
+						    <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" onclick="change_sync_sel_aux(1)">
+						    <label class="btn btn-outline-primary" for="btnradio1">Aux</label>
+
+						    <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off" onclick="change_sync_sel_aux(0)" checked>
+						    <label class="btn btn-outline-primary" for="btnradio2">Zynq</label>
+						</div>
+					    </div>
+					    <div class="col">
+						<p>Sync State: </p>
+						<span id="asic-sync-state">&nbsp;</span>
+					    </div>
+					</div>
+				    </div>
+                                </div>
+					<div class="toast" role="alert" data-bs-autohide="false" aria-live="assertive" aria-atomic="true">
+					  <div class="toast-body">
+					    WARNING: Regulators disabled due to critical temperature. Correct cooling and cycle regulators to recover.
+					    <div class="mt-2 pt-2 border-top">
+					      <button type="button" class="btn btn-primary btn-sm" onclick="run_vreg_cycle()" data-bs-dismiss="toast">Cycle Regulators</button>
+					      <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="toast">Close</button>
+					    </div>
+					  </div>
+					</div>
+			    </div> <!-- row -->
                         </div> <!-- vol-md-2 -->
 
                         <div class="col-xxl-7 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
@@ -192,16 +249,16 @@
                     <!-- </div> -->
 
                     <!-- <div class="row contflex"> -->
-                        <div class="col-md-11">
-                            <div class="row">
+                        <div class="col-md-12">
+                            <div class="row contflex">
                                 <h3 class="text-center">FireFly Channel Control</h3>
                             </div>
                             <div class="row contflex">
-                                <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12 card">
+                                <div class="col-xl-5 col-lg-11 col-md-11 col-sm-11 card">
                                     <div id='ff1_chtable'></div>
                                 </div> <!-- col-md-6 -->
 
-                                <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12 card">
+                                <div class="col-xl-5 col-lg-11 col-md-11 col-sm-11 card">
                                     <div id='ff2_chtable'></div>
                                 </div> <!-- col-md-6 -->
                             </div> <!-- row -->

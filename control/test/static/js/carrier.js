@@ -48,9 +48,16 @@ function update_api_adapters() {
 }
 
 function poll_loki() {
+	update_loki_vreg_en();
+        update_loki_asic_nrst();
 	update_loki_ff_data();		// Updated in adapter at slower rate
 	update_loki_power_monitor();	// Updated in adapter at slower rate
 	update_loki_vcal();		// Held internal to adapter, no bus impact
+
+        update_loki_asic_sync_aux();    // Call before sync
+        update_loki_asic_sync();
+
+	update_loki_critical_temp();
 
 	setTimeout(poll_loki, 1000);
 }
@@ -360,15 +367,17 @@ function update_loki_temps() {
 		dataType: 'json',
 		timeout: 600,
 		success: function(response) {
-		    var firefly_temp = response.TEMPERATURE.toFixed(2);
-		    console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
-		    $('#temp-firefly'+ff_id).html(firefly_temp);
+		    if (response.TEMPERATURE != null) {
+			    var firefly_temp = response.TEMPERATURE.toFixed(2);
+			    console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
+			    $('#temp-firefly'+ff_id).html(firefly_temp);
+		    }
 		},
 		error: function() {
 		    $('#temp-firefly'+ff_id).html("N/A");
 	    	}
         }).fail(function(xhr, status) {
-	console.log('fail')
+	console.log('failed to get temperature for ff id ' + ff_id)
 	});
     }
 
@@ -380,12 +389,16 @@ function update_loki_temps() {
 		timeout: 600,
 		success: function(response) {
 			// Zynq PS Temperature
-			var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
-			$('#temp-zynqps').html(temp_zynqps);
+		        if (response.TEMPERATURES.ZYNQ.PS != null) {
+				var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
+				$('#temp-zynqps').html(temp_zynqps);
+			}
 
 			// Ambient Temperature
-			var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
-			$('#temp-ambient').html(temp_ambient);
+		        if (response.TEMPERATURES.AMBIENT != null) {
+				var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
+				$('#temp-ambient').html(temp_ambient);
+			}
 
 			// PT100 Temperature
 			// TODO
@@ -497,6 +510,142 @@ function update_loki_vcal() {
 	});
 }
 
+function update_loki_asic_nrst() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_RST',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+        asic_rst_state = response.ASIC_RST;
+
+	$('#asic-rst-state').html((asic_rst_state ? "RESET" : "Enabled"));
+	$('#asic-rst-state').removeClass();
+	$('#asic-rst-state').addClass((asic_rst_state ? "badge bg-danger" : "badge bg-success"));
+            //console.log("Got asic reset state: " + asic_rst_state)
+        },
+        error: function() {
+            console.log('Error retrieving ASIC reset state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get ASIC_RST');
+    });
+}
+
+function update_loki_vreg_en() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_CYCLE',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+        vreg_en_state = response.VREG_CYCLE;
+
+	$('#vreg-en-state').html((vreg_en_state ? "Enabled" : "Disabled"));
+	$('#vreg-en-state').removeClass();
+	$('#vreg-en-state').addClass((vreg_en_state ? "badge bg-success" : "badge bg-danger"));
+        },
+        error: function() {
+            console.log('Error retrieving vreg_en state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get VREG_EN');
+    });
+}
+
+function update_loki_asic_sync() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            asic_sync_state = response.SYNC;
+
+            //TODO set the zynq button state with asic_sync_sel
+
+            // If the aux sync is selected, the value read is for the zynq
+            // setting only, and not the asic one.
+            if (!asic_sync_sel_aux) {
+                $('#asic-sync-state').html((asic_sync_state ? "High" : "Low"));
+                $('#asic-sync-state').removeClass();
+                $('#asic-sync-state').addClass((asic_sync_state ? "badge bg-success" : "badge bg-danger"));
+            } else {
+                $('#asic-sync-state').html("AUX");
+                $('#asic-sync-state').removeClass();
+                $('#asic-sync-state').addClass("badge bg-warning");
+            }
+
+            //console.log("Got asic sync state: " + asic_sync_state)
+        },
+        error: function() {
+            $('#asic-sync-state').html("No Data");
+            $('#asic-sync-state').removeClass();
+            $('#asic-sync-state').addClass("badge bg-danger");
+            console.log('Error retrieving SYNC reset state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get SYNC state');
+    });
+}
+
+var asic_sync_sel_aux = NaN;
+
+function update_loki_asic_sync_aux(){
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC_SEL_AUX',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            asic_sync_sel_aux = response.SYNC_SEL_AUX;
+
+            // The asic sync state is also updated based on this selection;
+            // if aux is selected, the synq sync setting is not relevant.
+
+            //TODO update and enable the radio buttons           
+
+            //console.log("Got asic sync sel aux state: " + asic_sync_sel_aux)
+        },
+        error: function() {
+            console.log('Error retrieving SYNC SEL AUX state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get SYNC SEL AUX state');
+    });
+}
+
+
+var toast_shown = false;
+$('.toast').on('shown.bs.toast', function() {
+	toast_shown = true
+})
+
+function update_loki_critical_temp() {
+	// Check to see if the temperature is currently critical, which shuts down regulators.
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/CRITICAL_TEMP',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            critical_temp_state = response.CRITICAL_TEMP;
+            //TODO send popup, add UI elements etc
+
+            if (critical_temp_state) {
+                if(!toast_shown) $('.toast').toast('show');
+		console.log('Critical temperature reported')
+	    } else {
+		$('.toast').toast('hide');
+		    toast_shown = false;
+	    }
+
+            //console.log("Got critical temperature state: " + critical_temp_state)
+        },
+        error: function() {
+            console.log('Error retrieving critical temperature state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get critical temperature state');
+    });
+}
+
+
 function change_ff_ch_dis(disabled, ff, ch) {
 	console.log("Firefly " + ff + " CH " + ch + " Disable Changed to " + (disabled ? "true" : "false"));
 	$.ajax({
@@ -525,6 +674,36 @@ function change_vcal() {
         }
 	});
 }
+
+function change_sync_sel_aux(aux_en) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'SYNC_SEL_AUX': aux_en}),
+        success: function(data) {
+            //TODO disable the radio until it is read back
+            $("sync_aux_radio").addClass('disabled');
+            $('btnradio1').prop('disabled', true);
+            // $("btnradio1").attr("disabled", true);
+        }
+	});
+}
+
+function change_asic_mode(modename) {
+	// Re-init the ASIC and set mode, local or global.
+	// Currently, only global is supported
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_MODE': modename}),
+        success: function(data) {
+		console.log("Mode set to " + modename);
+        }
+	});
+}
+
 
 function run_vreg_cycle() {
 	console.log("Commanding adapter to power cycle VREG");
