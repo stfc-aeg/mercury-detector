@@ -53,11 +53,21 @@ class Asic():
             self._serialiser_block_configs.append(new_serialiser_block)
         self._logger.info("ASIC init complete")
 
+        # Local State Variables init to None before read
+        self._reset_local_states()
+
+    def _reset_local_states(self):
+        # Local State Variables init to None before read. Should be done
+        # on boot and on ASIC reset
+        self._STATE_feedback_capacitance = None
+        self._STATE_frame_length_clocks = None
+        self._STATE_integration_time = None
+
     """ SPI Register Access Functions """
-    def reset_page(self):
+    def _reset_page(self):
         self.page = 1
 
-    def set_page(self, page):
+    def _set_page(self, page):
         page_bit = {1: 0b0, 2: 0b1}[page]
 
         if self.page != page:
@@ -79,9 +89,9 @@ class Asic():
     def read_register(self, address):
 
         if (address > 127):     # Page 2
-            self.set_page(2)
+            self._set_page(2)
         else:                   # Page 1
-            self.set_page(1)
+            self._set_page(1)
         address = address & REGISTER_ADDRESS_MASK
 
         command = address | REGISTER_READ_TRANSACTION
@@ -98,9 +108,9 @@ class Asic():
     def write_register(self, address, value):
 
         if (address > 127):     # Page 2
-            self.set_page(2)
+            self._set_page(2)
         else:                   # Page 1
-            self.set_page(1)
+            self._set_page(1)
         address = address & REGISTER_ADDRESS_MASK
 
         command = address | REGISTER_WRITE_TRANSACTION
@@ -115,9 +125,9 @@ class Asic():
     def burst_read(self, start_register, num_bytes):
 
         if (start_register > 127):  # Page 2
-            self.set_page(2)
+            self._set_page(2)
         else:                       # Page 1
-            self.set_page(1)
+            self._set_page(1)
         start_register = start_register & REGISTER_ADDRESS_MASK
 
         command = start_register | REGISTER_READ_TRANSACTION
@@ -133,9 +143,9 @@ class Asic():
     def burst_write(self, start_register, values):
 
         if (start_register > 127):  # Page 2
-            self.set_page(2)
+            self._set_page(2)
         else:                       # Page 1
-            self.set_page(1)
+            self._set_page(1)
         start_register = start_register & REGISTER_ADDRESS_MASK
 
         command = start_register | REGISTER_WRITE_TRANSACTION
@@ -184,7 +194,8 @@ class Asic():
     """ Pin and power control """
     def enable(self):
         self.gpio_nrst.set_value(1)
-        self.reset_page()    # Page is now default value
+        self._reset_page()          # Page is now default value
+        self._reset_local_states()  # Local states now None
 
         # Read into local copies of serialiser config
         for i in range(0, 11):
@@ -225,7 +236,6 @@ class Asic():
         time.sleep(0.1)
 
         self.enable()
-        self.reset_page()   # Page is now default value
         time.sleep(0.1)     # Allow ASIC time to come out of reset
         self._logger.debug("ASIC reset complete")
 
@@ -308,6 +318,77 @@ class Asic():
             self.write_register(register, (bias << 4) | bias)   # Set for both nibbles
 
         self._logger.info("Set ramp bias for all 40 ASIC ramps to {}".format(bias))
+
+    def set_integration_time(self, integration_time_frames):
+        if not integration_time_frames in range(0,(0xFF)+1):
+            raise ValueError("Integration time frames must be 0-255")
+
+        self.write_register(0x06, integration_time_frames)
+        self._STATE_integration_time = integration_time_frames
+        self._logger.info('Set integration time to {} frames'.format(integration_time_frames))
+
+    def get_integration_time(self, direct=False):
+        # Return the integration time in frames.
+        # Returns the locally stored value by default to avoid client request
+        # based load. However, a direct reading can be forced (e.g. if relevant
+        # bits have been modified directly with another function).
+        if direct or self._STATE_integration_time is None:
+            # Read from ASIC and set locally stored state
+            latest_value = self.read_register(0x06)[1]
+            self._STATE_integration_time = latest_value
+
+        return self._STATE_integration_time
+
+    def set_frame_length(self, frame_length_clocks):
+        if not frame_length_clocks in range(0,(0xFF)+1):
+            raise ValueError("Frame length must be 0-255")
+
+        self.write_register(0x05, frame_length_clocks)
+        self._STATE_frame_length = frame_length_clocks
+        self._logger.info('Set frame length to  {} clocks'.format(frame_length_clocks))
+
+    def get_frame_length(self, direct=False):
+        # Return the frame length in clock cycles.
+        # Returns the locally stored value by default to avoid client request
+        # based load. However, a direct reading can be forced (e.g. if relevant
+        # bits have been modified directly with another function).
+        if direct or self._STATE_frame_length_clocks is None:
+            # Read from ASIC and set locally stored state
+            latest_value = self.read_register(0x05)[1]
+            self._STATE_frame_length = latest_value
+
+        return self._STATE_frame_length
+
+    def set_feedback_capacitance(self, feedback_capacitance_fF):
+        if not feedback_capacitance_fF in [0, 7, 14, 21]:
+            raise ValueError("Capacitance must be 0, 7, 14 or 21 (fF)")
+
+        field_bits = {0 :   0b00,
+                      7 :   0b01,
+                      14:   0b10,
+                      21:   0b11}[feedback_capacitance_fF]
+
+        previous_reg_val = self.read_register(0x00)[1]
+
+        new_reg_val = (previous_reg_val & 0b11100111) | (field_bits << 3)
+
+        self.write_register(0x00, new_reg_val)
+        self._STATE_feedback_capacitance = feedback_capacitance_fF  # Cache fF value
+        self._logger.info('Set feedback capacitance to  {}fF'.format(feedback_capacitance_fF))
+
+    def get_feedback_capacitance(self, direct=False):
+        # Return the current feedback capacitance in fF.
+        # Returns the locally stored value by default to avoid client request
+        # based load. However, a direct reading can be forced (e.g. if relevant
+        # bits have been modified directly with another function).
+        if direct or self._STATE_feedback_capacitance is None:
+            # Read from ASIC and set locally stored state
+            latest_value = (self.read_register(0x00)[1] >> 3) & 0b11
+            total_fF = 7 if (latest_value & 0b01 > 0) else 0
+            total_fF += 14 if (latest_value & 0b10 > 0) else 0
+            self._STATE_feedback_capacitance = total_fF
+
+        return self._STATE_feedback_capacitance
 
     """ Serialiser Functions """
     def get_serialiserblk_from_channel(channel):

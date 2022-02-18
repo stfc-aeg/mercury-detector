@@ -692,6 +692,27 @@ class Carrier():
         else:
             logging.warning("Mode {} is not supported by ASIC".format(value))
 
+    def set_asic_integration_time(self, value):
+        self.asic.set_integration_time(value)
+
+    def get_asic_integration_time(self):
+        # Read cached value from the ASIC
+        return self.asic.get_integration_time(direct=False)
+
+    def set_asic_frame_length(self, value):
+        self.asic.set_frame_length(value)
+
+    def get_asic_frame_length(self):
+        # Read cached value from the ASIC
+        return self.asic.get_frame_length(direct=False)
+
+    def set_asic_feedback_capacitance(self, value):
+        self.asic.set_feedback_capacitance(value)
+
+    def get_asic_feedback_capacitance(self):
+        # Read cached value from the ASIC
+        return self.asic.get_feedback_capacitance(direct=False)
+
     def _paramtree_setup(self):
 
         # Sync single-read items
@@ -742,6 +763,9 @@ class Carrier():
             "SYNC_SEL_AUX": (self.get_sync_sel_aux, self.set_sync_sel_aux, {"description":"Set true to get sync signal externally"}),
             "ASIC_RST":(self.get_asic_rst, self.set_asic_rst, {"description":"Set true to enter ASIC reset"}),
             "ASIC_MODE":(None, self.set_asic_mode, {"description":"Init the ASIC with a specific mode (e.g. global)"}),
+            "ASIC_INTEGRATION_TIME":(self.get_asic_integration_time, self.set_asic_integration_time, {"description":"ASIC Integration Time (in frames)"}),
+            "ASIC_FRAME_LENGTH":(self.get_asic_frame_length, self.set_asic_frame_length, {"description":"ASIC Frame Length (in cycles)"}),
+            "ASIC_FEEDBACK_CAPACITANCE":(self.get_asic_feedback_capacitance, self.set_asic_feedback_capacitance, {"description":"ASIC Preamo feedback capacitance"}),
             #"VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set true to enable on-board power supplies"})
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
