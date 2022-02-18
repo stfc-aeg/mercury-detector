@@ -268,9 +268,14 @@ class Asic():
         self.write_register(0x03, 0x1F)     # Enable pixel analogue signals
         self.write_register(0x03, 0x3F)     # Enable pixel digital signals
 
+        time.sleep(0.1) #TEMP suggested by Lawrence
+
         # Remove serialiser digital and analogue reset
-        self.write_register(0x04, 0x01)
-        self.write_register(0x04, 0x03)
+        self.write_register(0x04, 0x02) # Remove analogue reset
+        time.sleep(0.1) #TEMP suggested by Lawrence
+        self.write_register(0x04, 0x03) # Remove digital reset
+
+        #TODO need to include serialiser init through bonding, see manual pg89
 
         # Enable readout
         self.write_register(0x03, 0x7F)
