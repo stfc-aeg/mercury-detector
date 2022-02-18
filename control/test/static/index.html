@@ -127,13 +127,18 @@
 				    </div>
 				    <div class="card-body">
 		                        <div class="row contflex">
-                                    <p>VCAL Voltage: <span id="vcal-voltage">&nbsp;</span>v</p>
-                                    <div class="input-group mb-3">
-                                        <span class="input-group-text">VCAL (V)</span>
-                                        <input type="number" class="form-control" id="vcal-input"/>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
+                                    <div class="col-8">
+                                        <div class="input-group mb-3">
+                                            <span class="input-group-text">VCAL</span>
+                                            <input type="number" class="form-control" id="vcal-input"/>
+                                            <span class="input-group-text">V</span>
+                                            <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
+                                        </div>
                                     </div>
-                                    <!-- <p><input type="button" value="Update" id="vcal-submit" onclick="change_vcal()"/></p> -->
+                                    <div class="col-2">
+                                        VCAL: 
+                                        <span id="vcal-voltage">&nbsp;</span>
+                                    </div>
 
 					</div>
 				    </div>
@@ -183,6 +188,69 @@
 					    </div>
 					</div>
 				    </div>
+                                </div>
+                                <div class="card w-100 text-center">
+                                    <div class="card-header">
+                                    Frame Control
+                                    </div>
+                                    <div class="card-body">
+                                    <div class="row contflex">
+                                        <div class="col">
+                                            <div class="input-group mb-3">
+                                                <span class="input-group-text">Integration Time</span>
+                                                <input type="number" class="form-control" id="integration-time-input"/>
+                                                <span class="input-group-text">frames</span>
+                                                <button class="btn btn-outline-secondary" type="button" onclick="change_integration_time($('#integration-time-input').prop('value'))">Update</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row contflex">
+                                        <div class="col">
+                                            <div class="input-group mb-3">
+                                                <span class="input-group-text">Frame Length</span>
+                                                <input type="number" class="form-control" id="frame-length-input"/>
+                                                <span class="input-group-text">cycles</span>
+                                                <button class="btn btn-outline-secondary" type="button" onclick="change_frame_length($('#frame-length-input').prop('value'))">Update</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row contflex">
+                                        <div class="col-5">
+                                            Integration Time: 
+                                            <span id="asic-integration-time-state">&nbsp;</span>
+                                        </div>
+                                        <div class="col-5">
+                                            Frame Length: 
+                                            <span id="asic-frame-length-state">&nbsp;</span>
+                                        </div>
+                                    </div>
+                                    </div>
+                                </div>
+                                <div class="card w-90 text-center">
+                                    <div class="card-header">
+                                    Preamp Control
+                                    </div>
+                                    <div class="card-body">
+                                    <div class="row contflex">
+                                        <div class="col">
+                                        <p>Feedback Capacitance: </p>
+                                        <div class="btn-group" role="group" aria-label="Basic radio toggle button group" id="feedback-cap-select">
+                                            <input type="radio" class="btn-check" name="btnradio" id="radiocap0fF" autocomplete="off" onclick="change_feedback_cap(0)">
+                                            <label class="btn btn-outline-primary" for="radiocap0fF">0fF</label>
+                                            <input type="radio" class="btn-check" name="btnradio" id="radiocap7fF" autocomplete="off" onclick="change_feedback_cap(7)">
+                                            <label class="btn btn-outline-primary" for="radiocap7fF">7fF</label>
+                                            <input type="radio" class="btn-check" name="btnradio" id="radiocap14fF" autocomplete="off" onclick="change_feedback_cap(14)">
+                                            <label class="btn btn-outline-primary" for="radiocap14fF">14fF</label>
+                                            <input type="radio" class="btn-check" name="btnradio" id="radiocap21fF" autocomplete="off" onclick="change_feedback_cap(21)">
+                                            <label class="btn btn-outline-primary" for="radiocap21fF">21fF</label>
+                                        </div>
+                                        </div>
+                                        <div class="col">
+                                        <p>Feedback Capacitance: </p>
+                                        <span id="asic-feedback-capacitance-state">&nbsp;</span>
+                                        </div>
+                                    </div>
+                                    </div>
                                 </div>
 					<div class="toast" role="alert" data-bs-autohide="false" aria-live="assertive" aria-atomic="true">
 					  <div class="toast-body">

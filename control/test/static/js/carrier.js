@@ -57,6 +57,9 @@ function poll_loki() {
         update_loki_asic_sync_aux();    // Call before sync
         update_loki_asic_sync();
 
+    update_loki_asic_preamp();
+	update_loki_asic_integration_time();
+	update_loki_asic_frame_length();
 	update_loki_critical_temp();
 
 	setTimeout(poll_loki, 1000);
@@ -369,7 +372,7 @@ function update_loki_temps() {
 		success: function(response) {
 		    if (response.TEMPERATURE != null) {
 			    var firefly_temp = response.TEMPERATURE.toFixed(2);
-			    console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
+			    //console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
 			    $('#temp-firefly'+ff_id).html(firefly_temp);
 		    }
 		},
@@ -438,7 +441,6 @@ function update_loki_power_monitor() {
 	var psu_dig_cur = NaN;
 	var psu_dig_ctrl_cur = NaN;
 
-	//$.getJSON('/api/' + api_version + '/' + adapter_name + '/PSU', function(response) {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/PSU',
 		async: false,
 		dataType: 'json',
@@ -504,10 +506,27 @@ function update_loki_power_monitor() {
 }
 
 function update_loki_vcal() {
-	$.getJSON('/api/' + api_version + '/' + adapter_name + '/VCAL', function(response) {
-		var vcal = response.VCAL;
-		$('#vcal-voltage').html(vcal);
-	});
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VCAL',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+        vcal_voltage = response.VCAL;
+
+	$('#vcal-voltage').html(vcal_voltage + "v");
+	$('#vcal-voltage').removeClass();
+	$('#vcal-voltage').addClass("badge bg-success");
+			console.log('updated vcal as ' + vcal_voltage);
+        },
+        error: function() {
+            console.log('Error retrieving VCAL');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get VCAL');
+        $('#vcal-voltage').html(("No con"));
+        $('#vcal-voltage').removeClass();
+        $('#vcal-voltage').addClass("badge bg-danger");
+    });
 }
 
 function update_loki_asic_nrst() {
@@ -528,6 +547,9 @@ function update_loki_asic_nrst() {
         }
     }).fail(function(xhr, status) {
         console.log('failed to get ASIC_RST');
+        $('#asic-rst-state').html(("No con"));
+        $('#asic-rst-state').removeClass();
+        $('#asic-rst-state').addClass("badge bg-danger");
     });
 }
 
@@ -547,7 +569,85 @@ function update_loki_vreg_en() {
             console.log('Error retrieving vreg_en state');
         }
     }).fail(function(xhr, status) {
+        $('#vreg-en-state').html(("No con"));
+        $('#vreg-en-state').removeClass();
+        $('#vreg-en-state').addClass("badge bg-danger");
         console.log('failed to get VREG_EN');
+    });
+}
+
+function update_loki_asic_preamp() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FEEDBACK_CAPACITANCE',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            asic_feedback_capacitance_state = response.ASIC_FEEDBACK_CAPACITANCE;
+
+        // Update the badge
+        $('#asic-feedback-capacitance-state').html((asic_feedback_capacitance_state + " fF"));
+        $('#asic-feedback-capacitance-state').removeClass();
+        $('#asic-feedback-capacitance-state').addClass("badge bg-success");
+
+        // Update the selection box
+        //TODO
+        },
+        error: function() {
+            console.log('Error retrieving vreg_en state');
+        }
+    }).fail(function(xhr, status) {
+        $('#asic-feedback-capacitance-state').html(("No con"));
+        $('#asic-feedback-capacitance-state').removeClass();
+        $('#asic-feedback-capacitance-state').addClass("badge bg-danger");
+        console.log('failed to get VREG_EN');
+    });
+}
+
+function update_loki_asic_integration_time() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_INTEGRATION_TIME',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            integration_time = response.ASIC_INTEGRATION_TIME;
+
+        // Update the badge
+        $('#asic-integration-time-state').html((integration_time + " frame" + ((integration_time == 1) ? "" : "s")));
+        $('#asic-integration-time-state').removeClass();
+        $('#asic-integration-time-state').addClass("badge bg-success");
+        },
+        error: function() {
+            console.log('Error retrieving vreg_en state');
+        }
+    }).fail(function(xhr, status) {
+        $('#asic-integration-time-state').html(("No con"));
+        $('#asic-integration-time-state').removeClass();
+        $('#asic-integration-time-state').addClass("badge bg-danger");
+        console.log('failed to get integration time');
+    });
+}
+
+function update_loki_asic_frame_length() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FRAME_LENGTH',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            frame_length = response.ASIC_FRAME_LENGTH;
+
+        // Update the badge
+        $('#asic-frame-length-state').html((frame_length + " cycles"));
+        $('#asic-frame-length-state').removeClass();
+        $('#asic-frame-length-state').addClass("badge bg-success");
+        },
+        error: function() {
+            console.log('Error retrieving vreg_en state');
+        }
+    }).fail(function(xhr, status) {
+        $('#asic-frame-length-state').html(("No con"));
+        $('#asic-frame-length-state').removeClass();
+        $('#asic-frame-length-state').addClass("badge bg-danger");
+        console.log('failed to get frame length');
     });
 }
 
@@ -704,6 +804,51 @@ function change_asic_mode(modename) {
 	});
 }
 
+function change_feedback_cap(capacitance) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_FEEDBACK_CAPACITANCE': capacitance}),
+        success: function(data) {
+		console.log("Mode set to " + capacitance);
+        }
+	});
+}
+
+function change_integration_time(frames) {
+	frames = Number(frames)
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_INTEGRATION_TIME': frames}),
+        success: function(data) {
+		// Mark the readback void
+		$('#asic-integration-time-state').removeClass();
+		$('#asic-integration-time-state').addClass("badge bg-warning");
+
+		console.log("Integration time set to " + frames + " frames");
+        }
+	});
+}
+
+function change_frame_length(cycles) {
+	cycles = Number(cycles)
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_FRAME_LENGTH': cycles}),
+        success: function(data) {
+		// Mark the readback void
+		$('#asic-frame-length-state').removeClass();
+		$('#asic-frame-length-state').addClass("badge bg-warning");
+
+		console.log("Frame length set to " + cycles + " cycles");
+        }
+	});
+}
 
 function run_vreg_cycle() {
 	console.log("Commanding adapter to power cycle VREG");
