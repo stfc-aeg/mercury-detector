@@ -766,7 +766,7 @@ class Carrier():
             "ASIC_INTEGRATION_TIME":(self.get_asic_integration_time, self.set_asic_integration_time, {"description":"ASIC Integration Time (in frames)"}),
             "ASIC_FRAME_LENGTH":(self.get_asic_frame_length, self.set_asic_frame_length, {"description":"ASIC Frame Length (in cycles)"}),
             "ASIC_FEEDBACK_CAPACITANCE":(self.get_asic_feedback_capacitance, self.set_asic_feedback_capacitance, {"description":"ASIC Preamo feedback capacitance"}),
-            #"VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set true to enable on-board power supplies"})
+            "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
                 "CONFIG_AVAIL":(self.get_clk_config_avail, None, {"description":"Available SI5344 config files"}),

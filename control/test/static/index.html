@@ -23,11 +23,16 @@
     <body>
 
         <h1 class="text-center">MERCURY Carrier Control</h1>
+        <p class="lead text-center">
+            Zynq Connection Status: 
+            <span id="zynq-connection-state">&nbsp;</span>
+        </p>
 
         <ul class="nav nav-tabs" role="tablist">
             <!-- <ul class="nav nav-pills" role="tablist"> -->
             <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="home" data-bs-target="#home">Sequencer</a></li>  
             <li class="nav-item" role="presentation"><a class="nav-link active" aria-selected="True"    data-bs-toggle="tab" type="button" role="tab" aria-controls="pcbcontrol" data-bs-target="#pcbcontrol">PCB Control</a></li>
+            <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"    data-bs-toggle="tab" type="button" role="tab" aria-controls="ASIC" data-bs-target="#ASIC">ASIC</a></li>
             <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="about" data-bs-target="#about">About</a></li>
             <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="contact" data-bs-target="#contact">Contact</a></li>
             </ul>
@@ -148,22 +153,6 @@
                                             ASIC Mode
                                         </div>
                                         <div class="card-body">
-                                            <div class="row contflex">
-                                                <div class="col">
-                                                    <button type="button" class="btn btn-primary"  onclick="run_vreg_cycle()">Power Cycle Regulators</button>
-                                                </div>
-                                                <div class="col">
-                                                    <button type="button" class="btn btn-primary"  onclick="change_asic_mode('global')">Enable Global Mode</button>
-                                                </div>
-                                                <div class="col">
-                                                    <p>Reset State: </p>
-                                                    <span id="asic-rst-state">&nbsp;</span>
-                                                </div>
-                                                <div class="col">
-                                                    <p>Regulator Enable State: </p>
-                                                    <span id="vreg-en-state">&nbsp;</span>
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
                                     <div class="card w-75 text-center">
@@ -173,18 +162,6 @@
                                         <div class="card-body">
                                             <div class="row contflex">
                                                 <div class="col">
-                                                    <p>Sync Source: </p>
-                                                    <div class="btn-group-vertical" role="group" aria-label="Basic radio toggle button group" id="sync_aux_radio">
-                                                        <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" onclick="change_sync_sel_aux(1)">
-                                                        <label class="btn btn-outline-primary" for="btnradio1">Aux</label>
-
-                                                        <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off" onclick="change_sync_sel_aux(0)" checked>
-                                                        <label class="btn btn-outline-primary" for="btnradio2">Zynq</label>
-                                                    </div>
-                                                </div>
-                                                <div class="col">
-                                                    <p>Sync State: </p>
-                                                    <span id="asic-sync-state">&nbsp;</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -194,36 +171,6 @@
                                             Frame Control
                                         </div>
                                         <div class="card-body">
-                                            <div class="row contflex">
-                                                <div class="col">
-                                                    <div class="input-group mb-3">
-                                                        <span class="input-group-text">Integration Time</span>
-                                                        <input type="number" class="form-control" id="integration-time-input"/>
-                                                        <span class="input-group-text">frames</span>
-                                                        <button class="btn btn-outline-secondary" type="button" onclick="change_integration_time($('#integration-time-input').prop('value'))">Update</button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="row contflex">
-                                                <div class="col">
-                                                    <div class="input-group mb-3">
-                                                        <span class="input-group-text">Frame Length</span>
-                                                        <input type="number" class="form-control" id="frame-length-input"/>
-                                                        <span class="input-group-text">cycles</span>
-                                                        <button class="btn btn-outline-secondary" type="button" onclick="change_frame_length($('#frame-length-input').prop('value'))">Update</button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="row contflex">
-                                                <div class="col-5">
-                                                    Integration Time: 
-                                                    <span id="asic-integration-time-state">&nbsp;</span>
-                                                </div>
-                                                <div class="col-5">
-                                                    Frame Length: 
-                                                    <span id="asic-frame-length-state">&nbsp;</span>
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
                                     <div class="card w-90 text-center">
@@ -231,24 +178,14 @@
                                             Preamp Control
                                         </div>
                                         <div class="card-body">
+                                        </div>
+                                    </div>
+                                    <div class="card w-100 text-center">
+                                        <div class="card-header">
+                                            Serialiser Control
+                                        </div>
+                                        <div class="card-body">
                                             <div class="row contflex">
-                                                <div class="col">
-                                                    <p>Feedback Capacitance: </p>
-                                                    <div class="btn-group" role="group" aria-label="Basic radio toggle button group" id="feedback-cap-select">
-                                                        <input type="radio" class="btn-check" name="btnradio" id="radiocap0fF" autocomplete="off" onclick="change_feedback_cap(0)">
-                                                        <label class="btn btn-outline-primary" for="radiocap0fF">0fF</label>
-                                                        <input type="radio" class="btn-check" name="btnradio" id="radiocap7fF" autocomplete="off" onclick="change_feedback_cap(7)">
-                                                        <label class="btn btn-outline-primary" for="radiocap7fF">7fF</label>
-                                                        <input type="radio" class="btn-check" name="btnradio" id="radiocap14fF" autocomplete="off" onclick="change_feedback_cap(14)">
-                                                        <label class="btn btn-outline-primary" for="radiocap14fF">14fF</label>
-                                                        <input type="radio" class="btn-check" name="btnradio" id="radiocap21fF" autocomplete="off" onclick="change_feedback_cap(21)">
-                                                        <label class="btn btn-outline-primary" for="radiocap21fF">21fF</label>
-                                                    </div>
-                                                </div>
-                                                <div class="col">
-                                                    <p>Feedback Capacitance: </p>
-                                                    <span id="asic-feedback-capacitance-state">&nbsp;</span>
-                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -334,6 +271,161 @@
                             </div> <!-- row -->
 
                     </div><!-- container fluid-container -->
+                </div>
+
+                <div class="tab-pane fade" id="ASIC" role="tabpanel">
+                    <h2 class="text-center">ASIC Operations</h2>
+
+                    <div class="container-fluid">
+                        <div class="row contflex">
+                            <div class="card w-30 mb-3 text-center">
+                                <div class="card-header">
+                                    Primary Control & Status
+                                </div>
+                                <div class="card-body">
+                                    <div class="row contflex">
+                                        <div class="col-4">
+                                            <div class="col-xxl-4 col-sm-12 mb-3">
+                                                <button type="button" class="btn btn-danger"  onclick="run_vreg_cycle()">
+                                                    Power Cycle Regulators
+                                                    <div class="spinner-border spinner-border-sm" role="status" id="power-cycle-spinner">
+                                                          <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                            <div class="col-xxl-4 col-sm-12 mb-3">
+                                                <button type="button" class="btn btn-danger"  onclick="run_vreg_powerdown()">Power Down Regulators</button>
+                                            </div>
+                                            <div class="col-xxl-4 col-sm-12 mb-3">
+                                                <button type="button" class="btn btn-primary"  onclick="change_asic_mode('global')">Enable Global Mode</button>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <p>Sync Source: </p>
+                                            <div class="btn-group" role="group" aria-label="Basic radio toggle button group" id="sync_aux_radio">
+                                                <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" onclick="change_sync_sel_aux(1)">
+                                                <label class="btn btn-outline-primary" for="btnradio1">Aux</label>
+
+                                                <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off" onclick="change_sync_sel_aux(0)" checked>
+                                                <label class="btn btn-outline-primary" for="btnradio2">Zynq</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="row">
+                                                Reset State: 
+                                                <span id="asic-rst-state">&nbsp;</span>
+                                            </div>
+                                            <div class="row">
+                                                Regulator Enable State: 
+                                                <span id="vreg-en-state">&nbsp;</span>
+                                            </div>
+                                            <div class="row">
+                                                Sync State: 
+                                                <span id="asic-sync-state">&nbsp;</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card w-30 mb-3 text-center">
+                                <div class="card-header">
+                                    Segment Readout
+                                </div>
+                            </div>
+                            <div class="card w-30 mb-3 text-center">
+                                <div class="card-header">
+                                    Advanced Settings
+                                </div>
+                                <div class="card-body">
+                                    <div class="accordion" id="asic-advanced-accordion">
+										<div class="accordion-item">
+											<h2 class="accordion-header" id="headingPreampControl">
+											  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePreampControl" aria-expanded="true" aria-controls="collapsePreampControl">
+												Pre-amplifier Control
+											  </button>
+											</h2>
+											<div id="collapsePreampControl" class="accordion-collapse collapse show" aria-labelledby="headingPreampControl" data-bs-parent="#asic-advanced-accordion">
+											    <div class="accordion-body">
+                                                    <div class="row contflex">
+                                                        <div class="col">
+                                                            <p>Feedback Capacitance: </p>
+                                                            <div class="btn-group" role="group" aria-label="Basic radio toggle button group" id="feedback-cap-select">
+                                                                <input type="radio" class="btn-check" name="btnradio" id="radiocap0fF" autocomplete="off" onclick="change_feedback_cap(0)">
+                                                                <label class="btn btn-outline-primary" for="radiocap0fF">0fF</label>
+                                                                <input type="radio" class="btn-check" name="btnradio" id="radiocap7fF" autocomplete="off" onclick="change_feedback_cap(7)">
+                                                                <label class="btn btn-outline-primary" for="radiocap7fF">7fF</label>
+                                                                <input type="radio" class="btn-check" name="btnradio" id="radiocap14fF" autocomplete="off" onclick="change_feedback_cap(14)">
+                                                                <label class="btn btn-outline-primary" for="radiocap14fF">14fF</label>
+                                                                <input type="radio" class="btn-check" name="btnradio" id="radiocap21fF" autocomplete="off" onclick="change_feedback_cap(21)">
+                                                                <label class="btn btn-outline-primary" for="radiocap21fF">21fF</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col">
+                                                            <p>Feedback Capacitance: </p>
+                                                            <span id="asic-feedback-capacitance-state">&nbsp;</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+										</div>
+										<div class="accordion-item">
+											<h2 class="accordion-header" id="headingFrameControl">
+											  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFrameControl" aria-expanded="true" aria-controls="collapseFrameControl">
+												Frame Control
+											  </button>
+											</h2>
+											<div id="collapseFrameControl" class="accordion-collapse collapse show" aria-labelledby="headingFrameControl" data-bs-parent="#asic-advanced-accordion">
+											    <div class="accordion-body">
+                                                    <div class="row contflex">
+                                                        <div class="col">
+                                                            <div class="input-group mb-3">
+                                                                <span class="input-group-text">Integration Time</span>
+                                                                <input type="number" class="form-control" id="integration-time-input"/>
+                                                                <span class="input-group-text">frames</span>
+                                                                <button class="btn btn-outline-secondary" type="button" onclick="change_integration_time($('#integration-time-input').prop('value'))">Update</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="row contflex">
+                                                        <div class="col">
+                                                            <div class="input-group mb-3">
+                                                                <span class="input-group-text">Frame Length</span>
+                                                                <input type="number" class="form-control" id="frame-length-input"/>
+                                                                <span class="input-group-text">cycles</span>
+                                                                <button class="btn btn-outline-secondary" type="button" onclick="change_frame_length($('#frame-length-input').prop('value'))">Update</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="row contflex">
+                                                        <div class="col-5">
+                                                            Integration Time: 
+                                                            <span id="asic-integration-time-state">&nbsp;</span>
+                                                        </div>
+                                                        <div class="col-5">
+                                                            Frame Length: 
+                                                            <span id="asic-frame-length-state">&nbsp;</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+										</div>
+										<div class="accordion-item">
+											<h2 class="accordion-header" id="headingSerialiserControl">
+											  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSerialiserControl" aria-expanded="true" aria-controls="collapseSerialiserControl">
+												Serialiser Control
+											  </button>
+											</h2>
+											<div id="collapseSerialiserControl" class="accordion-collapse collapse show" aria-labelledby="headingSerialiserControl" data-bs-parent="#asic-advanced-accordion">
+											    <div class="accordion-body">
+                                                    Body 2
+                                                </div>
+                                            </div>
+										</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tab-pane fade" id="about" role="tabpanel">

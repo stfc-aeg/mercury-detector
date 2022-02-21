@@ -13,6 +13,7 @@ $( document ).ready(function() {
     // Loki additions
     update_loki_ff_static_data();
     poll_loki();
+    poll_loki_vregneeded();
     poll_loki_slow();
 });
 
@@ -47,19 +48,28 @@ function update_api_adapters() {
     });
 }
 
+function poll_loki_vregneeded() {
+	// Poll functions that require vreg enabled. This means the timeout will not
+	// slow the response of other updates
+	update_loki_ff_data();		// Updated in adapter at slower rate
+	//update_loki_power_monitor();	// Updated in adapter at slower rate
+
+	update_loki_asic_preamp();
+	update_loki_asic_integration_time();
+	update_loki_asic_frame_length();
+
+	setTimeout(poll_loki_vregneeded, 1000);
+}
+
 function poll_loki() {
 	update_loki_vreg_en();
         update_loki_asic_nrst();
-	update_loki_ff_data();		// Updated in adapter at slower rate
-	update_loki_power_monitor();	// Updated in adapter at slower rate
 	update_loki_vcal();		// Held internal to adapter, no bus impact
 
         update_loki_asic_sync_aux();    // Call before sync
         update_loki_asic_sync();
 
-    update_loki_asic_preamp();
-	update_loki_asic_integration_time();
-	update_loki_asic_frame_length();
+	update_loki_connection();
 	update_loki_critical_temp();
 
 	setTimeout(poll_loki, 1000);
@@ -541,6 +551,10 @@ function update_loki_asic_nrst() {
 	$('#asic-rst-state').removeClass();
 	$('#asic-rst-state').addClass((asic_rst_state ? "badge bg-danger" : "badge bg-success"));
             //console.log("Got asic reset state: " + asic_rst_state)
+			//
+	if (asic_rst_state) {
+		$('#collapseFrameControl').attr('disabled', 'disabled');
+	}
         },
         error: function() {
             console.log('Error retrieving ASIC reset state');
@@ -564,6 +578,12 @@ function update_loki_vreg_en() {
 	$('#vreg-en-state').html((vreg_en_state ? "Enabled" : "Disabled"));
 	$('#vreg-en-state').removeClass();
 	$('#vreg-en-state').addClass((vreg_en_state ? "badge bg-success" : "badge bg-danger"));
+
+	if (vreg_en_state == 1) {
+		console.log('hiding spinner')
+		$('#power-cycle-spinner').hide()
+	}
+
         },
         error: function() {
             console.log('Error retrieving vreg_en state');
@@ -627,6 +647,31 @@ function update_loki_asic_integration_time() {
     });
 }
 
+var time_last_connected = null
+function update_loki_connection() {
+	// Exists simply to check if the Zynq is connected and report time since last connection
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name,
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+			time_last_connected = new Date()
+		$('#zynq-connection-state').html("Connected");
+		$('#zynq-connection-state').removeClass();
+		$('#zynq-connection-state').addClass("badge bg-success");
+        },
+        error: function() {
+        }
+    }).fail(function(xhr, status) {
+	    timenow = new Date();
+	    seconds_down = Math.round(((timenow.getTime() - time_last_connected.getTime())/1000))
+        $('#zynq-connection-state').html("No Connection for " + seconds_down + "s");
+        $('#zynq-connection-state').removeClass();
+        $('#zynq-connection-state').addClass("badge bg-danger");
+        console.log('failed to get connection');
+    });
+}
+
 function update_loki_asic_frame_length() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FRAME_LENGTH',
 		async: false,
@@ -676,7 +721,7 @@ function update_loki_asic_sync() {
             //console.log("Got asic sync state: " + asic_sync_state)
         },
         error: function() {
-            $('#asic-sync-state').html("No Data");
+            $('#asic-sync-state').html("No Con");
             $('#asic-sync-state').removeClass();
             $('#asic-sync-state').addClass("badge bg-danger");
             console.log('Error retrieving SYNC reset state');
@@ -850,6 +895,18 @@ function change_frame_length(cycles) {
 	});
 }
 
+function run_vreg_powerdown() {
+	console.log("Commanding adapter to power down VREG");
+	$.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: 'application/json',
+		data: JSON.stringify({'VREG_EN': false}),
+	success: function(data) {
+	}
+	});
+}
+
 function run_vreg_cycle() {
 	console.log("Commanding adapter to power cycle VREG");
 	$.ajax({
@@ -858,9 +915,10 @@ function run_vreg_cycle() {
 		contentType: 'application/json',
 		data: JSON.stringify({'VREG_CYCLE': true}),
 	success: function(data) {
+		$('#power-cycle-spinner').show()
 	}
 	});
 
 	// Re-run static data capture
-    	update_loki_ff_static_data();
+    	//update_loki_ff_static_data();
 }
