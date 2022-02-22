@@ -274,7 +274,7 @@ function await_execution_complete() {
         display_log_messages();
         is_executing = result.is_executing
         if (is_executing) {
-            setTimeout(await_execution_complete, 1000);
+            setTimeout(await_execution_complete, 500);
         } else {
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, false);
         }

@@ -23,234 +23,474 @@
     <body>
 
         <h1 class="text-center">MERCURY Carrier Control</h1>
-
-                <ul class="nav nav-tabs" role="tablist">
-                <!-- <ul class="nav nav-pills" role="tablist"> -->
-                    <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="home" data-bs-target="#home">Sequencer</a></li>  
-                    <li class="nav-item" role="presentation"><a class="nav-link active" aria-selected="True"    data-bs-toggle="tab" type="button" role="tab" aria-controls="pcbcontrol" data-bs-target="#pcbcontrol">PCB Control</a></li>
-                    <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="about" data-bs-target="#about">About</a></li>
-                    <li class="nav-item" role="presentation"><a class="nav-link" aria-selected="False"          data-bs-toggle="tab" type="button" role="tab" aria-controls="contact" data-bs-target="#contact">Contact</a></li>
-                </ul>
-
-
-        <div class="tab-content">
-            <div class="tab-pane fade" id="home" role="tabpanel">
-                <h2 class="text-center">Sequencer</h2>
-                <div class="container-fluid">
-                    <div class="row">
-                        <div class="col"></div>
-                        <div class="col-md-8">
-                            <div class="row contflex">
-                                <h4>Log Messages</h4>
-                                <pre class="pre-scrollable" id="command-sequencer-log-messages"></pre>
-                            </div>
-                            <div class="row contflex">
-                                <div class="col-md-12" id="command-sequencer-alerts-row"></div>
-                            </div>
-                            <div class="row contflex">
-                                <div class="col-md-4"></div>
-                                <div class="col-md-4" id="command-sequencer-control-buttons"></div>
-                            </div>
-                            <div class="row contflex">
-                                <div class="col-md-1"></div>
-                                <div class="col-md-10" id="command-sequencer-sequence-modules-layout"></div>
-                                <div class="col-md-1"></div>
-                            </div>
+        <p class="lead text-center">
+            Zynq Connection Status: 
+            <span id="zynq-connection-state">&nbsp;</span>
+        </p>
+            <div class="row contflex">
+                <div class="toast" role="alert" data-bs-autohide="false" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-body">
+                        WARNING: Regulators disabled due to critical temperature. Correct cooling and cycle regulators to recover.
+                        <span id="latest_critical_temperature"></span>
+                        <div class="mt-2 pt-2 border-top">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="run_vreg_cycle()" data-bs-dismiss="toast">Cycle Regulators</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="toast">Close</button>
                         </div>
-                        <div class="col"></div>
                     </div>
                 </div>
             </div>
 
-            <div class="tab-pane fade show active" id="pcbcontrol" role="tabpanel">
-                <h2 class="text-center">MERCURY PCB Control</h2>
+        <ul class="nav nav-tabs" role="tablist">
+            <!-- <ul class="nav nav-pills" role="tablist"> -->
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" aria-selected="False" data-bs-toggle="tab" type="button" role="tab" aria-controls="home" data-bs-target="#home">
+                    Sequencer
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" aria-selected="False" data-bs-toggle="tab" type="button" role="tab" aria-controls="pcbcontrol" data-bs-target="#pcbcontrol">
+                    PCB Control
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link active" aria-selected="True" data-bs-toggle="tab" type="button" role="tab" aria-controls="ASIC" data-bs-target="#ASIC">
+                    ASIC
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" aria-selected="False" data-bs-toggle="tab" type="button" role="tab" aria-controls="about" data-bs-target="#about">
+                    About
+                </a>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" aria-selected="False" data-bs-toggle="tab" type="button" role="tab" aria-controls="contact" data-bs-target="#contact">
+                    Contact
+                </a>
+            </li>
+        </ul>
 
-                <div class="container-fluid">
-                    <div class="row contflex row-cols-1 row-cols-md-2 g-4">
 
-                        <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
-                            <div class="row">
-                                <p class="lead text-center">System Temperatures</p>
-                            </div>
-                            <div class="row contflex">
-                                <div class="col-md-11">
-                                    <table class="table table-striped" style="width=100%">
-                                        <thead>
-                                            <tr>
-                                                <th>Sensor</th>
-                                                <th>Temp (C)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>Zynq PS</td>
-                                                <td><span id="temp-zynqps">&nbsp;</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Ambient</td>
-                                                <td><span id="temp-ambient">&nbsp;</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>FireFly 1</td>
-                                                <td><span id="temp-firefly1">&nbsp;</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>FireFly 2</td>
-                                                <td><span id="temp-firefly2">&nbsp;</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>PT100</td>
-                                                <td><span id="temp-pt100">&nbsp;</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>ASIC TEMP1</td>
-                                                <td><span id="temp-asic-1">&nbsp;</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>ASIC TEMP2</td>
-                                                <td><span id="temp-asic-2">&nbsp;</span></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+            <div class="tab-content">
+                <div class="tab-pane fade" id="home" role="tabpanel">
+                    <h2 class="text-center">Sequencer</h2>
+                    <div class="container-fluid">
+                        <div class="row">
+                            <div class="col"></div>
+                            <div class="col-md-8">
+                                <div class="row contflex">
+                                    <h4>Log Messages</h4>
+                                    <pre class="pre-scrollable" id="command-sequencer-log-messages"></pre>
+                                </div>
+                                <div class="row contflex">
+                                    <div class="col-md-12" id="command-sequencer-alerts-row"></div>
+                                </div>
+                                <div class="row contflex">
+                                    <div class="col-md-4"></div>
+                                    <div class="col-md-4" id="command-sequencer-control-buttons"></div>
+                                </div>
+                                <div class="row contflex">
+                                    <div class="col-md-1"></div>
+                                    <div class="col-md-10" id="command-sequencer-sequence-modules-layout"></div>
+                                    <div class="col-md-1"></div>
                                 </div>
                             </div>
-                        </div> <!-- col-md-2 -->
-
-                        <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
-                            <div class="row">
-                                <p class="lead text-center">Board Control</p>
-                            </div> <!-- row -->
-                            <div class="row contflex">
-                                <div class="col-md-11">
-                                    <p>VCAL Voltage: <span id="vcal-voltage">&nbsp;</span>v</p>
-                                    <div class="input-group mb-3">
-                                        <span class="input-group-text">VCAL (V)</span>
-                                        <input type="number" class="form-control" id="vcal-input"/>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
-                                    </div>
-                                    <!-- <p><input type="button" value="Update" id="vcal-submit" onclick="change_vcal()"/></p> -->
-                                </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
-                            <div class="row contflex">
-                                <div class="col-md-11">
-                                    <p>Regulator Power Control:</p>
-                                    <p><input type="button" value="Power Cycle&#13;&#10;VREG EN" id="vreg-cycle-submit" onclick="run_vreg_cycle()"/></p>
-                                </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
-                        </div> <!-- vol-md-2 -->
-
-                        <div class="col-xxl-7 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
-                            <div class="row">
-                                <p class="lead text-center">System Power Rails</p>
-                            </div>
-                            <div class="row contflex">
-                                <div class="col-lg-5 col-md-12 col-sm-12">
-                                    <table class="table table-striped"style="width=100%">
-                                        <thead>
-                                            <tr>
-                                                <th>Rail</th>
-                                                <th>Power (W)</th>
-                                                <th>Pre-Regulator Voltage (V)</th>
-                                                <th>Current (A)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>Analogue</td>
-                                                <td><span id="psu-analogue-pwr"></span></td>
-                                                <td><span id="psu-analogue-vol"></span></td>
-                                                <td><span id="psu-analogue-cur"></span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Digital</td>
-                                                <td><span id="psu-dig-pwr"></span></td>
-                                                <td><span id="psu-dig-vol"></span></td>
-                                                <td><span id="psu-dig-cur"></span></td>
-                                            </tr>
-                                            <tr>
-                                                <td>Digital Control</td>
-                                                <td><span id="psu-dig-ctrl-pwr"></span></td>
-                                                <td><span id="psu-dig-ctrl-vol"></span></td>
-                                                <td><span id="psu-dig-ctrl-cur"></span></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div> <!-- col -->
-                                <div class="col-lg-5 col-md-12 col-sm-12">
-                                    <div class="row">
-                                        <h6>Pre-Regulator Voltage</h6>
-                                        <canvas id="voltage-chart"></canvas>
-                                    </div>
-                                    <div class="row">
-                                        <h6>Rail Current</h6>
-                                        <canvas id="current-chart"></canvas>
-                                    </div>
-                                </div> <!-- col -->
-                            </div> <!-- row -->
-                        </div> <!-- col-md-4 -->
-
-                    <!-- </div> -->
-
-                    <!-- <div class="row contflex"> -->
-                        <div class="col-md-11">
-                            <div class="row">
-                                <h3 class="text-center">FireFly Channel Control</h3>
-                            </div>
-                            <div class="row contflex">
-                                <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12 card">
-                                    <div id='ff1_chtable'></div>
-                                </div> <!-- col-md-6 -->
-
-                                <div class="col-xl-6 col-lg-12 col-md-12 col-sm-12 card">
-                                    <div id='ff2_chtable'></div>
-                                </div> <!-- col-md-6 -->
-                            </div> <!-- row -->
-                        </div> <!-- col-md-11 -->
-                    </div> <!-- row -->
-
-                </div><!-- container fluid-container -->
-            </div>
-
-            <div class="tab-pane fade" id="about" role="tabpanel">
-                <h2 class="text-center">About</h2>
-                <div class="container-fluid">
-                    <h3 class="text-center">API Information</h3>
-                    <p>API version is:&nbsp;<span id="api-version">&nbsp;</span></p>
-                    <p>Registered API adapters:&nbsp;<span id="api-adapters">&nbsp;</span></p>
+                            <div class="col"></div>
+                        </div>
+                    </div>
                 </div>
 
+                <div class="tab-pane fade" id="pcbcontrol" role="tabpanel">
+                    <h2 class="text-center">MERCURY PCB Control</h2>
+
+                    <div class="container-fluid">
+                        <div class="row contflex row-cols-1 row-cols-md-2 g-4">
+
+                            <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
+                                <div class="row">
+                                    <p class="lead text-center">System Temperatures</p>
+                                </div>
+                                <div class="row contflex">
+                                    <div class="col-md-11">
+                                        <table class="table table-striped" style="width=100%">
+                                            <thead>
+                                                <tr>
+                                                    <th>Sensor</th>
+                                                    <th>Temp (C)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Zynq PS</td>
+                                                    <td><span id="temp-zynqps">&nbsp;</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Ambient</td>
+                                                    <td><span id="temp-ambient">&nbsp;</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>FireFly 1</td>
+                                                    <td><span id="temp-firefly1">&nbsp;</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>FireFly 2</td>
+                                                    <td><span id="temp-firefly2">&nbsp;</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>PT100</td>
+                                                    <td><span id="temp-pt100">&nbsp;</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>ASIC TEMP1</td>
+                                                    <td><span id="temp-asic-1">&nbsp;</span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>ASIC TEMP2</td>
+                                                    <td><span id="temp-asic-2">&nbsp;</span></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div> <!-- col-md-2 -->
+
+                            <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
+                                <div class="row">
+                                    <p class="lead text-center">ASIC Control</p>
+                                </div> <!-- row -->
+                                <div class="row contflex">
+                                    <div class="col">
+                                        <div class="card mb-3 text-center">
+                                            <div class="card-header">
+                                                VCAL Control
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="row contflex">
+                                                    <div class="col-8">
+                                                        <div class="input-group mb-3">
+                                                            <span class="input-group-text">VCAL</span>
+                                                            <input type="number" class="form-control" id="vcal-input"/>
+                                                            <span class="input-group-text">V</span>
+                                                            <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-2">
+                                                        VCAL: 
+                                                        <span id="vcal-voltage">&nbsp;</span>
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div> <!-- row -->
+                            </div> <!-- vol-md-2 -->
+
+                            <div class="col-xxl-7 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
+                                <div class="row">
+                                    <p class="lead text-center">System Power Rails</p>
+                                </div>
+                                <div class="row contflex">
+                                    <div class="col-lg-5 col-md-12 col-sm-12">
+                                        <table class="table table-striped"style="width=100%">
+                                            <thead>
+                                                <tr>
+                                                    <th>Rail</th>
+                                                    <th>Power (W)</th>
+                                                    <th>Pre-Regulator Voltage (V)</th>
+                                                    <th>Current (A)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Analogue</td>
+                                                    <td><span id="psu-analogue-pwr"></span></td>
+                                                    <td><span id="psu-analogue-vol"></span></td>
+                                                    <td><span id="psu-analogue-cur"></span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Digital</td>
+                                                    <td><span id="psu-dig-pwr"></span></td>
+                                                    <td><span id="psu-dig-vol"></span></td>
+                                                    <td><span id="psu-dig-cur"></span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Digital Control</td>
+                                                    <td><span id="psu-dig-ctrl-pwr"></span></td>
+                                                    <td><span id="psu-dig-ctrl-vol"></span></td>
+                                                    <td><span id="psu-dig-ctrl-cur"></span></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div> <!-- col -->
+                                    <div class="col-lg-5 col-md-12 col-sm-12">
+                                        <div class="row">
+                                            <h6>Pre-Regulator Voltage</h6>
+                                            <canvas id="voltage-chart"></canvas>
+                                        </div>
+                                        <div class="row">
+                                            <h6>Rail Current</h6>
+                                            <canvas id="current-chart"></canvas>
+                                        </div>
+                                    </div> <!-- col -->
+                                </div> <!-- row -->
+                            </div> <!-- col-md-4 -->
+
+                            <!-- </div> -->
+
+                            <!-- <div class="row contflex"> -->
+                            <div class="col-md-12">
+                                <div class="row contflex">
+                                    <h3 class="text-center">FireFly Channel Control</h3>
+                                </div>
+                                <div class="row contflex">
+                                    <div class="col-xxl-5 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
+                                        <div id='ff1_chtable'></div>
+                                    </div> <!-- col-md-6 -->
+
+                                    <div class="col-xxl-5 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
+                                        <div id='ff2_chtable'></div>
+                                    </div> <!-- col-md-6 -->
+                                </div> <!-- row -->
+                            </div> <!-- col-md-11 -->
+                            </div> <!-- row -->
+
+                    </div><!-- container fluid-container -->
+                </div>
+
+                <div class="tab-pane fade show active" id="ASIC" role="tabpanel">
+                    <h2 class="text-center">ASIC Operations</h2>
+
+                    <div class="container-fluid">
+                        <div class="row contflex">
+                            <div class="col col-xl-7 col-lg-12 col-md-12 col-sm-12 col-xs-12">
+                                <div class="card w-30 mb-3 text-center">
+                                    <div class="card-header">
+                                        Primary Control & Status
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row contflex">
+                                            <div class="col-4">
+                                                <div class="row contflex">
+                                                    <div class="col-sm-12 mb-3">
+                                                        <button type="button" class="btn btn-danger"  onclick="run_vreg_cycle()">
+                                                            Power Cycle Regulators
+                                                            <div class="spinner-border spinner-border-sm" role="status" id="power-cycle-spinner">
+                                                                  <span class="visually-hidden">Loading...</span>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                    <div class="col-sm-12 mb-3">
+                                                        <button type="button" id="button-power-down-regulators" class="btn btn-danger"  onclick="run_vreg_powerdown()">Power Down Regulators</button>
+                                                    </div>
+                                                    <div class="col-sm-12 mb-3">
+                                                        <button type="button" id="button-en-global" class="btn btn-primary"  onclick="change_asic_mode('global')">Enable Global Mode</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-3">
+                                                <p>Sync Source: </p>
+                                                <div class="btn-group" role="group" aria-label="Basic radio toggle button group" id="sync_aux_radio">
+                                                    <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" onclick="change_sync_sel_aux(1)">
+                                                    <label class="btn btn-outline-primary" for="btnradio1">Aux</label>
+
+                                                    <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off" onclick="change_sync_sel_aux(0)" checked>
+                                                    <label class="btn btn-outline-primary" for="btnradio2">Zynq</label>
+                                                </div>
+                                            </div>
+                                            <div class="col-3">
+                                                <div class="row">
+                                                    Reset State: 
+                                                    <span id="asic-rst-state">&nbsp;</span>
+                                                </div>
+                                                <div class="row">
+                                                    Regulator Enable State: 
+                                                    <span id="vreg-en-state">&nbsp;</span>
+                                                </div>
+                                                <div class="row">
+                                                    Sync State: 
+                                                    <span id="asic-sync-state">&nbsp;</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card w-30 mb-3 text-center">
+                                    <div class="card-header">
+                                        Segment Readout
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col col-xl-5 col-lg-12 col-md-12 col-sm-12 col-xs-12">
+                                <div class="card w-30 mb-3 text-center">
+                                    <div class="card-header">
+                                        Advanced Settings
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="accordion" id="asic-advanced-accordion">
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header" id="headingPreampControl">
+                                                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePreampControl" aria-expanded="true" aria-controls="collapsePreampControl">
+                                                    Pre-amplifier Control
+                                                  </button>
+                                                </h2>
+                                                <div id="collapsePreampControl" class="accordion-collapse collapse" aria-labelledby="headingPreampControl" data-bs-parent="#asic-advanced-accordion">
+                                                    <div class="accordion-body">
+                                                        <div class="row contflex">
+                                                            <div class="col">
+                                                                <p>Feedback Capacitance: </p>
+                                                                <div class="btn-group" role="group" aria-label="Basic radio toggle button group" id="feedback-cap-select">
+                                                                    <input type="radio" class="btn-check" name="btnradio" id="radiocap0fF" autocomplete="off" onclick="change_feedback_cap(0)">
+                                                                    <label class="btn btn-outline-primary" for="radiocap0fF">0fF</label>
+                                                                    <input type="radio" class="btn-check" name="btnradio" id="radiocap7fF" autocomplete="off" onclick="change_feedback_cap(7)">
+                                                                    <label class="btn btn-outline-primary" for="radiocap7fF">7fF</label>
+                                                                    <input type="radio" class="btn-check" name="btnradio" id="radiocap14fF" autocomplete="off" onclick="change_feedback_cap(14)">
+                                                                    <label class="btn btn-outline-primary" for="radiocap14fF">14fF</label>
+                                                                    <input type="radio" class="btn-check" name="btnradio" id="radiocap21fF" autocomplete="off" onclick="change_feedback_cap(21)">
+                                                                    <label class="btn btn-outline-primary" for="radiocap21fF">21fF</label>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col">
+                                                                <p>Feedback Capacitance: </p>
+                                                                <span id="asic-feedback-capacitance-state">&nbsp;</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header" id="headingFrameControl">
+                                                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFrameControl" aria-expanded="true" aria-controls="collapseFrameControl">
+                                                    Frame Control
+                                                  </button>
+                                                </h2>
+                                                <div id="collapseFrameControl" class="accordion-collapse collapse" aria-labelledby="headingFrameControl" data-bs-parent="#asic-advanced-accordion">
+                                                    <div class="accordion-body">
+                                                        <div class="row contflex">
+                                                            <div class="col">
+                                                                <div class="input-group mb-3">
+                                                                    <span class="input-group-text">Integration Time</span>
+                                                                    <input type="number" class="form-control" id="integration-time-input"/>
+                                                                    <span class="input-group-text">frames</span>
+                                                                    <button class="btn btn-outline-secondary" type="button" onclick="change_integration_time($('#integration-time-input').prop('value'))">Update</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="row contflex">
+                                                            <div class="col">
+                                                                <div class="input-group mb-3">
+                                                                    <span class="input-group-text">Frame Length</span>
+                                                                    <input type="number" class="form-control" id="frame-length-input"/>
+                                                                    <span class="input-group-text">cycles</span>
+                                                                    <button class="btn btn-outline-secondary" type="button" onclick="change_frame_length($('#frame-length-input').prop('value'))">Update</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="row contflex">
+                                                            <div class="col-5">
+                                                                Integration Time: 
+                                                                <span id="asic-integration-time-state">&nbsp;</span>
+                                                            </div>
+                                                            <div class="col-5">
+                                                                Frame Length: 
+                                                                <span id="asic-frame-length-state">&nbsp;</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header" id="headingSerialiserControl">
+                                                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSerialiserControl" aria-expanded="true" aria-controls="collapseSerialiserControl">
+                                                    Serialiser Control
+                                                  </button>
+                                                </h2>
+                                                <div id="collapseSerialiserControl" class="accordion-collapse collapse" aria-labelledby="headingSerialiserControl" data-bs-parent="#asic-advanced-accordion">
+                                                    <div class="accordion-body">
+                                                        <div class="row contflex">
+                                                            <div class="col-7">
+                                                                <div class="row">
+                                                                    Channel Selection
+                                                                    <select id="input-serialiser-chsel" class="form-control">
+                                                                        <option selected>All</option>
+                                                                        <option>...</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="row">
+                                                                    <div class="input-group mb-3">
+                                                                        <span class="input-group-text">Pattern</span>
+                                                                        <select id="input-serialiser-patternsel" class="form-control">
+                                                                            <option selected>0: Serial Data</option>
+                                                                            <option>...</option>
+                                                                        </select>
+                                                                        <button class="btn btn-outline-secondary" type="button" onclick="change_serialiser_pattern($('#input-serialiser-patternsel').prop('value'))">Update</button>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="row">
+                                                                    <div class="input-group mb-3">
+                                                                        <span class="input-group-text">Bit Scramble</span>
+                                                                        <select id="input-serialiser-scramble" class="form-control">
+                                                                            <option selected>Enable</option>
+                                                                            <option>Disable</option>
+                                                                        </select>
+                                                                        <button class="btn btn-outline-secondary" type="button" onclick="change_serialiser_scramble($('#input-serialiser-scramble').prop('value'))">Update</button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-5">
+                                                                Readout
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="about" role="tabpanel">
+                    <h2 class="text-center">About</h2>
+                    <div class="container-fluid">
+                        <h3 class="text-center">API Information</h3>
+                        <p>API version is:&nbsp;<span id="api-version">&nbsp;</span></p>
+                        <p>Registered API adapters:&nbsp;<span id="api-adapters">&nbsp;</span></p>
+                    </div>
+
+                </div>
+
+                <div class="tab-pane fade" id="contact" role="tabpanel">
+                    Contact
+                </div>
             </div>
 
-            <div class="tab-pane fade" id="contact" role="tabpanel">
-                Contact
-            </div>
-        </div>
+            <script src="js/global-nav.js"></script>
+            <script>
+                var nav = get_navbar('index.html');
+var demo = document.getElementById('global-nav'); // target element.
+    demo.insertAdjacentHTML('beforeend', nav);
+            </script>
 
-        <script src="js/global-nav.js"></script>
-        <script>
-            var nav = get_navbar('index.html');
-            var demo = document.getElementById('global-nav'); // target element.
-            demo.insertAdjacentHTML('beforeend', nav);
-        </script>
+            <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+            <!-- <script src="js/jquery-2.2.3.min.js"></script> -->
+            <script src="https://code.jquery.com/jquery-2.2.3.min.js"></script>
 
-        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
-        <!-- <script src="js/jquery-2.2.3.min.js"></script> -->
-        <script src="https://code.jquery.com/jquery-2.2.3.min.js"></script>
+            <!-- Include all compiled plugins (below), or include individual files as needed -->
 
-        <!-- Include all compiled plugins (below), or include individual files as needed -->
+            <script src="js/bootstrap-5.1.1-dist/js/bootstrap.min.js"></script>
 
-        <script src="js/bootstrap-5.1.1-dist/js/bootstrap.min.js"></script>
+            <script src="js/bootstrap-switch-4.0.0-alpha.1-dist/bootstrap-switch.min.js"></script>
 
-        <script src="js/bootstrap-switch-4.0.0-alpha.1-dist/bootstrap-switch.min.js"></script>
+            <script src="js/moment.js"></script>
 
-        <script src="js/moment.js"></script>
+            <!-- <script src="js/chart.js-3.5.1/chart.min.js"></script> -->
+            <script src="js/chart.js-2.9.3/Chart.min.js"></script>
 
-        <!-- <script src="js/chart.js-3.5.1/chart.min.js"></script> -->
-        <script src="js/chart.js-2.9.3/Chart.min.js"></script>
-
-        <script src="js/carrier.js"></script>
-        <script src="js/odin_control.js"></script>
-        <script src="js/command_sequencer.js"></script>
+            <script src="js/carrier.js"></script>
+            <script src="js/odin_control.js"></script>
+            <script src="js/command_sequencer.js"></script>
 
     </body>
 </html>

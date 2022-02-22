@@ -5,6 +5,9 @@ from odin_devices.max5306 import MAX5306
 from odin_devices.si534x import SI5344
 from odin_devices.bme280 import BME280
 from odin_devices.i2c_device import I2CException
+from odin_devices.spi_device import SPIDevice
+
+from .asic import Asic
 
 try:
     from odin_devices.ltc2986 import LTC2986, LTCSensorException
@@ -14,6 +17,7 @@ except ModuleNotFoundError:
     pass
 
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
+from tornado.ioloop import IOLoop
 
 import logging
 import time
@@ -21,7 +25,7 @@ import sys
 import os
 from enum import Enum as _Enum, auto as _auto
 
-logging.basicConfig(encoding='utf-8', level=logging.INFO)
+logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
 _RAIL_MONITOR_DERIVE_POWER = True
@@ -76,6 +80,7 @@ class Carrier():
 
     def __init__(self, si5344_config_directory, si5344_config_filename,
                  power_monitor_IV,
+                 critical_temp_limit,
                  interface_definition=_interface_definition_default,
                  vcal=_vcal_default):
 
@@ -94,12 +99,31 @@ class Carrier():
         self._vcal = vcal
         self.vcal_limit = 1.8       # Over 1.8v can damage MERCURY
 
+        # Set the critical temperature limit
+        self._critical_temperature_limit = critical_temp_limit
+        self._temperature_iscritical = True     # Start assuming temperature critical until checked
+
         # Get LOKI GPIO pin bus
         self._gpio_bus = GPIO_ZynqMP
 
         # Claim standalone control pins
         self._gpiod_sync = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync,
                                                GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_sync_sel = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync_sel,
+                                                   GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_asic_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_asic_nrst,
+                                                    GPIO_ZynqMP.DIR_OUTPUT)
+
+        # Put nRST in safe state before vreg_en forced off (may occur after allocation when run after failure)
+        self._gpiod_asic_nrst.set_value(0)
+
+        # Claim vreg enable control pin, as pull-up (will set disabled until written)
+        #TODO add the pull-up
+        self._gpiod_vreg_en = GPIO_ZynqMP.get_pin(self._interface_definition.pin_vreg_en,
+                                                  GPIO_ZynqMP.DIR_OUTPUT,
+                                                #   pull_up=True)     # Do not power up immediately
+                                                    )
+        self.set_vreg_en(False)
 
         # Define device-specific control pins
         self._gpiod_firefly_1 = GPIO_ZynqMP.get_pin(self._interface_definition.pin_firefly_1,
@@ -108,19 +132,19 @@ class Carrier():
                                                     GPIO_ZynqMP.DIR_OUTPUT)
         self._gpiod_nRead_int = GPIO_ZynqMP.get_pin(self._interface_definition.pin_nRead_int,
                                                     GPIO_ZynqMP.DIR_OUTPUT)
-        #tempself._gpiod_sync = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync,
-        #temp                                       GPIO_ZynqMP.DIR_OUTPUT)
-        self._gpiod_sync_sel = GPIO_ZynqMP.get_pin(self._interface_definition.pin_sync_sel,
-                                                   GPIO_ZynqMP.DIR_OUTPUT)
-        self._gpiod_asic_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_asic_nrst,
-                                                    GPIO_ZynqMP.DIR_OUTPUT)
-        self._gpiod_vreg_en = GPIO_ZynqMP.get_pin(self._interface_definition.pin_vreg_en,
-                                                  GPIO_ZynqMP.DIR_OUTPUT)
+
+        # Init ASIC
+        self.asic = Asic(
+            self._gpiod_asic_nrst, self._gpiod_sync_sel, self._gpiod_sync,
+            bus=interface_definition.spidev_id_mercury[0],
+            device=interface_definition.spidev_id_mercury[1],
+            hz=20000000)    # 20M -> 10M
 
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
         self.set_sync_sel_aux(False)                        # Set sync Zynq-controlled
         self.set_asic_rst(True)                             # Init device in reset
+        logging.warning('triggering first power cycle')
         self.vreg_power_cycle_init(None)                    # Contains device setup
 
 
@@ -221,9 +245,9 @@ class Carrier():
                                                name='VDDA ASIC',
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
-            self._pac1921_u3.config_gain(8, 8)
-            self._pac1921_u2.config_gain(8, 8)
-            self._pac1921_u1.config_gain(8, 8)
+            self._pac1921_u3.config_gain(di_gain=1, dv_gain=8)
+            self._pac1921_u2.config_gain(di_gain=1, dv_gain=8)
+            self._pac1921_u1.config_gain(di_gain=1, dv_gain=8)
 
             # PAC1921 Rail monitor mode settings
             if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
@@ -304,11 +328,19 @@ class Carrier():
             self._si5344))
 
     def sync_power_readings(self):
-        self._sync_power_supply_readings()
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            self._sync_power_supply_readings()
 
     def sync_firefly_readings(self):
-        self._sync_firefly_tx_channels_disabled(1)
-        self._sync_firefly_tx_channels_disabled(2)
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            self._sync_firefly_tx_channels_disabled(1)
+            self._sync_firefly_tx_channels_disabled(2)
+
+    def sync_temperature_readings(self):
+        #TODO update this for new PCB
+        # Wait until VREG_EN complete, or request will bork the bus
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            self._sync_critical_temp_monitor()
 
     ''' Zynq System '''
 
@@ -325,6 +357,40 @@ class Carrier():
 
         return round(((temp_raw+temp_offset)*temp_scale)/1000, 2)
 
+    ''' Critical temperature monitoring '''
+    def _sync_critical_temp_monitor(self):
+        #TODO Without VREG_EN enabled, the temperature cannot (currently) be checked
+        if (not self.get_vreg_en()) or self._POWER_CYCLING:
+            logging.warning('ASIC temp could not be read due to disabled regulators:' + \
+                    '\nRegulators Enabled: {}\nTemp Critical: {}'.format(
+                        self.get_vreg_en(), self._temperature_iscritical))
+            logging.warning('Power cycle vreg after fixing cooling to recover')
+            return
+
+        try:
+            #TODO convert this back to using the ASIC once a sensor is available
+            current_temperature = self.get_ambient_temperature()
+            current_temperature = self.get_ambient_temperature()    # read twice becaues for some reason bme280 first reading is always high
+
+            if current_temperature >= self._critical_temperature_limit:
+                self._temperature_iscritical = True
+
+                # If temperature is critical, force disable VREG_EN
+                self.set_vreg_en(False)
+                logging.critical('Temperature too high ({}C), ASIC disabled'.format(current_temperature))
+            else:
+                self._temperature_iscritical = False
+                # Do not automatically re-enable, should cycle VREG_EN instead
+                logging.debug('ASIC temperature ({}C) below critical ({}C)'.format(current_temperature, self._critical_temperature_limit))
+        except Exception as e:
+            # Force regulator low anyway
+            logging.critical('Failed to get ASIC temperature, disabling')
+            self.set_vreg_en(False)
+            raise
+
+    def get_critical_temp_status(self):
+        return self._temperature_iscritical
+
     ''' PAC1921 '''
 
     def _sync_power_supply_readings(self):
@@ -334,14 +400,14 @@ class Carrier():
 
         if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
             current_meas = self._pac1921_array_current_measurement
-            logging.warning("mode was POWER_AND_IV, current meas set to {}".format(current_meas))
+            logging.debug("mode was POWER_AND_IV, current meas set to {}".format(current_meas))
 
             # Get Parameter Tree measurement type name
             current_meas_name = {pac1921.Measurement_Type.POWER: 'POWER',
                         pac1921.Measurement_Type.CURRENT: 'CURRENT',
                         pac1921.Measurement_Type.VBUS: 'VOLTAGE'}[current_meas]
 
-            logging.warning("Measurement name is {}".format(current_meas_name))
+            logging.debug("Measurement name is {}".format(current_meas_name))
 
             # Get readings from current measurement for all monitors
             for monitor in self._pac1921_array:
@@ -354,7 +420,7 @@ class Carrier():
                             self._power_supply_readings[monitor.get_name()]['CURRENT'])
 
 
-            logging.warning("Readings taken, {}".format(self._power_supply_readings))
+            logging.info("Readings taken, {}".format(self._power_supply_readings))
 
             # Advance to next measurement
             if _RAIL_MONITOR_DERIVE_POWER:
@@ -376,7 +442,7 @@ class Carrier():
             self._pac1921_array_current_measurement = next_measurement
 
         elif self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_ONLY:
-            logging.warning("mode was POWER ONLY")
+            logging.debug("mode was POWER ONLY")
 
             # Read power from all devices with pin controlled integration
             psr_titles, psr_values = self._pac1921_array.read_devices()
@@ -394,17 +460,20 @@ class Carrier():
     def get_ambient_temperature(self):
         if self._bme280 is None:
             return None
-        return self._bme280.temperature
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            return self._bme280.temperature
 
     def get_ambient_pressure(self):
         if self._bme280 is None:
             return None
-        return self._bme280.pressure
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            return self._bme280.pressure
 
     def get_ambient_humidity(self):
         if self._bme280 is None:
             return None
-        return self._bme280.humidity
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            return self._bme280.humidity
 
     ''' FireFlies '''
 
@@ -424,8 +493,9 @@ class Carrier():
         self._firefly_info[ff_num]['OUI'] = oui
 
     def get_firefly_temperature(self, ff_num):
-        ff = self._get_firefly(ff_num)
-        return ff.get_temperature()
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            ff = self._get_firefly(ff_num)
+            return ff.get_temperature()
 
     def get_firefly_partnumber(self, ff_num):
         # This will not change during run, so only repeat the values read at boot
@@ -449,17 +519,24 @@ class Carrier():
         self._firefly_channelstates[ff_num] = ff.get_disabled_tx_channels()
 
     def get_firefly_tx_channel_disabled(self, ff_num, channel_num):
-        return self._firefly_channelstates[ff_num][channel_num]
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+
+            # Sync if it has not yet been completed
+            if self._firefly_channelstates[ff_num] == {}:
+                self._sync_firefly_tx_channels_disabled(ff_num)
+
+            return self._firefly_channelstates[ff_num][channel_num]
 
     def set_firefly_tx_channel_disabled(self, ff_num, channel_num, disabled):
-        ff = self._get_firefly(ff_num)
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            ff = self._get_firefly(ff_num)
 
-        channel_bitfield = FireFly.CHANNEL_00 << channel_num
+            channel_bitfield = FireFly.CHANNEL_00 << channel_num
 
-        if (disabled):
-            ff.disable_tx_channels(channel_bitfield)
-        else:
-            ff.enable_tx_channels(channel_bitfield)
+            if (disabled):
+                ff.disable_tx_channels(channel_bitfield)
+            else:
+                ff.enable_tx_channels(channel_bitfield)
 
     ''' LTC2986 '''
 
@@ -507,10 +584,11 @@ class Carrier():
             logging.error("Could not set MAX5306, was not init")
             return
 
-        if value <= self.vcal_limit:
-            self._max5306.set_output(1, value)
-            self._vcal = value
-            logging.debug("Vcal changed to {}".format(value))
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            if value <= self.vcal_limit:
+                self._max5306.set_output(1, value)
+                self._vcal = value
+                logging.info("Vcal changed to {}".format(value))
 
     ''' SI5344 Clock Generator Control '''
 
@@ -539,6 +617,10 @@ class Carrier():
 
     ''' Direct GPIO Control '''
 
+    def get_sync(self):
+        # Convert to int
+        return 1 if self.asic.get_sync() else 0
+
     def send_sync(self):
         LVDS_sync_active_state = 0 if (_LVDS_sync_idle_state == 1) else 1
         self._gpiod_sync.set_value(LVDS_sync_active_state)
@@ -546,25 +628,59 @@ class Carrier():
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
 
     def set_sync_sel_aux(self, value):
-        self._sync_sel_aux_state = bool(value)
-        pin_state = 0 if (value) else 1
-        self._gpiod_sync_sel.set_value(pin_state)
+        self.asic.set_sync_source_aux(value)
 
     def get_sync_sel_aux(self):
-        return self._sync_sel_aux_state
+        # Convert to int
+        return 1 if self.asic.get_sync_source_aux() else 0
 
     def set_asic_rst(self, value):
-        self._asic_rst_state = bool(value)
-        pin_state = 0 if (value) else 1     # Reverse logic for nRst
-        self._gpiod_asic_nrst.set_value(pin_state)
+        # Will eventually be called by ASIC paramtree?
+        if (value):
+            self.asic.disable()
+        else:
+            self.asic.enable()
 
     def get_asic_rst(self):
-        return self._asic_rst_state
+        # Will eventually be called by ASIC paramtree?
+        asic_enabled = self.asic.get_enabled()
+        return not asic_enabled
 
-    def set_vreg_en(self, value):
-        self._vreg_en_state = bool(value)
-        pin_state = 0 if (value) else 1     # Reverse logic
+    def set_vreg_en(self, enable):
+        self._vreg_en_state = bool(enable)
+
+        # Actions prior to setting pin
+        if not enable:      # Disable
+            # Deactivate any tasks that might attempt to communicate with devices
+            self._POWER_CYCLING = True
+
+            # Always Put ASIC GPIO in safe state (low for CMOS) if VREG is being disabled
+            self._gpiod_asic_nrst.set_value(0)  # nRST low
+            self._gpiod_sync.set_value(0)       # sync low
+        else:               # Enabled
+            pass
+
+        pin_state = 0 if (enable) else 1     # Reverse logic
         self._gpiod_vreg_en.set_value(pin_state)
+
+        # Actions post setting pin
+        if not enable:      # Disable
+            pass
+        else:               # Enabled
+            # Allow time for devices to come up
+            time.sleep(1)
+
+            # Re-init the board devices
+            logging.info("Board VREG power cycled, re-init devices")
+            self.POR_init_devices()
+
+            # Re-configure the device tree (some things depend on up-to-date device info
+            self._paramtree_setup()
+
+            # Re-activate any tasks that might attempt to communicate with devices
+            logging.info("Device init complete, allowing communication")
+            self._POWER_CYCLING = False
+
 
     def get_vreg_en(self):
         return self._vreg_en_state
@@ -575,27 +691,45 @@ class Carrier():
         the board in a stable and configured state.
         """
 
-        # Deactivate any tasks that might attempt to communicate with devices
-        self._POWER_CYCLING = True
-
         # Perform the power cycle
-        logging.debug("\n\n\n\nPower cycling board VREG")
+        logging.warning("\n\n\n\nPower cycling board VREG")
         self.set_vreg_en(False)                              # Power up regulators
-        time.sleep(2)
-        self.set_vreg_en(True)                              # Power up regulators
 
-        # Allow time for devices to come up
-        time.sleep(1)
+        # Schedule the enable to take place after a delay that does not block
+        IOLoop.instance().call_later(2.0, self.set_vreg_en, True)
 
-        # Re-init the board devices
-        logging.debug("Board VREG power cycled, re-init devices")
-        self.POR_init_devices()
+        logging.warning("Regulator enable will be called in 2s")
 
-        # Re-configure the device tree (some things depend on up-to-date device info
-        self._paramtree_setup()
+    ''' ASIC Control '''
+    def set_asic_mode(self, value):
+        if value == "global":
+            self.asic.enter_global_mode()
+            logging.info("Entering global mode")
+        #elif value == "local":
+        #    pass
+        else:
+            logging.warning("Mode {} is not supported by ASIC".format(value))
 
-        # Re-activate any tasks that might attempt to communicate with devices
-        self._POWER_CYCLING = False
+    def set_asic_integration_time(self, value):
+        self.asic.set_integration_time(value)
+
+    def get_asic_integration_time(self):
+        # Read cached value from the ASIC
+        return self.asic.get_integration_time(direct=False)
+
+    def set_asic_frame_length(self, value):
+        self.asic.set_frame_length(value)
+
+    def get_asic_frame_length(self):
+        # Read cached value from the ASIC
+        return self.asic.get_frame_length(direct=False)
+
+    def set_asic_feedback_capacitance(self, value):
+        self.asic.set_feedback_capacitance(value)
+
+    def get_asic_feedback_capacitance(self):
+        # Read cached value from the ASIC
+        return self.asic.get_feedback_capacitance(direct=False)
 
     def _paramtree_setup(self):
 
@@ -623,7 +757,7 @@ class Carrier():
                 self._rail_monitor_mode,
                 self.get_power_supply_readings)
 
-        logging.error(rail_monitor_tree)
+        logging.info(rail_monitor_tree)
 
         # Define the ParameterTree
         self._param_tree = ParameterTree({
@@ -641,12 +775,17 @@ class Carrier():
                 "ASIC_TEMP1":(self.get_asic_temp1_temperature, None, {"description":"ASIC internal TEMP1", "units":"C"}),
                 "ASIC_TEMP2":(self.get_asic_temp2_temperature, None, {"description":"ASIC internal TEMP2", "units":"C"})
             },
+            "CRITICAL_TEMP": (self.get_critical_temp_status, None, {"description":"Read 1 if system has a critical temperature"}),
             "VCAL": (self.get_vcal_in, self.set_vcal_in, {"description":"Analogue VCAL_IN", "units":"V"}),
-            "SYNC": (lambda: 0, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
+            "SYNC": (self.get_sync, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
             "SYNC_SEL_AUX": (self.get_sync_sel_aux, self.set_sync_sel_aux, {"description":"Set true to get sync signal externally"}),
             "ASIC_RST":(self.get_asic_rst, self.set_asic_rst, {"description":"Set true to enter ASIC reset"}),
-            #"VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set true to enable on-board power supplies"})
-            "VREG_CYCLE":(None, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices"}),
+            "ASIC_MODE":(None, self.set_asic_mode, {"description":"Init the ASIC with a specific mode (e.g. global)"}),
+            "ASIC_INTEGRATION_TIME":(self.get_asic_integration_time, self.set_asic_integration_time, {"description":"ASIC Integration Time (in frames)"}),
+            "ASIC_FRAME_LENGTH":(self.get_asic_frame_length, self.set_asic_frame_length, {"description":"ASIC Frame Length (in cycles)"}),
+            "ASIC_FEEDBACK_CAPACITANCE":(self.get_asic_feedback_capacitance, self.set_asic_feedback_capacitance, {"description":"ASIC Preamo feedback capacitance"}),
+            "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
+            "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
                 "CONFIG_AVAIL":(self.get_clk_config_avail, None, {"description":"Available SI5344 config files"}),
                 "CONFIG_SELECT":(self.get_clk_config, self.set_clk_config, {"description":"Currently selected SI5344 config"}),
