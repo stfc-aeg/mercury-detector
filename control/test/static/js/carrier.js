@@ -52,7 +52,7 @@ function poll_loki_vregneeded() {
 	// Poll functions that require vreg enabled. This means the timeout will not
 	// slow the response of other updates
 	update_loki_ff_data();		// Updated in adapter at slower rate
-	//update_loki_power_monitor();	// Updated in adapter at slower rate
+	update_loki_power_monitor();	// Updated in adapter at slower rate
 
 	update_loki_asic_preamp();
 	update_loki_asic_integration_time();
@@ -526,7 +526,7 @@ function update_loki_vcal() {
 	$('#vcal-voltage').html(vcal_voltage + "v");
 	$('#vcal-voltage').removeClass();
 	$('#vcal-voltage').addClass("badge bg-success");
-			console.log('updated vcal as ' + vcal_voltage);
+			//console.log('updated vcal as ' + vcal_voltage);
         },
         error: function() {
             console.log('Error retrieving VCAL');
@@ -580,9 +580,17 @@ function update_loki_vreg_en() {
 	$('#vreg-en-state').addClass((vreg_en_state ? "badge bg-success" : "badge bg-danger"));
 
 	if (vreg_en_state == 1) {
-		console.log('hiding spinner')
+        // The power cycle is now complete
 		$('#power-cycle-spinner').hide()
-	}
+
+        // Enable buttons that do not make sense when there is no power
+        $('#button-power-down-regulators').removeClass("disabled");
+        $('#button-en-global').removeClass("disabled");
+	} else {
+        // Disable buttons that do not make sense when there is no power
+        $('#button-power-down-regulators').addClass("disabled");
+        $('#button-en-global').addClass("disabled");
+    }
 
         },
         error: function() {
