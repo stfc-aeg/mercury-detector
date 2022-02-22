@@ -17,6 +17,7 @@ except ModuleNotFoundError:
     pass
 
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
+from tornado.ioloop import IOLoop
 
 import logging
 import time
@@ -143,6 +144,7 @@ class Carrier():
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
         self.set_sync_sel_aux(False)                        # Set sync Zynq-controlled
         self.set_asic_rst(True)                             # Init device in reset
+        logging.warning('triggering first power cycle')
         self.vreg_power_cycle_init(None)                    # Contains device setup
 
 
@@ -518,6 +520,11 @@ class Carrier():
 
     def get_firefly_tx_channel_disabled(self, ff_num, channel_num):
         if self.get_vreg_en() and not self._POWER_CYCLING:
+
+            # Sync if it has not yet been completed
+            if self._firefly_channelstates[ff_num] == {}:
+                self._sync_firefly_tx_channels_disabled(ff_num)
+
             return self._firefly_channelstates[ff_num][channel_num]
 
     def set_firefly_tx_channel_disabled(self, ff_num, channel_num, disabled):
@@ -642,13 +649,38 @@ class Carrier():
     def set_vreg_en(self, enable):
         self._vreg_en_state = bool(enable)
 
-        # Always Put ASIC GPIO in safe state (low for CMOS) if VREG is being disabled
-        if not enable:
+        # Actions prior to setting pin
+        if not enable:      # Disable
+            # Deactivate any tasks that might attempt to communicate with devices
+            self._POWER_CYCLING = True
+
+            # Always Put ASIC GPIO in safe state (low for CMOS) if VREG is being disabled
             self._gpiod_asic_nrst.set_value(0)  # nRST low
             self._gpiod_sync.set_value(0)       # sync low
+        else:               # Enabled
+            pass
 
         pin_state = 0 if (enable) else 1     # Reverse logic
         self._gpiod_vreg_en.set_value(pin_state)
+
+        # Actions post setting pin
+        if not enable:      # Disable
+            pass
+        else:               # Enabled
+            # Allow time for devices to come up
+            time.sleep(1)
+
+            # Re-init the board devices
+            logging.info("Board VREG power cycled, re-init devices")
+            self.POR_init_devices()
+
+            # Re-configure the device tree (some things depend on up-to-date device info
+            self._paramtree_setup()
+
+            # Re-activate any tasks that might attempt to communicate with devices
+            logging.info("Device init complete, allowing communication")
+            self._POWER_CYCLING = False
+
 
     def get_vreg_en(self):
         return self._vreg_en_state
@@ -659,28 +691,14 @@ class Carrier():
         the board in a stable and configured state.
         """
 
-        # Deactivate any tasks that might attempt to communicate with devices
-        self._POWER_CYCLING = True
-
         # Perform the power cycle
         logging.warning("\n\n\n\nPower cycling board VREG")
         self.set_vreg_en(False)                              # Power up regulators
-        time.sleep(2)
 
-        self.set_vreg_en(True)                              # Power up regulators
+        # Schedule the enable to take place after a delay that does not block
+        IOLoop.instance().call_later(2.0, self.set_vreg_en, True)
 
-        # Allow time for devices to come up
-        time.sleep(1)
-
-        # Re-init the board devices
-        logging.info("Board VREG power cycled, re-init devices")
-        self.POR_init_devices()
-
-        # Re-configure the device tree (some things depend on up-to-date device info
-        self._paramtree_setup()
-
-        # Re-activate any tasks that might attempt to communicate with devices
-        self._POWER_CYCLING = False
+        logging.warning("Regulator enable will be called in 2s")
 
     ''' ASIC Control '''
     def set_asic_mode(self, value):

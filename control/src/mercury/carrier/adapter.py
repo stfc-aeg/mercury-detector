@@ -98,7 +98,7 @@ class CarrierAdapter(ApiAdapter):
         )
 
         use_iv = True
-        critical_temperature = 20       #TODO set lower once using ASIC temp
+        critical_temperature = 20.0       #TODO set lower once using ASIC temp
 
         self.carrier = Carrier(si_config_location,
                                si_filename,
