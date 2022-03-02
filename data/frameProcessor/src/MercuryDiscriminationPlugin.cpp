@@ -25,6 +25,7 @@ namespace FrameProcessor
                             this->get_version_long() << " loaded.");
 
     directional_distance_ = (int)pixel_grid_size_/2;  // Set to 1 for 3x3: 2 for 5x5 pixel grid
+    // Note: image_height_, image_with_ initialised in parent (MercuryProcessorPlugin)
     number_rows_ = image_height_;
     number_columns_ = image_width_;
   }
@@ -54,10 +55,9 @@ namespace FrameProcessor
     {
       pixel_grid_size_ =
           config.get_param<int>(MercuryDiscriminationPlugin::CONFIG_PIXEL_GRID_SIZE);
+      directional_distance_ = (int)pixel_grid_size_/2;
     }
 
-    // Set to 1 for 3x3: 2 for 5x5 pixel grid
-    directional_distance_ = (int)pixel_grid_size_/2;
   }
 
   void MercuryDiscriminationPlugin::requestConfiguration(OdinData::IpcMessage& reply)

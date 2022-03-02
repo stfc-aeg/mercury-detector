@@ -2,8 +2,7 @@ import h5py
 import numpy as np
 import argparse
 
-from nose.tools import assert_equals, assert_true, assert_false,\
-    assert_equal, assert_not_equal
+from nose.tools import assert_true, assert_equal
 
 
 class DatasetChecker:
@@ -17,7 +16,16 @@ class DatasetChecker:
 
             self.data = np.array(data_file[args.dataset_name])
             self.raw = np.array(data_file["raw_frames"])
+
+            self.spectra = np.array(data_file["summed_spectra"])
             # print(self.data)
+
+    def check_summed_spectra(self):
+
+        expected_spectra = np.zeros(800, dtype=np.uint64)
+        expected_spectra[:5] =  np.array([   0, 2240,  920,    0,   80], dtype=np.uint64)
+        assert_true(np.array_equal(self.spectra[0], expected_spectra))
+
 
     def check_addition_averages(self):
 
@@ -70,3 +78,4 @@ if __name__ == "__main__":
     checker = DatasetChecker(args)
 
     checker.check_addition_averages()
+    checker.check_summed_spectra()

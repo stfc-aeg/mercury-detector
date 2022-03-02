@@ -64,6 +64,10 @@ namespace FrameSimulator {
 
         std::string image_pattern_json_path_;
 
+        void extract_normal_header(const u_char *data);
+        void extract_extended_header(const u_char *data);
+        bool extended_packet_header_;
+        int packet_header_size_;
     };
 
     REGISTER(FrameSimulatorPlugin, MercuryFrameSimulatorPlugin, "MercuryFrameSimulatorPlugin");
