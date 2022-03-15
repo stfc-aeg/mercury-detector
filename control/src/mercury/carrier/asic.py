@@ -6,6 +6,10 @@ REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
 REGISTER_ADDRESS_MASK = 0b01111111
 
+class ASICDisabledError (Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
 class Asic():
 
     # Maps MERCURY logical channel to (serialiser block, driver number)
@@ -30,6 +34,9 @@ class Asic():
                                 18  :   (10, 1),
                                 19  :   (10, 2),
                                   }
+    _serialiser_mode_names = {
+        "init":0b00, "bonding":0b01, "data":0b11
+    }
 
     def __init__(self, gpio_nrst, gpio_sync_sel, gpio_sync, bus=2, device=0, hz=2000000):
 
@@ -62,6 +69,8 @@ class Asic():
         self._STATE_feedback_capacitance = None
         self._STATE_frame_length_clocks = None
         self._STATE_integration_time = None
+        self._STATE_serialiser_mode = None
+        self._STATE_all_serialiser_pattern = None
 
     """ SPI Register Access Functions """
     def _reset_page(self):
@@ -87,6 +96,8 @@ class Asic():
             self.page = page
 
     def read_register(self, address):
+        if not self.get_enabled():
+            raise ASICDisabledError('Cannot read, ASIC disabled')
 
         if (address > 127):     # Page 2
             self._set_page(2)
@@ -106,6 +117,8 @@ class Asic():
         return readback
     
     def write_register(self, address, value):
+        if not self.get_enabled():
+            raise ASICDisabledError('Cannot write, ASIC disabled')
 
         if (address > 127):     # Page 2
             self._set_page(2)
@@ -123,6 +136,8 @@ class Asic():
         self._logger.debug("Register {} written with {}".format(address, value))
 
     def burst_read(self, start_register, num_bytes):
+        if not self.get_enabled():
+            raise ASICDisabledError('Cannot read, ASIC disabled')
 
         if (start_register > 127):  # Page 2
             self._set_page(2)
@@ -141,6 +156,8 @@ class Asic():
         return readback
 
     def burst_write(self, start_register, values):
+        if not self.get_enabled():
+            raise ASICDisabledError('Cannot write, ASIC disabled')
 
         if (start_register > 127):  # Page 2
             self._set_page(2)
@@ -195,7 +212,6 @@ class Asic():
     def enable(self):
         self.gpio_nrst.set_value(1)
         self._reset_page()          # Page is now default value
-        self._reset_local_states()  # Local states now None
 
         # Read into local copies of serialiser config
         for i in range(0, 11):
@@ -209,6 +225,7 @@ class Asic():
     def disable(self):
         self.gpio_nrst.set_value(0)
         self._logger.info('ASIC disabled')
+        self._reset_local_states()  # Local states now None
 
     def set_sync(self, is_en):
         pin_state = 1 if (is_en) else 0         # High is GPIO 1
@@ -270,12 +287,17 @@ class Asic():
 
         time.sleep(0.1) #TEMP suggested by Lawrence
 
+        # Set serialisers configuration blocks to default working mode
+        self._init_serialisers()
+
         # Remove serialiser digital and analogue reset
         self.write_register(0x04, 0x02) # Remove analogue reset
         time.sleep(0.1) #TEMP suggested by Lawrence
         self.write_register(0x04, 0x03) # Remove digital reset
 
-        #TODO need to include serialiser init through bonding, see manual pg89
+        # Cycle through serialiser modes, starts in init
+        # self.set_global_serialiser_mode("bonding")   # Enter bonding mode from init mode
+        #TODO Advance serialiser from bonding to data mode, see manual pg89
 
         # Enable readout
         self.write_register(0x03, 0x7F)
@@ -396,7 +418,36 @@ class Asic():
         return self._STATE_feedback_capacitance
 
     """ Serialiser Functions """
-    def get_serialiserblk_from_channel(channel):
+    def _init_serialisers(self):
+        # Configure serialiser control blocks so that they have settings that
+        # have been determined during the tuning process. Ideally this should
+        # be called after an ASIC reset.
+
+        # Sync current readings with ASIC
+        for block_num in range(1, 11):
+            self._read_serialiser_config(block_num)
+        self._reset_local_states()
+
+        # Set optimal settings
+        for serialiser_number in range(1,11):
+            serialiser = self._serialiser_block_configs[serialiser_number-1]
+
+            serialiser.enable_ccp             = 0b1       # default
+            serialiser.enable_ccp_initial     = 0b1
+            serialiser.low_priority_ccp       = 0b1
+            serialiser.strict_alignment       = 1         # default
+            serialiser.patternControl         = 0b000     # default
+            serialiser.ccp_count              = 0b000
+            serialiser.bypassScramble         = 0b0       # default
+            serialiser.cml_en                 = 0b00      # default (on)
+            serialiser.dll_config             = 0b000
+            serialiser.dll_phase_config       = 0b0
+
+            # Write the config to the serialiser control block
+            self._write_serialiser_config(serialiser_number)
+
+        # Settings that match defaults
+    def get_serialiserblk_from_channel(self, channel):
         block_num, driver_num = self._block_drv_channel_map[channel]
         serialiser = self._serialiser_block_configs[block_num]
 
@@ -413,6 +464,10 @@ class Asic():
         config_block = self._serialiser_block_configs[ser_index].pack()
 
         # Write to the ASIC
+        self._logger.debug("Configured serialiser block {} at start address {}:\t{}".format(
+            serialiser_block_num, base_address,
+            self._serialiser_block_configs[ser_index].__repr__()
+        ))
         self.burst_write(base_address, config_block)
 
         # Assume the write succeeded and re-import the config bytes
@@ -443,6 +498,51 @@ class Asic():
             serialiser.set_cml_driver_enable(2, enable)
             if not holdoff:
                 self._write_serialiser_config(serialiser_number)
+
+    def set_all_serialiser_pattern(self, pattern):
+        # Set pattern for all serialisers
+        if not pattern in range(0, 8):
+            return ValueError('Pattern setting must be 0-7')
+
+        for serialiser_number in range(1,11):
+            serialiser = self._serialiser_block_configs[serialiser_number-1]
+            serialiser.pattern = pattern
+            self._write_serialiser_config(serialiser_number)
+
+        self._logger.info('Serialiser pattern set to {} for all blocks'.format(pattern))
+
+        self._STATE_all_serialiser_pattern = pattern
+
+    def get_all_serialiser_pattern(self, direct=False):
+        # Returns the locally stored value by default to avoid client request
+        # based load. However, a direct reading can be forced (e.g. if relevant
+        # bits have been modified directly with another function).
+
+        # Assume that modes are the same, and only read the first channel
+        if direct or self._STATE_all_serialiser_pattern is None:
+            # Read from ASIC and set locally stored state
+            (serialiser, block_num, driver_num) = self.get_serialiserblk_from_channel(1)
+            try:
+                latest_value = serialiser.patternControl
+            except AttributeError:
+                self._read_serialiser_config(block_num)
+                self._logger.warning('serialiser: {}'.format(serialiser.__repr__()))
+                latest_value = serialiser.patternControl
+            
+            self._logger.warning('read direct from serialiser {} as {}'.format(
+                block_num, serialiser.patternControl))
+            self._STATE_all_serialiser_pattern = latest_value
+
+        # self._logger.warning('read pattern as {}'.format(self._STATE_all_serialiser_pattern))
+        return self._STATE_all_serialiser_pattern
+
+    def set_all_serialiser_bit_scramble(self, scrable_en):
+        bypassScramble = 0 if scramble_en else 1
+        
+        for serialiser_number in range(1,11):
+            serialiser = self._serialiser_block_configs[serialiser_number-1]
+            serialiser.bypassScramble = bypassScramble
+            self._write_serialiser_config(serialiser_number)
 
     def set_channel_serialiser_pattern(self, channel, pattern, holdoff=False):
         # Selectively set the output pattern for the serialiser associated with 
@@ -495,6 +595,46 @@ class Asic():
             ser_block.dll_phase_config = bit_value
             self._write_serialiser_config(ser_index+1)
 
+    def set_global_serialiser_mode(self, mode):
+        # Set the mode bits for both serialisers in reg04
+
+        if isinstance(mode, int):       # Using bits
+            mode_bits = mode & 0b11
+        elif isinstance(mode, str):     # Using mode name
+            mode_bits = self._serialiser_mode_names[mode]
+
+        oldbyte = self.read_register(4)[1]
+        oldmasked = oldbyte & 0b11000011
+
+        new = (oldmasked | (mode_bits << 2)) | (mode_bits << 4)
+        self.write_register(4, new)
+
+        self._STATE_serialiser_mode = mode_bits
+
+        self._logger.info('Set serialiser mode to {} ({})'.format(
+            self._STATE_serialiser_mode, mode
+        ))
+    
+    def get_global_serialiser_mode(self, bits_only=False, direct=False):
+        # Return the currently set mode. If bits_only is True, will send
+        # the bit encoding rather than the name.
+        # Returns the locally stored value by default to avoid client request
+        # based load. However, a direct reading can be forced (e.g. if relevant
+        # bits have been modified directly with another function).
+
+        # Assume that modes are the same, and only read SERMode1xG
+        if direct or self._STATE_serialiser_mode is None:
+            # Read from ASIC and set locally stored state
+            latest_value = (self.read_register(0x04)[1] >> 2) & 0b11
+            self._STATE_serialiser_mode = latest_value
+
+        if bits_only:
+            return self._STATE_serialiser_mode
+        else:
+            for name, mode_bits in self._serialiser_mode_names.items():
+                if mode_bits == self._STATE_serialiser_mode:
+                    return name
+
 
 class SerialiserBlockConfig():
 
@@ -508,9 +648,15 @@ class SerialiserBlockConfig():
         outstr= ""
         try:
             outstr += "Enable CCP: {}".format(bool(self.enable_ccp))
+            outstr += ", Enable CCP Initial: {}".format(bool(self.enable_ccp_initial))
+            outstr += ", Low Priority CCP: {}".format(bool(self.low_priority_ccp))
+            outstr += ", Strict Alignment: {}".format(bool(self.strict_alignment))
             outstr += ", Pattern Control: {}".format(self.patternControl)
+            outstr += ", CCP Count: {}".format(self.ccp_count)
             outstr += ", Bypass Scramble: {}".format(bool(self.bypassScramble))
             outstr += ", CML EN: {}".format(bool(self.cml_en))
+            outstr += ", DLL Config: {}".format(self.dll_config)
+            outstr += ", DLL Phase Config: {}".format(self.dll_phase_config)
         except AttributeError as e:
             outstr = "No read (failed on with {})".format(e)
 
@@ -526,12 +672,16 @@ class SerialiserBlockConfig():
         combined_fields = int.from_bytes(bytes_in, byteorder='little')
 
         # Slice config items
-        self.enable_ccp = (combined_fields & (0b1 << 46)) >> 46
-        self.patternControl = (combined_fields & (0b111 << 38)) >> 38
-        self.bypassScramble = (combined_fields & (0b1 << 42)) >> 42
-        self.cml_en = (combined_fields & (0b11 << 28)) >> 28
-        self.dll_config = (combined_fields & (0b111 << 30)) >> 30
-        self.dll_phase_config = (combined_fields & (0b1 << 33)) >> 33
+        self.enable_ccp             = (combined_fields & (0b1 << 46)) >> 46
+        self.enable_ccp_initial     = (combined_fields & (0b1 << 45)) >> 45
+        self.low_priority_ccp       = (combined_fields & (0b1 << 44)) >> 44
+        self.strict_alignment       = (combined_fields & (0b1 << 41)) >> 41
+        self.patternControl         = (combined_fields & (0b111 << 38)) >> 38
+        self.ccp_count              = (combined_fields & (0b111 << 35)) >> 35
+        self.bypassScramble         = (combined_fields & (0b1 << 42)) >> 42
+        self.cml_en                 = (combined_fields & (0b11 << 28)) >> 28
+        self.dll_config             = (combined_fields & (0b111 << 30)) >> 30
+        self.dll_phase_config       = (combined_fields & (0b1 << 33)) >> 33
 
     def pack(self):
         # Pack config items into combined fields, without overwriting any
@@ -543,12 +693,16 @@ class SerialiserBlockConfig():
 
             # Mask off bits where supported fields exist (manually)
             #               |7     |0   |15    |8   |23    |16  |31    |24  |39    |32  |47    |40
-            mask_bytes = [0b11111111, 0b11111111, 0b11111111, 0b00001111, 0b00111100, 0b10111010]
+            mask_bytes = [0b11111111, 0b11111111, 0b11111111, 0b00001111, 0b00000100, 0b10001000]
             combined_fields &= int.from_bytes(bytearray(mask_bytes), byteorder='little')
 
             # Overwrite supported fields
             combined_fields |= (self.enable_ccp & 0b1) << 46
+            combined_fields |= (self.enable_ccp_initial &  0b1) << 45
+            combined_fields |= (self.low_priority_ccp &  0b1) << 44
+            combined_fields |= (self.strict_alignment & 0b1) << 41
             combined_fields |= (self.patternControl & 0b111) << 38
+            combined_fields |= (self.ccp_count & 0b111) << 35
             combined_fields |= (self.bypassScramble & 0b1) << 42
             combined_fields |= (self.cml_en & 0b11) << 28
             combined_fields |= (self.dll_config & 0b111) << 30
