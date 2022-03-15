@@ -57,6 +57,7 @@ function poll_loki_vregneeded() {
 	update_loki_asic_preamp();
 	update_loki_asic_integration_time();
 	update_loki_asic_frame_length();
+    update_loki_asic_serialiser_mode();
 
 	setTimeout(poll_loki_vregneeded, 1000);
 }
@@ -371,6 +372,7 @@ function update_loki_ff_data() {
     }
 }
 
+var latest_asic_temp =null;		// Latest asic temperature
 function update_loki_temps() {
 	// FireFly Temperatures
     for (let ff_id = 1; ff_id <=2; ff_id++) {
@@ -411,6 +413,7 @@ function update_loki_temps() {
 		        if (response.TEMPERATURES.AMBIENT != null) {
 				var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
 				$('#temp-ambient').html(temp_ambient);
+				latest_asic_temp = temp_ambient;  //TODO TEMPORARY
 			}
 
 			// PT100 Temperature
@@ -547,14 +550,25 @@ function update_loki_asic_nrst() {
 		success: function(response) {
         asic_rst_state = response.ASIC_RST;
 
-	$('#asic-rst-state').html((asic_rst_state ? "RESET" : "Enabled"));
-	$('#asic-rst-state').removeClass();
-	$('#asic-rst-state').addClass((asic_rst_state ? "badge bg-danger" : "badge bg-success"));
+        // Configure the reset state indicator
+        if (asic_rst_state) {
+            // Use spinner to draw attention
+            spinner_html = '<div class="spinner-grow spinner-grow-sm" role="status"><span class="visually-hidden">Loading...</span></div>'
+            $('#asic-rst-state').html(spinner_html +  " RESET " + spinner_html);
+            $('#asic-rst-state').removeClass();
+    	    $('#asic-rst-state').addClass("badge bg-danger");
+        } else {
+            $('#asic-rst-state').html("Enabled");
+            $('#asic-rst-state').removeClass();
+    	    $('#asic-rst-state').addClass("badge bg-success");
+        }
             //console.log("Got asic reset state: " + asic_rst_state)
-			//
-	if (asic_rst_state) {
-		$('#collapseFrameControl').attr('disabled', 'disabled');
-	}
+
+        // Impact other controls
+        if (asic_rst_state) {
+            // $('#collapseFrameControl').addClass('disabled');
+        }
+
         },
         error: function() {
             console.log('Error retrieving ASIC reset state');
@@ -764,6 +778,47 @@ function update_loki_asic_sync_aux(){
     });
 }
 
+function update_loki_asic_serialiser_mode() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SER_MODE',
+		async: false,
+		dataType: 'json',
+		timeout: 200,
+		success: function(response) {
+            asic_serialiser_mode = response.ASIC_SER_MODE;
+            console.log('Got serialiser mode ' + asic_serialiser_mode);
+
+            $('#asic-ser-mode-state').html(asic_serialiser_mode);
+            $('#asic-ser-mode-state').removeClass();
+            switch (asic_serialiser_mode) {
+                case "init":
+                    $('#asic-ser-mode-state').addClass("badge bg-info");
+                    break;
+                case "bonding":
+                    $('#asic-ser-mode-state').addClass("badge bg-info");
+                    break;
+                case "data":
+                    $('#asic-ser-mode-state').addClass("badge bg-success");
+                    break;
+                default:
+                    console.log('Serialiser mode not recognised: ' + asic_serialiser_mode)
+                    $('#asic-ser-mode-state').addClass("badge bg-error");
+                    break
+            }
+        },
+        error: function() {
+            $('#asic-ser-mode-state').html("No Con");
+            $('#asic-ser-mode-state').removeClass();
+            $('#asic-ser-mode-state').addClass("badge bg-danger");
+            console.log('Error retrieving serialiser mode state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get serialiser mode');
+    });
+}
+
+function update_loki_asic_serialiser_pattern() {
+
+}
 
 var toast_shown = false;
 $('.toast').on('shown.bs.toast', function() {
@@ -782,7 +837,8 @@ function update_loki_critical_temp() {
 
             if (critical_temp_state) {
                 if(!toast_shown) $('.toast').toast('show');
-		console.log('Critical temperature reported')
+		console.log('Critical temperature reported (latest ' + latest_asic_temp + ')');
+		$('#latest_critical_temperature').html(latest_asic_temp);
 	    } else {
 		$('.toast').toast('hide');
 		    toast_shown = false;
@@ -899,6 +955,32 @@ function change_frame_length(cycles) {
 		$('#asic-frame-length-state').addClass("badge bg-warning");
 
 		console.log("Frame length set to " + cycles + " cycles");
+        }
+	});
+}
+
+function change_serialiser_mode(modename) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_SER_MODE': modename}),
+        success: function(data) {
+
+		console.log("Serialiser mode set to " + modename);
+        }
+	});
+}
+
+function change_serialiser_all_pattern(pattern) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_SER_PATTERN': pattern}),
+        success: function(data) {
+
+		console.log("Serialiser pattern set to " + pattern);
         }
 	});
 }

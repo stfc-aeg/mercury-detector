@@ -310,6 +310,10 @@
                                                     Sync State: 
                                                     <span id="asic-sync-state">&nbsp;</span>
                                                 </div>
+                                                <div class="row">
+                                                    Serialiser Mode: 
+                                                    <span id="asic-ser-mode-state">&nbsp;</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -407,6 +411,9 @@
                                                 <div id="collapseSerialiserControl" class="accordion-collapse collapse" aria-labelledby="headingSerialiserControl" data-bs-parent="#asic-advanced-accordion">
                                                     <div class="accordion-body">
                                                         <div class="row contflex">
+                                                            <button class="btn btn-primary" type="button" onclick="change_serialiser_mode('data')">Bonding Complete</button>
+                                                        </div>
+                                                        <div class="row contflex">
                                                             <div class="col-7">
                                                                 <div class="row">
                                                                     Channel Selection
@@ -438,6 +445,7 @@
                                                             </div>
                                                             <div class="col-5">
                                                                 Readout
+                                                                <span id="asic-ser-pattern-state"></span>
                                                             </div>
                                                         </div>
                                                     </div>

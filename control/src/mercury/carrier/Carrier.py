@@ -7,7 +7,7 @@ from odin_devices.bme280 import BME280
 from odin_devices.i2c_device import I2CException
 from odin_devices.spi_device import SPIDevice
 
-from .asic import Asic
+from .asic import Asic, ASICDisabledError
 
 try:
     from odin_devices.ltc2986 import LTC2986, LTCSensorException
@@ -206,10 +206,17 @@ class Carrier():
 
     def get(self, path, wants_metadata=False):
         """Main get method for the parameter tree"""
-        return self._param_tree.get(path, wants_metadata)
+        try:
+            return self._param_tree.get(path, wants_metadata)
+        except AttributeError:
+            raise ParameterTreeError
+
     def set(self, path, data):
         """Main set method for the parameter tree"""
-        return self._param_tree.set(path, data)
+        try:
+            return self._param_tree.set(path, data)
+        except AttributeError:
+            raise ParameterTreeError
 
     def POR_init_devices(self):
         """Init the devices on the board after a power-on-reset with current configuration"""
@@ -655,8 +662,14 @@ class Carrier():
             self._POWER_CYCLING = True
 
             # Always Put ASIC GPIO in safe state (low for CMOS) if VREG is being disabled
-            self._gpiod_asic_nrst.set_value(0)  # nRST low
-            self._gpiod_sync.set_value(0)       # sync low
+            try:
+                # Attempt to use the ASIC's own version, which will reset internal state
+                self.asic.disable()
+                self.asic.set_sync(False)
+            except AttributeError:
+                # Manually toggle pins
+                self._gpiod_asic_nrst.set_value(0)  # nRST low
+                self._gpiod_sync.set_value(0)       # sync low
         else:               # Enabled
             pass
 
@@ -714,22 +727,52 @@ class Carrier():
         self.asic.set_integration_time(value)
 
     def get_asic_integration_time(self):
-        # Read cached value from the ASIC
-        return self.asic.get_integration_time(direct=False)
+        try:
+            # Read cached value from the ASIC
+            return self.asic.get_integration_time(direct=False)
+        except ASICDisabledError:
+            return None
 
     def set_asic_frame_length(self, value):
         self.asic.set_frame_length(value)
 
     def get_asic_frame_length(self):
-        # Read cached value from the ASIC
-        return self.asic.get_frame_length(direct=False)
+        try:
+            # Read cached value from the ASIC
+            return self.asic.get_frame_length(direct=False)
+        except ASICDisabledError:
+            return None
 
     def set_asic_feedback_capacitance(self, value):
         self.asic.set_feedback_capacitance(value)
 
     def get_asic_feedback_capacitance(self):
-        # Read cached value from the ASIC
-        return self.asic.get_feedback_capacitance(direct=False)
+        try:
+            # Read cached value from the ASIC
+            return self.asic.get_feedback_capacitance(direct=False)
+        except ASICDisabledError:
+            return None
+
+    def set_asic_serialiser_mode(self, value):
+        # Mode can be set with a string or integer value
+        self.asic.set_global_serialiser_mode(value)
+
+    def get_asic_serialiser_mode(self):
+        try:
+            # Read cached value from the ASIC
+            return self.asic.get_global_serialiser_mode(bits_only=False, direct=False)
+        except ASICDisabledError:
+            return None
+
+    def set_asic_all_serialiser_pattern(self, value):
+        self.asic.set_all_serialiser_pattern(value)
+
+    def get_asic_all_serialiser_pattern(self):
+        try:
+            # Read cached value from the ASIC
+            return self.asic.get_all_serialiser_pattern(direct=False)
+        except ASICDisabledError:
+            return None
 
     def _paramtree_setup(self):
 
@@ -784,6 +827,8 @@ class Carrier():
             "ASIC_INTEGRATION_TIME":(self.get_asic_integration_time, self.set_asic_integration_time, {"description":"ASIC Integration Time (in frames)"}),
             "ASIC_FRAME_LENGTH":(self.get_asic_frame_length, self.set_asic_frame_length, {"description":"ASIC Frame Length (in cycles)"}),
             "ASIC_FEEDBACK_CAPACITANCE":(self.get_asic_feedback_capacitance, self.set_asic_feedback_capacitance, {"description":"ASIC Preamo feedback capacitance"}),
+            "ASIC_SER_MODE":(self.get_asic_serialiser_mode, self.set_asic_serialiser_mode, {"description":"ASIC Serialiser mode (init, bonding or data) as str"}),
+            "ASIC_SER_PATTERN":(self.get_asic_all_serialiser_pattern, self.set_asic_all_serialiser_pattern, {"description":"ASIC Serialiser pattern (0 for serial, 7 for PRBS, 1-5 for clock div)"}),
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
