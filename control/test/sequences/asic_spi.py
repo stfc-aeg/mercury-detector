@@ -1,6 +1,5 @@
 import time
 
-
 # asic_spi.py
 provides = ['spi_read_reg',
 'spi_write_reg',
@@ -24,7 +23,20 @@ provides = ['spi_read_reg',
 'all_sector_cal_capture',
 'set_all_ram_bias',
 'set_clock_config',
-'test_meta_20220211_TDC_frequency']
+'test_meta_20220211_TDC_frequency',
+'test_VCAL_large_range_20220225',
+'test_VCAL_large_range_TDC_20220225',
+'printdir',
+'test_VCAL_capacitance_slewRate_20220303',
+'test_VCAL_single_pixel_20220307','test_VCAL_bias_20220308',
+'test_VCAL_recordLowCurrent_20220308',
+'test_VCAL_capacitance_20220311',
+'test_VCAL_14fF_slewRate_20220308',
+'test_VCAL_14fF_Ipre_20220311',
+'test_VCAL_14fF_TDC_20220311',
+'test_VCAL_14fF_SinglePix_20220311',
+'serialiser_global_change',
+'test_VCAL_14fF_SinglePix_2patterns_range_globalBias_20220314']
 
 REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
@@ -274,6 +286,25 @@ def calibration_set_firstpixel(pattern=0):
     elif pattern == 2:
         calibration_y [9] = 0b00000011  # Set LSB
         calibration_x [0] = 0b11000000  # Set MSB
+    elif pattern == 3:
+        calibration_x[0] = 0b10000000
+        calibration_y[0] = 0b10000000
+    elif pattern ==4:
+        calibration_x[9] = 0b00000001
+        calibration_y[0] = 0b10000000
+    elif pattern == 5:
+        calibration_x[0] = 0b10000000
+        calibration_y[9] = 0b00000001
+    elif pattern == 6:
+        calibration_x[9] = 0b00000001
+        calibration_y[9] = 0b00000001
+    elif pattern == 7:
+        calibration_x[9] = 0b00000011
+        calibration_y[9] = 0b00000001
+    elif pattern == 8:
+        calibration_x[9] = 0b00000011
+        calibration_y[9] = 0b00000011
+   
 
 
     calibration_pattern = calibration_y + calibration_x
@@ -310,6 +341,7 @@ def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False, vcal
             # Read out the results from select sectors
             for sector in sector_array:
                 print("Begin reading samples for sector {} with VCAL: {}".format(sector, vcal_setting))
+                time.sleep(0.5)
 
                 # Sample the sector 50 times
                 samples_out = read_test_pattern(sector=sector, num_samples=sector_samples, store=False, printout=False)
@@ -443,7 +475,7 @@ def test_meta_20220211_TDC_frequency():
     asic.set_register_bit(  0, 0b00001000)
 
     # Create reference sample of slow slew ramping, limited sectors
-    asic.set_all_ram_bias(0b1000)        # Slow ramp slew (default)
+    asic.set_all_ramp_bias(0b1000)        # Slow ramp slew (default)
     set_clock_config(205)           # Use default 205Mhz TDC clock
     test1 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -453,7 +485,7 @@ def test_meta_20220211_TDC_frequency():
     print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
 
     # Increase resolution and test decreased range
-    asic.set_all_ram_bias(0b1111)        # Fast ramp slew
+    asic.set_all_ramp_bias(0b1111)        # Fast ramp slew
     set_clock_config(205)           # Use default 205Mhz TDC clock
     test2 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -463,7 +495,7 @@ def test_meta_20220211_TDC_frequency():
     print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
 
     # Increase measured resolution and look at high/low linearity
-    asic.set_all_ram_bias(0b1111)        # Fast ramp slew
+    asic.set_all_ramp_bias(0b1111)        # Fast ramp slew
     set_clock_config(225)           # Use 225Mhz TDC clock
     test3 = vcal_noise_test(local_vcal=False,
                             sector_samples=1000,
@@ -501,3 +533,628 @@ def test_meta_20220211_TDC_frequency():
     print("\t3) Linearity test stored in {}".format(test3))
     print("\t4) Uniformity test stored in {}".format(test4))
     print("\t5) CDS RST test stored in {}".format(test5))
+
+def test_VCAL_large_range_20220225():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Set negative range to -20keV
+    asic.clear_register_bit(0,0b01000000)              
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+    print("!!! All tests complete:")
+    print("\t1) Reference test stored in {}".format(test1))
+    print("\t2) Resolution test stored in {}".format(test2))
+
+def test_VCAL_large_range_TDC_20220225():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1 = vcal_noise_test(local_vcal=True,
+                            sector_samples=1000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Set negative range to -20keV
+    asic.clear_register_bit(0,0b01000000)              
+    test2 = vcal_noise_test(local_vcal=True,
+                            sector_samples=1000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+    print("!!! All tests complete:")
+    print("\t1) Reference test stored in {}".format(test1))
+    print("\t2) Resolution test stored in {}".format(test2))
+
+def printdir():
+    asic = get_context('asic')
+    carrier = get_context('carrier')
+
+    print(dir(asic))
+    print(dir(carrier))
+
+def test_VCAL_capacitance_slewRate_20220303():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    # Create reference sample of 7fF, 1000 slew rate
+    test1 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #7fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000) #Slowest ramp slew       
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+    #7fF, 1111 slew rate
+    asic.set_all_ramp_bias(0b1111) #fastest ramp slew
+    test3 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #14fF, 1000 slew rate
+    asic.set_all_ramp_bias(0b1000) #default slew rate
+    #Setting 14fF capacitor
+    asic.set_register_bit(0, 0b00010000)
+    asic.clear_register_bit(  0, 0b00001000)
+    test4 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #21fF, 1000 slew rate
+    asic.set_register_bit(  0, 0b00001000)
+    test5 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    print("Test 5 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+
+    print("!!! All tests complete:")
+    print("\t1) 7pF, 1000 slew rate test stored in {}".format(test1))
+    print("\t2) 7pF, 0000 slew rate test stored in {}".format(test2))
+    print("\t3) 7pF, 1111 slew rate test stored in {}".format(test3))
+    print("\t4) 14pF, 1000 slew rate test stored in {}".format(test4))
+    print("\t5) 21pF, 1000 slew rate test stored in {}".format(test5))
+
+def test_VCAL_single_pixel_20220307():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #setting pattern to be top left pixel
+    calibration_set_firstpixel(pattern=3)
+    # Create reference sample of -10keV range, limited sectors
+    test1 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting pattern to be top right pixel
+    calibration_set_firstpixel(pattern=4)
+    # Create reference sample of -10keV range, limited sectors
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting pattern to be bottom left pixel
+    calibration_set_firstpixel(pattern=5)
+    # Create reference sample of -10keV range, limited sectors
+    test3 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting pattern to be bottom right pixel
+    calibration_set_firstpixel(pattern=6)
+    # Create reference sample of -10keV range, limited sectors
+    test4 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+    print("!!! All tests complete:")
+    print("\t1) Top left test stored in {}".format(test1))
+    print("\t2) Top right test stored in {}".format(test2))
+    print("\t3) Bottom left test stored in {}".format(test3))
+    print("\t4) Bottom right test stored in {}".format(test4))
+
+def test_VCAL_bias_20220308():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #setting pattern to be top left pixel
+    #taking reference sample
+    test1 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting lowest current
+    asic.write_register(130,0b00000000)
+    # Create reference sample of -10keV range, limited sectors
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting highest current
+    asic.write_register(130,0b11111111)
+    # Create reference sample of -10keV range, limited sectors
+    test3 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    print("!!! All tests complete:")
+    print("\t1) Default current test stored in {}".format(test1))
+    print("\t2) Lowest current test stored in {}".format(test2))
+    print("\t3) Highest current test stored in {}".format(test3))
+
+def test_VCAL_recordLowCurrent_20220308():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00010000)
+    asic.set_register_bit(  0, 0b00001000)
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #setting lowest current
+    asic.write_register(130,0b00000000)
+    # Create reference sample of -10keV range, limited sectors
+    test1 = vcal_noise_test(local_vcal=False,
+                            sector_samples=500,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+
+    print("!!! All tests complete:")
+    print("\t1) Default current test stored in {}".format(test1))
+    
+
+def test_VCAL_capacitance_20220311():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    #Set default slew rate
+    asic.set_all_ramp_bias(0b1000) # Slow ramp slew (default)
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 1000 slew rate
+    #Setting 14fF capacitor
+    asic.set_register_bit(0, 0b00010000)
+    asic.clear_register_bit(  0, 0b00001000)
+    test4 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #21fF, 1000 slew rate
+    asic.set_register_bit(  0, 0b00001000)
+    test5 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    print("Test 5 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+
+    print("!!! All tests complete:")
+    print("\t4) 14pF, 1000 slew rate test stored in {}".format(test4))
+    print("\t5) 21pF, 1000 slew rate test stored in {}".format(test5))
+
+
+def test_VCAL_14fF_slewRate_20220308():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000) #Slowest ramp slew       
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+    #7fF, 1111 slew rate
+    asic.set_all_ramp_bias(0b1111) #fastest ramp slew
+    test3 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    print("!!! All tests complete:")
+    print("\t2) 14fF, 0000 slew rate test stored in {}".format(test2))
+    print("\t3) 14fF, 1111 slew rate test stored in {}".format(test3))
+
+def test_VCAL_14fF_Ipre_20220311():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+    #setting double the Ibias
+    asic.set_register_bit(0,0b00100000)
+
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+
+    print("!!! All tests complete:")
+    print("\t2) 14fF, 1000, Ipre=1 slew rate test stored in {}".format(test2))
+
+def test_VCAL_14fF_SinglePix_20220311():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+    #setting top left pixel pattern
+    calibration_set_firstpixel(pattern=6)
+
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+
+    print("!!! All tests complete:")
+    print("\t2) 14fF, 1000, top left pixel test stored in {}".format(test2))
+
+def test_VCAL_14fF_TDC_20220311():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+    #setting top left pixel pattern
+
+    test2 = vcal_noise_test(local_vcal=True,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+
+    print("!!! All tests complete:")
+    print("\t2) 14fF, 1000, TDC test stored in {}".format(test2))
+
+
+def serialiser_global_change(register=0,data=0):
+    if register > 5:
+        print ("Serialiser register byte does not exist: maximum value of 5 (index 0)")
+        return
+    for i in range(10):
+        register_address= 66 + (6*i) + register
+        data = data
+        asic.write_register(register_adress,data)
+        registers_strings = ["A","B","C","D","E","F"]
+    print("changed all 10 segment controls for register part {0} to {1}".format(registers_strings[register],str(data)))
+
+
+def test_VCAL_14fF_SinglePix_2patterns_range_globalBias_20220314():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+
+    #setting lowest current
+    asic.write_register(130,0b00000000)
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting highest current
+    asic.write_register(130,0b11111111)
+    # Create reference sample of -10keV range, limited sectors
+    test2 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #resetting to default current
+    asic.write_register(130,0b11110000)
+    #Set -20 keV negative range
+    asic.clear_register_bit(0,0b01000000)
+
+    # Create  sample of -20keV range, limited sectors
+    test3 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting -10 keV range
+    asic.set_register_bit(0,0b01000000)
+    #setting top left pixel pattern
+    calibration_set_firstpixel(pattern=7)
+
+    test4 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    #setting top left pixel pattern
+    calibration_set_firstpixel(pattern=8)
+
+    test5 = vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()    
+    print("Test 5 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+    
+
+    print("!!! All tests complete:")
+    print("\t1) 14fF, 1000, lowGlobalCurrent test stored in {}".format(test1))
+    print("\t2) 14fF, 1000, highGlobalCurrent test stored in {}".format(test2))
+    print("\t3) 14fF, 1000, -20 keV test stored in {}".format(test3))
+    print("\t4) 14fF, 1000, pattern 7 test stored in {}".format(test4))
+    print("\t5) 14fF, 1000, pattern 8 test stored in {}".format(test5))

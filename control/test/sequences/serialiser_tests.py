@@ -11,7 +11,11 @@ provides = ['ser_set_pattern',
 'cycle_cml_drivers',
 'bypass_scramble_all',
 'set_dll_phase_config',
-'set_dll_phase_config_next']
+'set_dll_phase_config_next',
+'enter_init_mode',
+'enter_bonding_mode',
+'enter_data_mode',
+'set_strict_alignment_all']
 
 def ser_set_pattern(serialiser_number=1, pattern=7):
     asic = get_context('asic')
@@ -136,8 +140,8 @@ def ser_enter_reset():
     asic.clear_register_bit(2, 0b1)     # Ser digi
     asic.clear_register_bit(1, 0b10)    # Ser PLL
 
-    spi_read_reg("1")
-    spi_read_reg("2")
+    #spi_read_reg("1")
+    #spi_read_reg("2")
 
 def ser_exit_reset():
     asic = get_context('asic')
@@ -146,8 +150,8 @@ def ser_exit_reset():
     asic.set_register_bit(2, 0b1)     # Ser digi
     asic.set_register_bit(1, 0b10)    # Ser PLL
 
-    spi_read_reg("1")
-    spi_read_reg("2")
+    #spi_read_reg("1")
+    #spi_read_reg("2")
 
 def set_single_cml(serialiser_block_number=1, cml_en=0b00):
     # Defaults to both on (0b00)
@@ -185,6 +189,43 @@ def bypass_scramble_all(enable=True):
     for serialiser in asic._serialiser_block_configs:
         print("Setting serialiser {}".format(i))
         serialiser.bypassScramble = 0b1 if enable else 0b0            # Enable CML drivers 1 & 2
+
+        asic._write_serialiser_config(i)    # Force pack and write to config
+        i += 1
+        # time.sleep(3)
+
+def set_serialiser_mode(mode_bits):
+    asic = get_context('asic')
+    # assume in global mode
+
+    oldbyte = asic.read_register(4)[1]
+    oldmasked = oldbyte & 0b11000011
+
+    new = (oldmasked | (mode_bits << 2)) | (mode_bits << 4)
+    asic.write_register(4, new)
+
+def enter_init_mode():
+    # set_serialiser_mode(0b11)
+    asic = get_context('asic')
+    asic.set_global_serialiser_mode("init")
+
+def enter_bonding_mode():
+    # set_serialiser_mode(0b01)
+    asic = get_context('asic')
+    asic.set_global_serialiser_mode("bonding")
+
+def enter_data_mode():
+    # set_serialiser_mode(0b11)
+    asic = get_context('asic')
+    asic.set_global_serialiser_mode("data")
+
+def set_strict_alignment_all(val=1):
+    asic = get_context('asic')
+    print("Setting Strict Alignment to {} for serialisers".format(val))
+    i = 1
+    for serialiser in asic._serialiser_block_configs:
+        print("Setting serialiser {}".format(i))
+        serialiser.strict_alignment = val & 0b1
 
         asic._write_serialiser_config(i)    # Force pack and write to config
         i += 1
