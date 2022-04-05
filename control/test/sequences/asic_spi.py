@@ -12,6 +12,7 @@ provides = ['spi_read_reg',
 'read_test_pattern',
 'write_test_pattern',
 'write_test_pattern2',
+'write_test_pattern3',
 'tdc_enable_local_vcal',
 # 'paged_register_test',
 # 'shift_register_test',
@@ -36,7 +37,21 @@ provides = ['spi_read_reg',
 'test_VCAL_14fF_TDC_20220311',
 'test_VCAL_14fF_SinglePix_20220311',
 'serialiser_global_change',
-'test_VCAL_14fF_SinglePix_2patterns_range_globalBias_20220314']
+'test_VCAL_14fF_SinglePix_2patterns_range_globalBias_20220314',
+'test_VCAL_14fF_allSectors_20220317',
+'test_VCAL_14fF_LawrenceTests_20220322',
+'test_VCAL_14fF_NoVCAL_Lawrence_tests_20220322',
+'test_VCAL_14fF_NoVCAL_Lawrence_testsbatch2_20220322',
+'test_VCAL_14fF_NoVCAL_Lawrence_testsbatch3_20220323',
+'test_VCAL_14fF_NoVCAL_Lawrence_testsbatch4_slewrate_20220323',
+'test_VCAL_14fF_NoVCAL_Lawrence_testsbatch5_capacitors_20220324',
+'test_VCAL_14fF_NoVCAL_Lawrence_testsbatch6_fullArray_20220324',
+'test_VCAL_14fF_NoVCAL_Lawrence_testsbatch7_fullArray_20220328',
+'test_VCAL_14fF_VCAL_Lawrence_testsbatch8_linearity_20220328',
+'test_VCAL_14fF_VCAL_Lawrence_testsbatch8_linearity_7and21_20220328',
+'test_VCAL_Lawrence_testsbatch9_newSettings_20220331',
+'test_VCAL_Lawrence_testsbatch10_newSettingsIndividual_20220401',
+'test_VCAL_Lawrence_testsbatch11_register18testing_20220404']
 
 REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
@@ -250,6 +265,7 @@ def write_test_pattern(sector=0):
 
 
 def write_test_pattern2(sector=0):
+
     asic = get_context('asic')
 
     asic.write_register(0x07, 0x01 | (sector<<2))
@@ -260,6 +276,42 @@ def write_test_pattern2(sector=0):
 
     # Test reg to write mode and select image sector 0
     asic.write_register(0x07, 0x03 | (sector<<2))
+
+    print("Writing 4095 to sector {0}".format(sector))
+
+def write_test_pattern3(sector=0):
+
+    values = range(1000,3100,100)
+
+    full_test_array = []
+    for i in range(20):
+        value = values[i]
+        byte_a = (value >> 4) & 0xFF
+        byte_b = ((value & 0x0F) << 4) | ((value & 0xF00) >> 8)
+        byte_c = value & 0x0FF
+
+        print('Representing value {} as bytes {} for sector {}'.format(value, [byte_a, byte_b, byte_c], i))
+        # return
+
+        # Add the triple byte to the array for each 12-bit pixel pair
+        for pixel_pair in range(0, 8):
+            full_test_array.append(byte_a)
+            full_test_array.append(byte_b)
+            full_test_array.append(byte_c)
+
+
+    asic = get_context('asic')
+
+    asic.write_register(0x07, 0x01 | (sector<<2))
+
+    values_out = [0xFF for x in range(0, 480)]
+
+    asic.burst_write(127, full_test_array)
+
+    # Test reg to write mode and select image sector 0
+    asic.write_register(0x07, 0x03 | (sector<<2))
+
+    print("Writing scaling pattern to sector {0}".format(sector))
 
 def tdc_enable_local_vcal(local_vcal_en=True):
     asic = get_context('asic')
@@ -309,7 +361,8 @@ def calibration_set_firstpixel(pattern=0):
     elif pattern == 8:
         calibration_x[9] = 0b00000011
         calibration_y[9] = 0b00000011
-   
+    elif pattern == 9:
+        pass
 
 
     calibration_pattern = calibration_y + calibration_x
@@ -1163,3 +1216,1055 @@ def test_VCAL_14fF_SinglePix_2patterns_range_globalBias_20220314():
     print("\t3) 14fF, 1000, -20 keV test stored in {}".format(test3))
     print("\t4) 14fF, 1000, pattern 7 test stored in {}".format(test4))
     print("\t5) 14fF, 1000, pattern 8 test stored in {}".format(test5))
+
+def test_VCAL_14fF_allSectors_20220317():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=True,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    print("!!! All tests complete:")
+    print("\t1) All sectors 14 fF test stored in {}".format(test1))
+
+
+def test_VCAL_14fF_LawrenceTests_20220322():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    asic.set_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence test1 stored in {}".format(test1))
+    print("\t2) Lawrence test2 stored in {}".format(test2))
+
+
+def test_VCAL_14fF_NoVCAL_Lawrence_tests_20220322():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+
+    asic.clear_register_bit(0,0b00000100)
+
+    print(asic.read_register(0))
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    asic.set_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence test1; No VCAL stored in {}".format(test1))
+    print("\t2) Lawrence test2; No VCAL stored in {}".format(test2))
+
+def test_VCAL_14fF_NoVCAL_Lawrence_testsbatch2_20220322():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+
+    asic.clear_register_bit(0,0b00000100)
+
+    print(asic.read_register(0))
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10000000)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    asic.write_register(9,0b10001100)
+
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence batch 2 test1; No VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch 2 test2; No VCAL stored in {}".format(test2))
+
+def test_VCAL_14fF_NoVCAL_Lawrence_testsbatch3_20220323():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b1000) #Default ramp slew
+
+    asic.clear_register_bit(0,0b00000100)
+
+    print(asic.read_register(0))
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001110)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    asic.write_register(9,0b10001111)
+
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence batch 3 test1; No VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch 3 test2; No VCAL stored in {}".format(test2))
+
+def test_VCAL_14fF_NoVCAL_Lawrence_testsbatch4_slewrate_20220323():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 14fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0010)
+
+    asic.clear_register_bit(0,0b00000100)
+
+    print(asic.read_register(0))
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+   
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence batch4 slew rate test; No VCAL stored in {}".format(test1))
+
+def test_VCAL_14fF_NoVCAL_Lawrence_testsbatch5_capacitors_20220324():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0010)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+   
+     # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    test3= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence batch5 7 fF test; No VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch5 14 fF test; No VCAL stored in {}".format(test2))
+    print("\t3) Lawrence batch5 21 fF test; No VCAL stored in {}".format(test3))
+
+
+def test_VCAL_14fF_NoVCAL_Lawrence_testsbatch6_fullArray_20220324():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0010)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=True,
+                            vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+   
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=True,
+                            vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))       
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence batch6 14 fF full array test; VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch5 14 fF full array test; No VCAL stored in {}".format(test2))
+
+
+def test_VCAL_14fF_NoVCAL_Lawrence_testsbatch7_fullArray_20220328():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=True,
+                            vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+   
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    
+    test2= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=True,
+                            vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))       
+
+    print("!!! All tests complete:")
+    print("\t1) Lawrence batch6 14 fF full array test; VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch5 14 fF full array test; No VCAL stored in {}".format(test2))
+
+def test_VCAL_14fF_VCAL_Lawrence_testsbatch8_linearity_20220328():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))    
+   
+    print("\t1) Lawrence batch8 14 fF linearity test; VCAL stored in {}".format(test1))
+
+
+def test_VCAL_14fF_VCAL_Lawrence_testsbatch8_linearity_7and21_20220328():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(  0, 0b00010000)
+
+    test2= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))   
+   
+    print("\t1) Lawrence batch8 7 fF linearity test; VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch8 21 fF linearity test; VCAL stored in {}".format(test2))
+
+
+def test_VCAL_Lawrence_testsbatch9_newSettings_20220331():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(17,174)
+    asic.write_register(18,198)
+    asic.write_register(21,190)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test2= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test3= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test4= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+   
+    print("\t1) Lawrence batch9 7 fF linearity test; VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch9 14 fF linearity test; VCAL stored in {}".format(test2))
+    print("\t3) Lawrence batch9 21 fF linearity test; VCAL stored in {}".format(test3))
+    print("\t3) Lawrence batch9 14 fF linearity test; no VCAL stored in {}".format(test4))
+
+
+def test_VCAL_Lawrence_testsbatch10_newSettingsIndividual_20220401():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(17,174)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test2= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test3= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test4= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+
+
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(18,198)
+
+    # Create reference sample of -10keV range, limited sectors
+    test5= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 5 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test6= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 6 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test7= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 7 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test8= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 8 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(21,190)
+
+     # Create reference sample of -10keV range, limited sectors
+    test9= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 9 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test10= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 10 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test11= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 11 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test12= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 12 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+
+   
+    print("\t1) Lawrence batch9 7 fF linearity test; VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch9 14 fF linearity test; VCAL stored in {}".format(test2))
+    print("\t3) Lawrence batch9 21 fF linearity test; VCAL stored in {}".format(test3))
+    print("\t4) Lawrence batch9 14 fF linearity test; no VCAL stored in {}".format(test4))
+    print("\t5) Lawrence batch9 7 fF linearity test; VCAL stored in {}".format(test5))
+    print("\t6) Lawrence batch9 14 fF linearity test; VCAL stored in {}".format(test6))
+    print("\t7) Lawrence batch9 21 fF linearity test; VCAL stored in {}".format(test7))
+    print("\t8) Lawrence batch9 14 fF linearity test; no VCAL stored in {}".format(test8))
+    print("\t9) Lawrence batch9 7 fF linearity test; VCAL stored in {}".format(test9))
+    print("\t10) Lawrence batch9 14 fF linearity test; VCAL stored in {}".format(test10))
+    print("\t11) Lawrence batch9 21 fF linearity test; VCAL stored in {}".format(test11))
+    print("\t12) Lawrence batch9 14 fF linearity test; no VCAL stored in {}".format(test12))
+
+def test_VCAL_Lawrence_testsbatch11_register18testing_20220404():
+    #testing the effect of changing the negative range
+
+    asic = get_context('asic')
+    
+    timenow = time.localtime()
+    print("Begin test {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    # Perform global mode before running this test, includes reset
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(17,174)
+    asic.write_register(21,190)
+    asic.write_register(18,196)
+
+    # Create reference sample of -10keV range, limited sectors
+    test1= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 1 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test2= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 2 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test3= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 3 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test4= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 4 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+
+
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(17,174)
+    asic.write_register(21,190)
+    asic.write_register(18,197)
+
+    # Create reference sample of -10keV range, limited sectors
+    test5= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 5 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test6= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 6 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test7= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 7 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test8= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 8 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+
+    set_global_mode()
+
+    # Set the feedback capacitence to 7fF
+    asic.set_register_bit(0, 0b00001000)
+    asic.clear_register_bit(  0, 0b00010000)
+
+    #Set default slew rate
+    set_clock_config(205)  # Use default 205 MHz TDC clock
+
+    #Set default negative range
+    asic.set_register_bit(0,0b01000000)
+
+    #14fF, 0000 slew rate
+    asic.set_all_ramp_bias(0b0000)
+
+    asic.clear_register_bit(0,0b00100000)
+    asic.write_register(12,6)
+    asic.write_register(14,20)
+    asic.write_register(9,0b10001111)
+    asic.write_register(17,174)
+    asic.write_register(21,190)
+    asic.write_register(18,0)
+
+     # Create reference sample of -10keV range, limited sectors
+    test9= vcal_noise_test(local_vcal=False,
+                            sector_samples=5000,
+                            all_sectors=False,
+                            vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 9 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test10= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 10 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))
+
+    asic.set_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test11= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=False,
+                        vcal_values=[0,0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5])
+    timenow = time.localtime()
+    print("Test 11 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec))  
+
+    asic.clear_register_bit(0,0b00000100)
+    print(asic.read_register(0))
+    asic.clear_register_bit(0, 0b00001000)
+    asic.set_register_bit(0, 0b00010000)
+
+    test12= vcal_noise_test(local_vcal=False,
+                        sector_samples=5000,
+                        all_sectors=True,
+                        vcal_values=[0.5])
+    timenow = time.localtime()
+    print("Test 12 complete {}:{}:{}".format(timenow.tm_hour, timenow.tm_min, timenow.tm_sec)) 
+
+   
+    print("\t1) Lawrence batch11 7 fF linearity test; VCAL stored in {}".format(test1))
+    print("\t2) Lawrence batch11 14 fF linearity test; VCAL stored in {}".format(test2))
+    print("\t3) Lawrence batch11 21 fF linearity test; VCAL stored in {}".format(test3))
+    print("\t4) Lawrence batch11 14 fF linearity test; no VCAL stored in {}".format(test4))
+    print("\t5) Lawrence batch11 7 fF linearity test; VCAL stored in {}".format(test5))
+    print("\t6) Lawrence batch11 14 fF linearity test; VCAL stored in {}".format(test6))
+    print("\t7) Lawrence batch11 21 fF linearity test; VCAL stored in {}".format(test7))
+    print("\t8) Lawrence batch11 14 fF linearity test; no VCAL stored in {}".format(test8))
+    print("\t9) Lawrence batch11 7 fF linearity test; VCAL stored in {}".format(test9))
+    print("\t10) Lawrence batch11 14 fF linearity test; VCAL stored in {}".format(test10))
+    print("\t11) Lawrence batch11 21 fF linearity test; VCAL stored in {}".format(test11))
+    print("\t12) Lawrence batch11 14 fF linearity test; no VCAL stored in {}".format(test12))
