@@ -307,6 +307,15 @@ class Asic():
 
         self._logger.info("Global mode configured")
 
+        # RE-INIT SERIALISERS (Serialisers will not function without additional reset. Reason unknown.)
+        time.sleep(0.5)
+        self.clear_register_bit(0x04, 0b10) # ana
+        self.clear_register_bit(0x04, 0b01) # digi
+        time.sleep(0.5)
+        self.set_register_bit(0x04, 0b10)   # ana
+        self.set_register_bit(0x04, 0b01)   # digi
+        self._logger.info("Serialiser encoding state force reset")
+
     def read_test_pattern(self, sector):
         # Read out a test pattern from a specificed sector using the 480
         # byte test shift register (320 12-bit pixels). The result is
@@ -317,7 +326,7 @@ class Asic():
 
         # Keep test register read mode with trigger 1
         self.write_register(0x07, 0x82 | (sector<<2))
-        time.sleep(0.001)
+        # time.sleep(0.001)
 
         # Put test shift register into shift mode
         self.write_register(0x07, 0x81 | (sector<<2))
@@ -529,7 +538,7 @@ class Asic():
                 self._logger.warning('serialiser: {}'.format(serialiser.__repr__()))
                 latest_value = serialiser.patternControl
             
-            self._logger.warning('read direct from serialiser {} as {}'.format(
+            self._logger.info('read pattern directly from serialiser {} as: {}'.format(
                 block_num, serialiser.patternControl))
             self._STATE_all_serialiser_pattern = latest_value
 

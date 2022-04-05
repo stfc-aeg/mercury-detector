@@ -427,7 +427,7 @@ class Carrier():
                             self._power_supply_readings[monitor.get_name()]['CURRENT'])
 
 
-            logging.info("Readings taken, {}".format(self._power_supply_readings))
+            logging.debug("Readings taken, {}".format(self._power_supply_readings))
 
             # Advance to next measurement
             if _RAIL_MONITOR_DERIVE_POWER:

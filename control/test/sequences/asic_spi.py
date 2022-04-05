@@ -63,6 +63,11 @@ def spi_write_reg(register="0", value="0"):
 
     asic.write_register(register, value)
 
+    # Force ASIC to 'forget' cached values that now may not be valid
+    asic._reset_local_states()
+    for i in range(1, 11):
+        asic._read_serialiser_config(i)
+
     print("Wrote {} bytes starting at address {}: {}".format(1, hex(register), hex(value)))
 
 def spi_read_burst(start_register="0", num_bytes=1):

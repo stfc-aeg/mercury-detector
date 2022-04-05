@@ -800,8 +800,9 @@ function update_loki_asic_serialiser_mode() {
                     $('#asic-ser-mode-state').addClass("badge bg-success");
                     break;
                 default:
-                    console.log('Serialiser mode not recognised: ' + asic_serialiser_mode)
-                    $('#asic-ser-mode-state').addClass("badge bg-error");
+                    console.log('Serialiser mode not recognised: ' + asic_serialiser_mode);
+                    $('#asic-ser-mode-state').html("Unknown");
+                    $('#asic-ser-mode-state').addClass("badge bg-danger");
                     break
             }
         },
