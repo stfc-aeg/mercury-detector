@@ -98,13 +98,15 @@ class CarrierAdapter(ApiAdapter):
         )
 
         use_iv = True
-        critical_temperature = 20.0       #TODO set lower once using ASIC temp
+        critical_temperature = 28.0       #TODO set lower once using ASIC temp
+        asic_spi_hz = int(self.options.get('asic_spi_hz'))
 
-        self.carrier = Carrier(si_config_location,
-                               si_filename,
-                               use_iv,
-                               critical_temperature,
-                               interface_definition=_interface_definition_ribbon)
+        self.carrier = Carrier(si5344_config_directory=si_config_location,
+                               si5344_config_filename=si_filename,
+                               power_monitor_IV=use_iv,
+                               critical_temp_limit=critical_temperature,
+                               interface_definition=_interface_definition_ribbon,
+                               asic_spi_speed_hz=asic_spi_hz)
 
         # Call self-repeating loops for first time
         self.power_update_interval = float(1.0)

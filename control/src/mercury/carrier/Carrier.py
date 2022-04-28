@@ -82,7 +82,8 @@ class Carrier():
                  power_monitor_IV,
                  critical_temp_limit,
                  interface_definition=_interface_definition_default,
-                 vcal=_vcal_default):
+                 vcal=_vcal_default,
+                 asic_spi_speed_hz=2000000):
 
         self._POWER_CYCLING = False
 
@@ -138,7 +139,24 @@ class Carrier():
             self._gpiod_asic_nrst, self._gpiod_sync_sel, self._gpiod_sync,
             bus=interface_definition.spidev_id_mercury[0],
             device=interface_definition.spidev_id_mercury[1],
-            hz=20000000)    # 20M -> 10M
+            # hz=30000000)    # 30M -> 15M: nope
+            #hz=20000000)    # 20M -> 10M: nope
+            # hz=16000000)    # 16M -> 8M: nope
+            # hz=8000000)    # 8M -> 4M: ok
+            # hz=5000000)    # 5M -> 2.5M: ok
+            # hz=2000000)    # 2M -> 1M: ok
+            hz=asic_spi_speed_hz)
+
+        '''
+        Speed (code)    |   Speed (actual)  | 2m Printer    | 1m 'fast' Printer |
+        2M              |   1M              | OK            |   OK
+        5M              |   2.5M            | OK            |   OK
+        8M              |   4M              | OK            |   OK
+        16M             |   8M              | No            |   OK 
+        20M             |   10M             | No            |   OK 
+        30M             |   15M             | No            |   No
+
+        '''
 
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
