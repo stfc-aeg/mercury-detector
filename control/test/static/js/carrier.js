@@ -401,7 +401,7 @@ function update_loki_temps() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/TEMPERATURES',
 		async: false,
 		dataType: 'json',
-		timeout: 600,
+		timeout: 60,
 		success: function(response) {
 			// Zynq PS Temperature
 		        if (response.TEMPERATURES.ZYNQ.PS != null) {
@@ -413,17 +413,32 @@ function update_loki_temps() {
 		        if (response.TEMPERATURES.AMBIENT != null) {
 				var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
 				$('#temp-ambient').html(temp_ambient);
-				latest_asic_temp = temp_ambient;  //TODO TEMPORARY
+				//latest_asic_temp = temp_ambient;  //TODO TEMPORARY
 			}
+
+            // Ambient Humidity (TODO MOVE)
+		        if (response.TEMPERATURES.HUMIDITY != null) {
+                    var hum_ambient = response.TEMPERATURES.HUMIDITY.toFixed(2);
+                    console.log('Humidity' + hum_ambient);
+                    $('#hum-ambient').html(hum_ambient);
+                    //latest_asic_temp = temp_ambient;  //TODO TEMPORARY
+                } else {
+                    console.log('Humidity null');
+                }
 
 			// PT100 Temperature
 			// TODO
 
-			// ASIC TEMP1 Temperature
-			// TODO
-
-			// ASIC TEMP2 Temperature
-			// TODO
+			// ASIC Temperature
+            if (response.TEMPERATURES.ASIC != null) {
+                console.log('got an ASIC temperature: ' + response.TEMPERATURES.ASIC);
+				var temp_asic = response.TEMPERATURES.ASIC.toFixed(2);
+				$('#temp-asic').html(temp_asic);
+				latest_asic_temp = temp_asic;  //TODO TEMPORARY
+			} else {
+                console.log('ASIC temperature was null');
+				$('#temp-asic').html('FAIL (last ' + latest_asic_temp + ')');
+            }
 		},
 		error: function() {
 			console.log('PCB Temperature reading error');
