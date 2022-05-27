@@ -386,7 +386,7 @@ def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False, vcal
     else:
         sector_array = [0, 9, 19]
 
-    time_now = time.gmtime()
+    time_now = time.localtime()
     filename = "/opt/loki-detector/exports/" + title + "_{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec, int((time.time() % 1) * 1000)) + '.csv'
     print("Will write to {}".format(filename))
     time.sleep(3)
