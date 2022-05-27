@@ -224,8 +224,8 @@ def read_test_pattern(sector=0, num_samples=1, store=False, printout=True):
     # Run global enable first
 
     readout_samples = []
-    time_now = time.gmtime()
-    filename = 'read-tests/' + '-'.join( [str(x) for x in [time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec]]) + '.csv'
+    time_now = time.localtime()
+    filename = '/opt/loki-detector/exports/' + '-'.join( [str(x) for x in [time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec]]) + '.csv'
 
     if not store:
         filename = '/dev/null'
