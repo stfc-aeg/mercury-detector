@@ -380,7 +380,7 @@ function update_loki_temps() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE',
 		async: false,
 		dataType: 'json',
-		timeout: 600,
+		timeout: 60,
 		success: function(response) {
 		    if (response.TEMPERATURE != null) {
 			    var firefly_temp = response.TEMPERATURE.toFixed(2);
@@ -472,7 +472,7 @@ function update_loki_power_monitor() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/PSU',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
 			psu_analogue_pwr = response.PSU.ANALOGUE.POWER.toFixed(5);
 			psu_dig_pwr = response.PSU.DIG.POWER.toFixed(5);
@@ -537,7 +537,7 @@ function update_loki_vcal() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VCAL',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
         vcal_voltage = response.VCAL;
 
@@ -561,7 +561,7 @@ function update_loki_asic_nrst() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_RST',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
         asic_rst_state = response.ASIC_RST;
 
@@ -600,7 +600,7 @@ function update_loki_vreg_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_CYCLE',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
         vreg_en_state = response.VREG_CYCLE;
 
@@ -637,7 +637,7 @@ function update_loki_asic_preamp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FEEDBACK_CAPACITANCE',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_feedback_capacitance_state = response.ASIC_FEEDBACK_CAPACITANCE;
 
@@ -664,7 +664,7 @@ function update_loki_asic_integration_time() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_INTEGRATION_TIME',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             integration_time = response.ASIC_INTEGRATION_TIME;
 
@@ -690,7 +690,7 @@ function update_loki_connection() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name,
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
 			time_last_connected = new Date()
 		$('#zynq-connection-state').html("Connected");
@@ -713,7 +713,7 @@ function update_loki_asic_frame_length() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FRAME_LENGTH',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             frame_length = response.ASIC_FRAME_LENGTH;
 
@@ -737,7 +737,7 @@ function update_loki_asic_sync() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_sync_state = response.SYNC;
 
@@ -774,7 +774,7 @@ function update_loki_asic_sync_aux(){
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC_SEL_AUX',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_sync_sel_aux = response.SYNC_SEL_AUX;
 
@@ -797,7 +797,7 @@ function update_loki_asic_serialiser_mode() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SER_MODE',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_serialiser_mode = response.ASIC_SER_MODE;
             console.log('Got serialiser mode ' + asic_serialiser_mode);
@@ -846,7 +846,7 @@ function update_loki_critical_temp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/CRITICAL_TEMP',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             critical_temp_state = response.CRITICAL_TEMP;
             //TODO send popup, add UI elements etc
