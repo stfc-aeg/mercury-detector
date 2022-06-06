@@ -80,6 +80,7 @@ class Carrier():
     def __init__(self, si5344_config_directory, si5344_config_filename,
                  power_monitor_IV,
                  critical_temp_limit,
+                 override_critical_temp_bme,
                  interface_definition=_interface_definition_default,
                  vcal=_vcal_default,
                  asic_spi_speed_hz=2000000):
@@ -101,6 +102,7 @@ class Carrier():
 
         # Set the critical temperature limit
         self._critical_temperature_limit = critical_temp_limit
+        self._override_critical_temp_bme = override_critical_temp_bme
         self._temperature_iscritical = True     # Start assuming temperature critical until checked
 
         # Get LOKI GPIO pin bus
@@ -335,6 +337,7 @@ class Carrier():
             self._ltc2986 = None
             # exit()  # Temp
         self._asic_temp = None  # Init cached ASIC temperature to None
+        self._pt100_temp =None  # Init cached PT100 temperature to None
 
         # Init SI5344 with clocks specified on the schematic. This requires a config file
         self._si5344 = SI5344(i2c_address=0x68)
@@ -400,13 +403,20 @@ class Carrier():
             return
 
         try:
-            # Update cached ASIC temperature
-            self._sync_asic_temperature()
+            logging.debug('self.override_critical_temp_bme: {}'.format(self._override_critical_temp_bme))
+            if not self._override_critical_temp_bme:
+                # Update cached ASIC temperature
+                self._sync_asic_temperature()
 
-            current_temperature = self.get_cached_asic_temperature()
+                current_temperature = self.get_cached_asic_temperature()
+            else:
+                current_temperature = self.get_ambient_temperature()
 
-            # if current_temperature == None:
-            #     raise Exception('ASIC temperature read as None')
+            if current_temperature is None:
+                raise Exception('ASIC temperature read as None')
+
+            logging.info('Current primary temperature: {} (BME?: {}) (Critical: {})'.format(
+                current_temperature, self._override_critical_temp_bme, self._critical_temperature_limit))
 
             if current_temperature >= self._critical_temperature_limit:
                 self._temperature_iscritical = True
@@ -420,7 +430,7 @@ class Carrier():
                 logging.debug('ASIC temperature ({}C) below critical ({}C)'.format(current_temperature, self._critical_temperature_limit))
         except Exception as e:
             # Force regulator low anyway
-            logging.critical('Failed to get ASIC temperature, disabling')
+            logging.critical('Failed to get ASIC temperature ({}), disabling'.format(e))
             self.set_vreg_en(False)
             # raise
 
@@ -576,36 +586,28 @@ class Carrier():
 
     ''' LTC2986 '''
 
-    def get_pt100_temperature(self):
-        if self._ltc2986 is not None:
-            if self.get_vreg_en() and not self._POWER_CYCLING:
-                try:
-                    # raise LTCSensorException('bypassed PT100')  # TEMP raise error to abort unmounted RTD reading
-                    # temperature, raw_in = self._ltc2986.measure_channel(_ltc2986_pt100_channel)
-                    # logging.info('LTC raw value read as {} -> {}'.format(
-                        # temperature, raw_in))
-                    temperature = self._ltc2986.measure_channel(_ltc2986_pt100_channel)
-                    return temperature
-                except LTCSensorException as e:
-                    logging.error("LTC2986 sensor failure: {}".format(e))
-                    return None
-            else:
-                return None
-        else:
-            return None
+    def get_cached_pt100_temperature(self):
+        return self._pt100_temp
 
     def _sync_asic_temperature(self):
         self._asic_temp = None
+        self._pt100_temp =None
 
         if self._ltc2986 is not None:
             try:
                 self._asic_temp = (self._ltc2986.measure_channel(_ltc2986_diode_channel))
             except LTCSensorException as e:
-                logging.error("LTC2986 sensor failure: {}".format(e))
+                logging.error("LTC2986 ASIC sensor failure: {}".format(e))
                 self._asic_temp =None
+            try:
+                self._pt100_temp = (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
+            except LTCSensorException as e:
+                logging.error("LTC2986 PT100 sensor failure: {}".format(e))
+                self._pt100_temp =None
         else:
             logging.warning('LTC2986 was not read; not initialised at start')
             self._asic_temp = None
+            self._pt100_temp =None
 
     def get_cached_asic_temperature(self):
         return self._asic_temp
@@ -847,7 +849,7 @@ class Carrier():
                     "PL":(lambda: self.get_zynq_ams_temp('2_pl'), None, {"description":"Zynq system PL Temperature", "units":"C"}),
                 },
                 "AMBIENT":(self.get_ambient_temperature, None, {"description":"Board ambient temperature from BME280", "units":"C"}),
-                "PT100":(self.get_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
+                "PT100":(self.get_cached_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
                 "ASIC":(self.get_cached_asic_temperature, None, {"description":"ASIC internal diode temperature", "units":"C"}),
                 "HUMIDITY":(self.get_ambient_humidity, None, {"description":"Board ambient humidity from BME280", "units":"%RH"})
             },
