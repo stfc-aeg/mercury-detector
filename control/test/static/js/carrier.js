@@ -427,7 +427,13 @@ function update_loki_temps() {
                 }
 
 			// PT100 Temperature
-			// TODO
+            if (response.TEMPERATURES.PT100 != null) {
+                var temp_pt100 = response.TEMPERATURES.PT100.toFixed(2);
+                $('#temp-pt100').html(temp_pt100);
+            } else {
+                console.log('Failed to read PT100');
+                $('#temp-pt100').html('FAIL');
+            }
 
 			// ASIC Temperature
             if (response.TEMPERATURES.ASIC != null) {
