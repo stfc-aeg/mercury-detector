@@ -403,18 +403,23 @@ function update_loki_temps() {
 		dataType: 'json',
 		timeout: 60,
 		success: function(response) {
+            console.log(response.TEMPERATURES);
 			// Zynq PS Temperature
 		        if (response.TEMPERATURES.ZYNQ.PS != null) {
 				var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
 				$('#temp-zynqps').html(temp_zynqps);
-			}
+			} else {
+				$('#temp-ambient').html('No Con');
+            }
 
 			// Ambient Temperature
 		        if (response.TEMPERATURES.AMBIENT != null) {
 				var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
 				$('#temp-ambient').html(temp_ambient);
 				//latest_asic_temp = temp_ambient;  //TODO TEMPORARY
-			}
+			} else {
+				$('#temp-ambient').html('No Con');
+            }
 
             // Ambient Humidity (TODO MOVE)
 		        if (response.TEMPERATURES.HUMIDITY != null) {
@@ -423,7 +428,7 @@ function update_loki_temps() {
                     $('#hum-ambient').html(hum_ambient);
                     //latest_asic_temp = temp_ambient;  //TODO TEMPORARY
                 } else {
-                    console.log('Humidity null');
+                    $('#hum-ambient').html('No Con');
                 }
 
 			// PT100 Temperature

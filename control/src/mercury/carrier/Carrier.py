@@ -86,6 +86,7 @@ class Carrier():
                  asic_spi_speed_hz=2000000):
 
         self._POWER_CYCLING = False
+        self._PARAMTREE_FIRSTINIT = True
 
         self._interface_definition = interface_definition
         if power_monitor_IV:
@@ -363,8 +364,20 @@ class Carrier():
             self._si5344))
 
     def sync_power_readings(self):
-        if self.get_vreg_en() and not self._POWER_CYCLING:
+        #if self.get_vreg_en() and not self._POWER_CYCLING:
+        try:
             self._sync_power_supply_readings()
+        except Exception as e:
+            logging.critical('Error reading PAC1921s: NO PCB?? ({})'.format(e))
+        #else:
+        #    logging.critical('will update power supply readings to be 0...')
+        #    try:
+        #        self._power_supply_readings = self._POWER_SUPPLY_READINGS_EMPTY
+        #    except AttributeError:
+        #        # May be encountered if sync attempts to run before paramtree setup complete
+        #        logging.critical('Could not find self._POWER_SUPPLY_READINGS_EMPTY')
+        #        pass
+        #    logging.critical('PSU readings are now: {}'.format(self.get_power_supply_readings))
 
     def sync_firefly_readings(self):
         if self.get_vreg_en() and not self._POWER_CYCLING:
@@ -819,10 +832,12 @@ class Carrier():
             self._sync_firefly_info(2)
 
         # Sync repeating readings
-        self._power_supply_readings = {
-                self._pac1921_u3.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
-                self._pac1921_u2.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
-                self._pac1921_u1.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0}}
+        self._POWER_SUPPLY_READINGS_EMPTY = {
+            self._pac1921_u3.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
+            self._pac1921_u2.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
+            self._pac1921_u1.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0}}
+        if self._PARAMTREE_FIRSTINIT:
+            self._power_supply_readings = self._POWER_SUPPLY_READINGS_EMPTY
         self._firefly_channelstates = {1: {}, 2: {}}
         #self.sync_power_readings()
         self.sync_firefly_readings()
@@ -875,3 +890,6 @@ class Carrier():
                 "CKDBG_STEP":(None, lambda dir: self.step_clk(3, dir), {"description": "Step frequency of the debug header clock up or down"}),
             }
         })
+
+        self._PARAMTREE_FIRSTINIT = False
+        logging.info(self._param_tree)
