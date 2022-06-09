@@ -485,23 +485,23 @@ function update_loki_power_monitor() {
 		dataType: 'json',
 		timeout: 20,
 		success: function(response) {
-			psu_analogue_pwr = response.PSU.ANALOGUE.POWER.toFixed(5);
-			psu_dig_pwr = response.PSU.DIG.POWER.toFixed(5);
-			psu_dig_ctrl_pwr = response.PSU.DIG_CTRL.POWER.toFixed(5);
+            try {psu_analogue_pwr = response.PSU.ANALOGUE.POWER.toFixed(5);} catch (TypeError) {}
+			try {psu_dig_pwr = response.PSU.DIG.POWER.toFixed(5);} catch (TypeError) {}
+			try {psu_dig_ctrl_pwr = response.PSU.DIG_CTRL.POWER.toFixed(5);} catch (TypeError) {}
 			$('#psu-analogue-pwr').html(psu_analogue_pwr);
 			$('#psu-dig-pwr').html(psu_dig_pwr);
 			$('#psu-dig-ctrl-pwr').html(psu_dig_ctrl_pwr);
 
-			psu_analogue_vol = response.PSU.ANALOGUE.VOLTAGE.toFixed(5);
-			psu_dig_vol = response.PSU.DIG.VOLTAGE.toFixed(5);
-			psu_dig_ctrl_vol = response.PSU.DIG_CTRL.VOLTAGE.toFixed(5);
+            try {psu_analogue_vol = response.PSU.ANALOGUE.VOLTAGE.toFixed(5);} catch (TypeError) {}
+            try {psu_dig_vol = response.PSU.DIG.VOLTAGE.toFixed(5);} catch (TypeError) {}
+            try {psu_dig_ctrl_vol = response.PSU.DIG_CTRL.VOLTAGE.toFixed(5);} catch (TypeError) {}
 			$('#psu-analogue-vol').html(psu_analogue_vol);
 			$('#psu-dig-vol').html(psu_dig_vol);
 			$('#psu-dig-ctrl-vol').html(psu_dig_ctrl_vol);
 
-			psu_analogue_cur = response.PSU.ANALOGUE.CURRENT.toFixed(5);
-			psu_dig_cur = response.PSU.DIG.CURRENT.toFixed(5);
-			psu_dig_ctrl_cur = response.PSU.DIG_CTRL.CURRENT.toFixed(5);
+            try {psu_analogue_cur = response.PSU.ANALOGUE.CURRENT.toFixed(5);} catch (TypeError) {}
+            try {psu_dig_cur = response.PSU.DIG.CURRENT.toFixed(5);} catch (TypeError) {}
+            try {psu_dig_ctrl_cur = response.PSU.DIG_CTRL.CURRENT.toFixed(5);} catch (TypeError) {}
 			$('#psu-analogue-cur').html(psu_analogue_cur);
 			$('#psu-dig-cur').html(psu_dig_cur);
 			$('#psu-dig-ctrl-cur').html(psu_dig_ctrl_cur);
