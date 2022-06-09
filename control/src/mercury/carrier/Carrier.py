@@ -65,8 +65,7 @@ _interface_definition_default = Carrier_Interface(
 _vcal_default = 1.5     # TODO check this
 
 _ltc2986_pt100_channel = 6
-_ltc2986_temp1_channel = 2
-_ltc2986_temp2_channel = 1
+_ltc2986_diode_channel = 2
 
 _LVDS_sync_idle_state = 0   # TODO Check polarity
 _LVDS_sync_duration = 0.1   # TODO Check duration
@@ -81,11 +80,13 @@ class Carrier():
     def __init__(self, si5344_config_directory, si5344_config_filename,
                  power_monitor_IV,
                  critical_temp_limit,
+                 override_critical_temp_bme,
                  interface_definition=_interface_definition_default,
                  vcal=_vcal_default,
                  asic_spi_speed_hz=2000000):
 
         self._POWER_CYCLING = False
+        self._PARAMTREE_FIRSTINIT = True
 
         self._interface_definition = interface_definition
         if power_monitor_IV:
@@ -102,6 +103,7 @@ class Carrier():
 
         # Set the critical temperature limit
         self._critical_temperature_limit = critical_temp_limit
+        self._override_critical_temp_bme = override_critical_temp_bme
         self._temperature_iscritical = True     # Start assuming temperature critical until checked
 
         # Get LOKI GPIO pin bus
@@ -320,14 +322,23 @@ class Carrier():
                                           LTC2986.RTD_RSense_Channel.CH4_CH3,
                                           2000,
                                           LTC2986.RTD_Num_Wires.NUM_2_WIRES,
-                                          LTC2986.RTD_Excitation_Mode.NO_ROTATION_NO_SHARING,
+                                          LTC2986.RTD_Excitation_Mode.NO_ROTATION_SHARING,
                                           LTC2986.RTD_Excitation_Current.CURRENT_500UA,
                                           LTC2986.RTD_Curve.EUROPEAN,
                                           _ltc2986_pt100_channel)
-            # TODO add diode sensor channels for ASIC once more info available. Use _ltc2986_temp1_channel,_ltc2986_temp2_channel
+            self._ltc2986.add_diode_channel(endedness=LTC2986.Diode_Endedness.DIFFERENTIAL,
+                                            conversion_cycles=LTC2986.Diode_Conversion_Cycles.CYCLES_2,
+                                            average_en=LTC2986.Diode_Running_Average_En.OFF,
+                                            excitation_current=LTC2986.Diode_Excitation_Current.CUR_80UA_320UA_640UA,
+                                            diode_non_ideality=1.0,
+                                            channel_num=_ltc2986_diode_channel)
+            # raise Exception()
         except Exception as e:
             logging.error("LTC2986 init failed: {}".format(e))
             self._ltc2986 = None
+            # exit()  # Temp
+        self._asic_temp = None  # Init cached ASIC temperature to None
+        self._pt100_temp =None  # Init cached PT100 temperature to None
 
         # Init SI5344 with clocks specified on the schematic. This requires a config file
         self._si5344 = SI5344(i2c_address=0x68)
@@ -353,8 +364,20 @@ class Carrier():
             self._si5344))
 
     def sync_power_readings(self):
-        if self.get_vreg_en() and not self._POWER_CYCLING:
+        #if self.get_vreg_en() and not self._POWER_CYCLING:
+        try:
             self._sync_power_supply_readings()
+        except Exception as e:
+            logging.critical('Error reading PAC1921s: NO PCB?? ({})'.format(e))
+        #else:
+        #    logging.critical('will update power supply readings to be 0...')
+        #    try:
+        #        self._power_supply_readings = self._POWER_SUPPLY_READINGS_EMPTY
+        #    except AttributeError:
+        #        # May be encountered if sync attempts to run before paramtree setup complete
+        #        logging.critical('Could not find self._POWER_SUPPLY_READINGS_EMPTY')
+        #        pass
+        #    logging.critical('PSU readings are now: {}'.format(self.get_power_supply_readings))
 
     def sync_firefly_readings(self):
         if self.get_vreg_en() and not self._POWER_CYCLING:
@@ -362,7 +385,6 @@ class Carrier():
             self._sync_firefly_tx_channels_disabled(2)
 
     def sync_temperature_readings(self):
-        #TODO update this for new PCB
         # Wait until VREG_EN complete, or request will bork the bus
         if self.get_vreg_en() and not self._POWER_CYCLING:
             self._sync_critical_temp_monitor()
@@ -384,6 +406,7 @@ class Carrier():
 
     ''' Critical temperature monitoring '''
     def _sync_critical_temp_monitor(self):
+
         #TODO Without VREG_EN enabled, the temperature cannot (currently) be checked
         if (not self.get_vreg_en()) or self._POWER_CYCLING:
             logging.warning('ASIC temp could not be read due to disabled regulators:' + \
@@ -393,9 +416,20 @@ class Carrier():
             return
 
         try:
-            #TODO convert this back to using the ASIC once a sensor is available
-            current_temperature = self.get_ambient_temperature()
-            current_temperature = self.get_ambient_temperature()    # read twice becaues for some reason bme280 first reading is always high
+            logging.debug('self.override_critical_temp_bme: {}'.format(self._override_critical_temp_bme))
+            if not self._override_critical_temp_bme:
+                # Update cached ASIC temperature
+                self._sync_asic_temperature()
+
+                current_temperature = self.get_cached_asic_temperature()
+            else:
+                current_temperature = self.get_ambient_temperature()
+
+            if current_temperature is None:
+                raise Exception('ASIC temperature read as None')
+
+            logging.info('Current primary temperature: {} (BME?: {}) (Critical: {})'.format(
+                current_temperature, self._override_critical_temp_bme, self._critical_temperature_limit))
 
             if current_temperature >= self._critical_temperature_limit:
                 self._temperature_iscritical = True
@@ -409,9 +443,9 @@ class Carrier():
                 logging.debug('ASIC temperature ({}C) below critical ({}C)'.format(current_temperature, self._critical_temperature_limit))
         except Exception as e:
             # Force regulator low anyway
-            logging.critical('Failed to get ASIC temperature, disabling')
+            logging.critical('Failed to get ASIC temperature ({}), disabling'.format(e))
             self.set_vreg_en(False)
-            raise
+            # raise
 
     def get_critical_temp_status(self):
         return self._temperature_iscritical
@@ -565,35 +599,31 @@ class Carrier():
 
     ''' LTC2986 '''
 
-    def get_pt100_temperature(self):
-        if self._ltc2986 is not None:
-            try:
-                return (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
-            except LTCSensorException as e:
-                logging.error("LTC2986 sensor failure: {}".format(e))
-                return None
-        else:
-            return None
+    def get_cached_pt100_temperature(self):
+        return self._pt100_temp
 
-    def get_asic_temp1_temperature(self):
-        if self._ltc2986 is not None:
-            try:
-                return (self._ltc2986.measure_channel(_ltc2986_temp1_channel))
-            except LTCSensorException as e:
-                logging.error("LTC2986 sensor failure: {}".format(e))
-                return None
-        else:
-            return None
+    def _sync_asic_temperature(self):
+        self._asic_temp = None
+        self._pt100_temp =None
 
-    def get_asic_temp2_temperature(self):
         if self._ltc2986 is not None:
             try:
-                return (self._ltc2986.measure_channel(_ltc2986_temp2_channel))
+                self._asic_temp = (self._ltc2986.measure_channel(_ltc2986_diode_channel))
             except LTCSensorException as e:
-                logging.error("LTC2986 sensor failure: {}".format(e))
-                return None
+                logging.error("LTC2986 ASIC sensor failure: {}".format(e))
+                self._asic_temp =None
+            try:
+                self._pt100_temp = (self._ltc2986.measure_channel(_ltc2986_pt100_channel))
+            except LTCSensorException as e:
+                logging.error("LTC2986 PT100 sensor failure: {}".format(e))
+                self._pt100_temp =None
         else:
-            return None
+            logging.warning('LTC2986 was not read; not initialised at start')
+            self._asic_temp = None
+            self._pt100_temp =None
+
+    def get_cached_asic_temperature(self):
+        return self._asic_temp
 
     ''' MAX5306 '''
 
@@ -802,10 +832,12 @@ class Carrier():
             self._sync_firefly_info(2)
 
         # Sync repeating readings
-        self._power_supply_readings = {
-                self._pac1921_u3.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
-                self._pac1921_u2.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
-                self._pac1921_u1.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0}}
+        self._POWER_SUPPLY_READINGS_EMPTY = {
+            self._pac1921_u3.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
+            self._pac1921_u2.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
+            self._pac1921_u1.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0}}
+        if self._PARAMTREE_FIRSTINIT:
+            self._power_supply_readings = self._POWER_SUPPLY_READINGS_EMPTY
         self._firefly_channelstates = {1: {}, 2: {}}
         #self.sync_power_readings()
         self.sync_firefly_readings()
@@ -832,9 +864,9 @@ class Carrier():
                     "PL":(lambda: self.get_zynq_ams_temp('2_pl'), None, {"description":"Zynq system PL Temperature", "units":"C"}),
                 },
                 "AMBIENT":(self.get_ambient_temperature, None, {"description":"Board ambient temperature from BME280", "units":"C"}),
-                "PT100":(self.get_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
-                "ASIC_TEMP1":(self.get_asic_temp1_temperature, None, {"description":"ASIC internal TEMP1", "units":"C"}),
-                "ASIC_TEMP2":(self.get_asic_temp2_temperature, None, {"description":"ASIC internal TEMP2", "units":"C"})
+                "PT100":(self.get_cached_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
+                "ASIC":(self.get_cached_asic_temperature, None, {"description":"ASIC internal diode temperature", "units":"C"}),
+                "HUMIDITY":(self.get_ambient_humidity, None, {"description":"Board ambient humidity from BME280", "units":"%RH"})
             },
             "CRITICAL_TEMP": (self.get_critical_temp_status, None, {"description":"Read 1 if system has a critical temperature"}),
             "VCAL": (self.get_vcal_in, self.set_vcal_in, {"description":"Analogue VCAL_IN", "units":"V"}),
@@ -858,3 +890,6 @@ class Carrier():
                 "CKDBG_STEP":(None, lambda dir: self.step_clk(3, dir), {"description": "Step frequency of the debug header clock up or down"}),
             }
         })
+
+        self._PARAMTREE_FIRSTINIT = False
+        logging.info(self._param_tree)

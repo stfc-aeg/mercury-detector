@@ -380,7 +380,7 @@ function update_loki_temps() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE',
 		async: false,
 		dataType: 'json',
-		timeout: 600,
+		timeout: 60,
 		success: function(response) {
 		    if (response.TEMPERATURE != null) {
 			    var firefly_temp = response.TEMPERATURE.toFixed(2);
@@ -401,29 +401,55 @@ function update_loki_temps() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/TEMPERATURES',
 		async: false,
 		dataType: 'json',
-		timeout: 600,
+		timeout: 60,
 		success: function(response) {
+            console.log(response.TEMPERATURES);
 			// Zynq PS Temperature
 		        if (response.TEMPERATURES.ZYNQ.PS != null) {
 				var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
 				$('#temp-zynqps').html(temp_zynqps);
-			}
+			} else {
+				$('#temp-ambient').html('No Con');
+            }
 
 			// Ambient Temperature
 		        if (response.TEMPERATURES.AMBIENT != null) {
 				var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
 				$('#temp-ambient').html(temp_ambient);
-				latest_asic_temp = temp_ambient;  //TODO TEMPORARY
-			}
+				//latest_asic_temp = temp_ambient;  //TODO TEMPORARY
+			} else {
+				$('#temp-ambient').html('No Con');
+            }
+
+            // Ambient Humidity (TODO MOVE)
+		        if (response.TEMPERATURES.HUMIDITY != null) {
+                    var hum_ambient = response.TEMPERATURES.HUMIDITY.toFixed(2);
+                    console.log('Humidity' + hum_ambient);
+                    $('#hum-ambient').html(hum_ambient);
+                    //latest_asic_temp = temp_ambient;  //TODO TEMPORARY
+                } else {
+                    $('#hum-ambient').html('No Con');
+                }
 
 			// PT100 Temperature
-			// TODO
+            if (response.TEMPERATURES.PT100 != null) {
+                var temp_pt100 = response.TEMPERATURES.PT100.toFixed(2);
+                $('#temp-pt100').html(temp_pt100);
+            } else {
+                console.log('Failed to read PT100');
+                $('#temp-pt100').html('FAIL');
+            }
 
-			// ASIC TEMP1 Temperature
-			// TODO
-
-			// ASIC TEMP2 Temperature
-			// TODO
+			// ASIC Temperature
+            if (response.TEMPERATURES.ASIC != null) {
+                console.log('got an ASIC temperature: ' + response.TEMPERATURES.ASIC);
+				var temp_asic = response.TEMPERATURES.ASIC.toFixed(2);
+				$('#temp-asic').html(temp_asic);
+				latest_asic_temp = temp_asic;  //TODO TEMPORARY
+			} else {
+                console.log('ASIC temperature was null');
+				$('#temp-asic').html('FAIL (last ' + latest_asic_temp + ')');
+            }
 		},
 		error: function() {
 			console.log('PCB Temperature reading error');
@@ -457,7 +483,7 @@ function update_loki_power_monitor() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/PSU',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
 			psu_analogue_pwr = response.PSU.ANALOGUE.POWER.toFixed(5);
 			psu_dig_pwr = response.PSU.DIG.POWER.toFixed(5);
@@ -522,7 +548,7 @@ function update_loki_vcal() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VCAL',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
         vcal_voltage = response.VCAL;
 
@@ -546,7 +572,7 @@ function update_loki_asic_nrst() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_RST',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
         asic_rst_state = response.ASIC_RST;
 
@@ -585,7 +611,7 @@ function update_loki_vreg_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_CYCLE',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
         vreg_en_state = response.VREG_CYCLE;
 
@@ -622,7 +648,7 @@ function update_loki_asic_preamp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FEEDBACK_CAPACITANCE',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_feedback_capacitance_state = response.ASIC_FEEDBACK_CAPACITANCE;
 
@@ -649,7 +675,7 @@ function update_loki_asic_integration_time() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_INTEGRATION_TIME',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             integration_time = response.ASIC_INTEGRATION_TIME;
 
@@ -675,7 +701,7 @@ function update_loki_connection() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name,
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
 			time_last_connected = new Date()
 		$('#zynq-connection-state').html("Connected");
@@ -698,7 +724,7 @@ function update_loki_asic_frame_length() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FRAME_LENGTH',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             frame_length = response.ASIC_FRAME_LENGTH;
 
@@ -722,7 +748,7 @@ function update_loki_asic_sync() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_sync_state = response.SYNC;
 
@@ -759,7 +785,7 @@ function update_loki_asic_sync_aux(){
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC_SEL_AUX',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_sync_sel_aux = response.SYNC_SEL_AUX;
 
@@ -782,7 +808,7 @@ function update_loki_asic_serialiser_mode() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SER_MODE',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             asic_serialiser_mode = response.ASIC_SER_MODE;
             console.log('Got serialiser mode ' + asic_serialiser_mode);
@@ -831,7 +857,7 @@ function update_loki_critical_temp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/CRITICAL_TEMP',
 		async: false,
 		dataType: 'json',
-		timeout: 200,
+		timeout: 20,
 		success: function(response) {
             critical_temp_state = response.CRITICAL_TEMP;
             //TODO send popup, add UI elements etc

@@ -31,6 +31,7 @@
                 <div class="toast" role="alert" data-bs-autohide="false" aria-live="assertive" aria-atomic="true">
                     <div class="toast-body">
                         WARNING: Regulators disabled due to critical temperature. Correct cooling and cycle regulators to recover.
+                        Latest temperature: 
                         <span id="latest_critical_temperature"></span>
                         <div class="mt-2 pt-2 border-top">
                             <button type="button" class="btn btn-primary btn-sm" onclick="run_vreg_cycle()" data-bs-dismiss="toast">Cycle Regulators</button>
@@ -105,50 +106,52 @@
                     <div class="container-fluid">
                         <div class="row contflex row-cols-1 row-cols-md-2 g-4">
 
-                            <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
-                                <div class="row">
-                                    <p class="lead text-center">System Temperatures</p>
+                            <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card w-30 mb-3 text-center">
+                                <div class="card-header">
+                                    System Temperatures
                                 </div>
-                                <div class="row contflex">
-                                    <div class="col-md-11">
-                                        <table class="table table-striped" style="width=100%">
-                                            <thead>
-                                                <tr>
-                                                    <th>Sensor</th>
-                                                    <th>Temp (C)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td>Zynq PS</td>
-                                                    <td><span id="temp-zynqps">&nbsp;</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Ambient</td>
-                                                    <td><span id="temp-ambient">&nbsp;</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>FireFly 1</td>
-                                                    <td><span id="temp-firefly1">&nbsp;</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>FireFly 2</td>
-                                                    <td><span id="temp-firefly2">&nbsp;</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>PT100</td>
-                                                    <td><span id="temp-pt100">&nbsp;</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>ASIC TEMP1</td>
-                                                    <td><span id="temp-asic-1">&nbsp;</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>ASIC TEMP2</td>
-                                                    <td><span id="temp-asic-2">&nbsp;</span></td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                <div class="card-body">
+                                    <div class="row contflex">
+                                        <div class="col-md-11">
+                                            <table class="table table-striped" style="width=100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Sensor</th>
+                                                        <th>Temp (C)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td>Zynq PS</td>
+                                                        <td><span id="temp-zynqps">&nbsp;</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Case</td>
+                                                        <td><span id="temp-ambient">&nbsp;</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Case Humidity</td>
+                                                        <td><span id="hum-ambient">&nbsp;</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>FireFly 1</td>
+                                                        <td><span id="temp-firefly1">&nbsp;</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>FireFly 2</td>
+                                                        <td><span id="temp-firefly2">&nbsp;</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>PT100</td>
+                                                        <td><span id="temp-pt100">&nbsp;</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>ASIC Diode</td>
+                                                        <td><span id="temp-asic">&nbsp;</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div> <!-- col-md-2 -->
@@ -418,6 +421,7 @@
                                                                 <button class="btn btn-primary" type="button" onclick="change_serialiser_mode('data')">Begin Data</button>
                                                             </div>
                                                         </div>
+                                                        <!--
                                                         <div class="row contflex">
                                                             <div class="col-7">
                                                                 <div class="row">
@@ -453,6 +457,7 @@
                                                                 <span id="asic-ser-pattern-state"></span>
                                                             </div>
                                                         </div>
+                                                        -->
                                                     </div>
                                                 </div>
                                             </div>
