@@ -23,6 +23,7 @@ import logging
 import time
 import sys
 import os
+import copy
 from enum import Enum as _Enum, auto as _auto
 
 logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
@@ -364,20 +365,19 @@ class Carrier():
             self._si5344))
 
     def sync_power_readings(self):
-        #if self.get_vreg_en() and not self._POWER_CYCLING:
-        try:
+        # Sync power readings only if the regulators are enabled (for now)
+        if self.get_vreg_en() and not self._POWER_CYCLING:
             self._sync_power_supply_readings()
-        except Exception as e:
-            logging.critical('Error reading PAC1921s: NO PCB?? ({})'.format(e))
-        #else:
-        #    logging.critical('will update power supply readings to be 0...')
-        #    try:
-        #        self._power_supply_readings = self._POWER_SUPPLY_READINGS_EMPTY
-        #    except AttributeError:
-        #        # May be encountered if sync attempts to run before paramtree setup complete
-        #        logging.critical('Could not find self._POWER_SUPPLY_READINGS_EMPTY')
-        #        pass
-        #    logging.critical('PSU readings are now: {}'.format(self.get_power_supply_readings))
+        else:
+            logging.critical('will update power supply readings to be None...')
+            try:
+                self._power_supply_readings = copy.deepcopy(self._POWER_SUPPLY_READINGS_EMPTY)
+            except AttributeError:
+                # May be encountered if sync attempts to run before paramtree setup complete
+                logging.critical('Could not find self._POWER_SUPPLY_READINGS_EMPTY')
+                self._power_supply_readings = None
+                pass
+            logging.critical('PSU readings are now: {}'.format(self.get_power_supply_readings()))
 
     def sync_firefly_readings(self):
         if self.get_vreg_en() and not self._POWER_CYCLING:
@@ -474,9 +474,17 @@ class Carrier():
                 self._power_supply_readings[monitor.get_name()][current_meas_name] = val
 
                 if _RAIL_MONITOR_DERIVE_POWER:
-                    self._power_supply_readings[monitor.get_name()]['POWER'] = (
-                            self._power_supply_readings[monitor.get_name()]['VOLTAGE'] *
-                            self._power_supply_readings[monitor.get_name()]['CURRENT'])
+                    try:
+                        self._power_supply_readings[monitor.get_name()]['POWER'] = (
+                                self._power_supply_readings[monitor.get_name()]['VOLTAGE'] *
+                                self._power_supply_readings[monitor.get_name()]['CURRENT'])
+                    except TypeError as e:
+                        if 'NoneType' in str(e):
+                            logging.info('Voltage or current for {} was None, calculating Power as None'.format(monitor))
+                            self._power_supply_readings[monitor.get_name()]['POWER'] = None
+                        else:
+                            raise
+
 
 
             logging.debug("Readings taken, {}".format(self._power_supply_readings))
@@ -833,11 +841,11 @@ class Carrier():
 
         # Sync repeating readings
         self._POWER_SUPPLY_READINGS_EMPTY = {
-            self._pac1921_u3.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
-            self._pac1921_u2.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0},
-            self._pac1921_u1.get_name(): {'POWER': 0, 'VOLTAGE': 0, 'CURRENT': 0}}
+            self._pac1921_u3.get_name(): {'POWER': None, 'VOLTAGE': None, 'CURRENT': None},
+            self._pac1921_u2.get_name(): {'POWER': None, 'VOLTAGE': None, 'CURRENT': None},
+            self._pac1921_u1.get_name(): {'POWER': None, 'VOLTAGE': None, 'CURRENT': None}}
         if self._PARAMTREE_FIRSTINIT:
-            self._power_supply_readings = self._POWER_SUPPLY_READINGS_EMPTY
+            self._power_supply_readings = copy.deepcopy(self._POWER_SUPPLY_READINGS_EMPTY)
         self._firefly_channelstates = {1: {}, 2: {}}
         #self.sync_power_readings()
         self.sync_firefly_readings()
