@@ -101,129 +101,134 @@
                 </div>
 
                 <div class="tab-pane fade" id="pcbcontrol" role="tabpanel">
-                    <h2 class="text-center">MERCURY PCB Control</h2>
-
                     <div class="container-fluid">
-                        <div class="row contflex row-cols-1 row-cols-md-2 g-4">
-
-                            <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card w-30 mb-3 text-center">
-                                <div class="card-header">
-                                    System Temperatures
-                                </div>
-                                <div class="card-body">
-                                    <div class="row contflex">
-                                        <div class="col-md-11">
-                                            <table class="table table-striped" style="width=100%">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Sensor</th>
-                                                        <th>Temp (C)</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr>
-                                                        <td>Zynq PS</td>
-                                                        <td><span id="temp-zynqps">&nbsp;</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>Case</td>
-                                                        <td><span id="temp-ambient">&nbsp;</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>Case Humidity</td>
-                                                        <td><span id="hum-ambient">&nbsp;</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>FireFly 1</td>
-                                                        <td><span id="temp-firefly1">&nbsp;</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>FireFly 2</td>
-                                                        <td><span id="temp-firefly2">&nbsp;</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>PT100</td>
-                                                        <td><span id="temp-pt100">&nbsp;</span></td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>ASIC Diode</td>
-                                                        <td><span id="temp-asic">&nbsp;</span></td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
+                        <div class="row contflex row-cols-1 row-cols-xxl-2 g-4">
+                            <div class="col">
+                                <div class="card w-30 mb-3 text-center"">
+                                    <div class="card-header">
+                                        System Temperatures & Environment
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row contflex">
+                                            <div class="col-md-11">
+                                                <table class="table table-striped table-sm" style="width=100%">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Sensor</th>
+                                                            <th>Temp (C)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td>Zynq PS</td>
+                                                            <td><span id="temp-zynqps">&nbsp;</span></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Case</td>
+                                                            <td><span id="temp-ambient">&nbsp;</span></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>Case Humidity</td>
+                                                            <td><span id="hum-ambient">&nbsp;</span></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>FireFly 1</td>
+                                                            <td><span id="temp-firefly1">&nbsp;</span></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>FireFly 2</td>
+                                                            <td><span id="temp-firefly2">&nbsp;</span></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>PT100</td>
+                                                            <td><span id="temp-pt100">&nbsp;</span></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>ASIC Diode</td>
+                                                            <td><span id="temp-asic">&nbsp;</span></td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="col">
+                                <div class="card mb-3 text-center">
+                                    <div class="card-header">
+                                        System Power Rails
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="container-fluid">
+                                            <div class="row justify-content-around">
+                                                <div class="col-auto align-self-center">
+                                                    <table class="table table-striped table-sm" style="width=100%">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style="width:30%">Rail</th>
+                                                                <th>Power (W)</th>
+                                                                <th>Pre-Regulator Voltage (V)</th>
+                                                                <th>Current (A)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>Analogue</td>
+                                                                <td><span id="psu-analogue-pwr"></span></td>
+                                                                <td><span id="psu-analogue-vol"></span></td>
+                                                                <td><span id="psu-analogue-cur"></span></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>Digital</td>
+                                                                <td><span id="psu-dig-pwr"></span></td>
+                                                                <td><span id="psu-dig-vol"></span></td>
+                                                                <td><span id="psu-dig-cur"></span></td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td>Digital Control</td>
+                                                                <td><span id="psu-dig-ctrl-pwr"></span></td>
+                                                                <td><span id="psu-dig-ctrl-vol"></span></td>
+                                                                <td><span id="psu-dig-ctrl-cur"></span></td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div> <!-- col -->
+                                                <div class="col-12">
+                                                    <h6>Pre-Regulator Voltage</h6>
+                                                    <canvas id="voltage-chart" height=50 width=200 style="height:50px; width:200px"></canvas>
+                                                    <h6>Rail Current</h6>
+                                                    <canvas id="current-chart" height=50 width=200 style="height:50px; width:200px"></canvas>
+                                                </div> <!-- col -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div> <!-- col-md-4 -->
                             </div> <!-- col-md-2 -->
 
-                            <div class="col-xxl-7 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
-                                <div class="row">
-                                    <p class="lead text-center">System Power Rails</p>
-                                </div>
-                                <div class="row contflex">
-                                    <div class="col-lg-5 col-md-12 col-sm-12">
-                                        <table class="table table-striped"style="width=100%">
-                                            <thead>
-                                                <tr>
-                                                    <th>Rail</th>
-                                                    <th>Power (W)</th>
-                                                    <th>Pre-Regulator Voltage (V)</th>
-                                                    <th>Current (A)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td>Analogue</td>
-                                                    <td><span id="psu-analogue-pwr"></span></td>
-                                                    <td><span id="psu-analogue-vol"></span></td>
-                                                    <td><span id="psu-analogue-cur"></span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Digital</td>
-                                                    <td><span id="psu-dig-pwr"></span></td>
-                                                    <td><span id="psu-dig-vol"></span></td>
-                                                    <td><span id="psu-dig-cur"></span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Digital Control</td>
-                                                    <td><span id="psu-dig-ctrl-pwr"></span></td>
-                                                    <td><span id="psu-dig-ctrl-vol"></span></td>
-                                                    <td><span id="psu-dig-ctrl-cur"></span></td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div> <!-- col -->
-                                    <div class="col-lg-5 col-md-12 col-sm-12">
-                                        <div class="row">
-                                            <h6>Pre-Regulator Voltage</h6>
-                                            <canvas id="voltage-chart"></canvas>
-                                        </div>
-                                        <div class="row">
-                                            <h6>Rail Current</h6>
-                                            <canvas id="current-chart"></canvas>
-                                        </div>
-                                    </div> <!-- col -->
-                                </div> <!-- row -->
-                            </div> <!-- col-md-4 -->
-
-                            <!-- </div> -->
-
-                            <!-- <div class="row contflex"> -->
-                            <div class="col-md-12">
-                                <div class="row contflex">
-                                    <h3 class="text-center">FireFly Channel Control</h3>
-                                </div>
-                                <div class="row contflex">
-                                    <div class="col-xxl-5 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
+                        </div>
+                        <div class="row rol-cols-1 rol-cols-xxl-2 contflex">
+                            <div class="col">
+                                <div class="card">
+                                    <div class="card-header">
+                                        FireFly 1
+                                    </div>
+                                    <div class="card-body">
                                         <div id='ff1_chtable'></div>
-                                    </div> <!-- col-md-6 -->
-
-                                    <div class="col-xxl-5 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="card">
+                                    <div class="card-header">
+                                        FireFly 2
+                                    </div>
+                                    <div class="card-body">
                                         <div id='ff2_chtable'></div>
-                                    </div> <!-- col-md-6 -->
-                                </div> <!-- row -->
+                                    </div>
+                                </div>
                             </div> <!-- col-md-11 -->
-                            </div> <!-- row -->
+                        </div> <!-- row -->
 
                     </div><!-- container fluid-container -->
                 </div>

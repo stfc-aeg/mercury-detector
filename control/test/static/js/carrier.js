@@ -231,11 +231,11 @@ function generateFireFlyChannelTable(id, num_channels, num_cols, en_state_col) {
     /* en_state_col will generate an additional column for channel state. However, this should be
      * covered by the switch state. */
 
+    // The channel column is 20% of the channel-toggle width
+    chcol_width = 20 / num_cols;
+
     // Create the HTML
     var ret = `
-                    <div class="row">
-                        <p class="lead">FireFly ${id}</p>
-                    </div>
                     <div class="row contflex">
                         <div class="col-8 col-md-8">
                             <p>Manufacturer:&nbsp;
@@ -257,7 +257,7 @@ function generateFireFlyChannelTable(id, num_channels, num_cols, en_state_col) {
 
     for (let column_num = 0; column_num < num_cols; column_num++) {
         ret += `
-                                    <th>Channel</th>
+                                    <th style="width:${chcol_width}%">Chan</th>
                                     <th>State Toggle</th>
                 `;
         if (en_state_col) {
