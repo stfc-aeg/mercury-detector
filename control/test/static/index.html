@@ -115,41 +115,55 @@
                                                     <thead>
                                                         <tr>
                                                             <th>Sensor</th>
-                                                            <th>Temp (C)</th>
+                                                            <th>Reading</th>
+                                                            <th>Unit</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         <tr>
-                                                            <td>Zynq PS</td>
+                                                            <td>Zynq PS Temp</td>
                                                             <td><span id="temp-zynqps">&nbsp;</span></td>
+                                                            <td>C</td>
                                                         </tr>
                                                         <tr>
-                                                            <td>Case</td>
+                                                            <td>Case Temp</td>
                                                             <td><span id="temp-ambient">&nbsp;</span></td>
+                                                            <td>C</td>
                                                         </tr>
                                                         <tr>
                                                             <td>Case Humidity</td>
                                                             <td><span id="hum-ambient">&nbsp;</span></td>
+                                                            <td>%RH</td>
                                                         </tr>
                                                         <tr>
-                                                            <td>FireFly 1</td>
+                                                            <td>FireFly 1 Temp</td>
                                                             <td><span id="temp-firefly1">&nbsp;</span></td>
+                                                            <td>C</td>
                                                         </tr>
                                                         <tr>
-                                                            <td>FireFly 2</td>
+                                                            <td>FireFly 2 Temp</td>
                                                             <td><span id="temp-firefly2">&nbsp;</span></td>
+                                                            <td>C</td>
                                                         </tr>
                                                         <tr>
                                                             <td>PT100</td>
                                                             <td><span id="temp-pt100">&nbsp;</span></td>
+                                                            <td>C</td>
                                                         </tr>
                                                         <tr>
                                                             <td>ASIC Diode</td>
                                                             <td><span id="temp-asic">&nbsp;</span></td>
+                                                            <td>C</td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
                                             </div>
+                                            <div class="col-12">
+                                                <h6>Temperatures</h6>
+                                                <canvas id="temperature-chart" height=50 width=200 style="height:50px; width:200px"></canvas>
+                                                <h6>Humidity</h6>
+                                                <canvas id="humidity-chart" height=50 width=200 style="height:50px; width:200px"></canvas>
+                                            </div> <!-- col -->
                                         </div>
                                     </div>
                                 </div>

@@ -31,7 +31,8 @@ function init() {
         false); // Do not include additional state column (indicated by switch)
     generateFireFlyChannelSwitches(2, 12);
 
-    init_power_tracking()
+    init_power_tracking();
+    init_environment_tracking();
 }
 
 function update_api_version() {
@@ -156,6 +157,92 @@ function init_power_tracking() {
                 label: "Analogue",
                 data: power_tracking_data_analogue_I,
                 backgroundColor: ['rgba(0, 255, 0, .2)'],
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            responsiveAnimationDuration: 0,
+            elements: {
+                line: {
+                    tension: 0
+                    }
+            },
+	    scales: {
+	        xAxes: [{
+                    type: 'time',
+		    distribution: 'linear',
+			ticks: {
+	                source: 'data',
+		    }
+		}]
+	    }
+        }
+    });
+}
+
+var chart_temp;
+var chart_hum;
+function init_environment_tracking() {
+    var chart_element = document.getElementById("temperature-chart").getContext('2d');
+    chart_temp = new Chart(chart_element,
+    {
+        type: 'line',
+        yAxisID: 'Temperature /C',
+        data: {
+            labels: environment_tracking_time,
+            datasets: [{
+                label: "Case",
+                data: environment_tracking_data_case_temp,
+                backgroundColor: ['rgba(255, 0, 0, .2)'],
+                spanGaps: false
+                },
+                {
+                label: "PT100",
+                data: environment_tracking_data_pt100_temp,
+                backgroundColor: ['rgba(0, 0, 255, .2)'],
+                },
+                {
+                label: "ASIC Diode",
+                data: environment_tracking_data_asic_diode_temp,
+                backgroundColor: ['rgba(0, 255, 0, .2)'],
+                }
+            ]
+        },
+        options: {
+            //animation: {
+            //    duration: 0
+            //},
+            responsiveAnimationDuration: 0,
+            elements: {
+                line: {
+                    tension: 0
+                    }
+            },
+            //responsive: true,
+	    scales: {
+	        xAxes: [{
+                    type: 'time',
+		    distribution: 'linear',
+		    ticks: {
+	                source: 'data',
+		    }
+		}]
+	    }
+        }
+    });
+
+    var chart_element = document.getElementById("humidity-chart").getContext('2d');
+    chart_hum = new Chart(chart_element,
+    {
+        type: 'line',
+        yAxisID: 'Relative Humidity /%',
+        data: {
+            labels: environment_tracking_time,
+            datasets: [{
+                label: "Case",
+                data: environment_tracking_data_case_humidity,
+                backgroundColor: ['rgba(255, 0, 0, .2)'],
                 }
             ]
         },
@@ -388,7 +475,18 @@ function update_loki_ff_data() {
 }
 
 var latest_asic_temp =null;		// Latest asic temperature
+var environment_tracking_data_case_temp = [];
+var environment_tracking_data_pt100_temp = [];
+var environment_tracking_data_asic_diode_temp = [];
+var environment_tracking_data_case_humidity = [];
+var environment_tracking_time = [];
+var environment_tracking_valuelimit = 40;
 function update_loki_temps() {
+    var temp_ambient = NaN;
+    var temp_pt100 = NaN;
+    var temp_asic = NaN;
+    var hum_ambient = NaN;
+
 	// FireFly Temperatures
     for (let ff_id = 1; ff_id <=2; ff_id++) {
         //$.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE/', function(response) {
@@ -431,7 +529,7 @@ function update_loki_temps() {
 
 			// Ambient Temperature
 		        if (response.TEMPERATURES.AMBIENT != null) {
-				var temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
+				temp_ambient = response.TEMPERATURES.AMBIENT.toFixed(2);
 				$('#temp-ambient').html(temp_ambient);
 				//latest_asic_temp = temp_ambient;  //TODO TEMPORARY
 			} else {
@@ -440,7 +538,7 @@ function update_loki_temps() {
 
             // Ambient Humidity (TODO MOVE)
 		        if (response.TEMPERATURES.HUMIDITY != null) {
-                    var hum_ambient = response.TEMPERATURES.HUMIDITY.toFixed(2);
+                    hum_ambient = response.TEMPERATURES.HUMIDITY.toFixed(2);
                     //console.log('Humidity ' + hum_ambient);
                     $('#hum-ambient').html(hum_ambient);
                     //latest_asic_temp = temp_ambient;  //TODO TEMPORARY
@@ -450,7 +548,7 @@ function update_loki_temps() {
 
 			// PT100 Temperature
             if (response.TEMPERATURES.PT100 != null) {
-                var temp_pt100 = response.TEMPERATURES.PT100.toFixed(2);
+                temp_pt100 = response.TEMPERATURES.PT100.toFixed(2);
                 $('#temp-pt100').html(temp_pt100);
             } else {
                 console.log('Failed to read PT100');
@@ -460,7 +558,7 @@ function update_loki_temps() {
 			// ASIC Temperature
             if (response.TEMPERATURES.ASIC != null) {
                 //console.log('got an ASIC temperature: ' + response.TEMPERATURES.ASIC);
-				var temp_asic = response.TEMPERATURES.ASIC.toFixed(2);
+				temp_asic = response.TEMPERATURES.ASIC.toFixed(2);
 				$('#temp-asic').html(temp_asic);
 				latest_asic_temp = temp_asic;  //TODO TEMPORARY
 			} else {
@@ -474,6 +572,28 @@ function update_loki_temps() {
 	}).fail(function(xhr, status) {
 		console.log('fail');
 	});
+
+    // Update chart data
+    environment_tracking_data_case_temp.push(temp_ambient);
+    if (environment_tracking_data_case_temp.length > environment_tracking_valuelimit) environment_tracking_data_case_temp.shift();
+
+    environment_tracking_data_pt100_temp.push(temp_pt100);
+    if (environment_tracking_data_pt100_temp.length > environment_tracking_valuelimit) environment_tracking_data_pt100_temp.shift();
+
+    environment_tracking_data_asic_diode_temp.push(temp_asic);
+    if (environment_tracking_data_asic_diode_temp.length > environment_tracking_valuelimit) environment_tracking_data_asic_diode_temp.shift();
+
+    environment_tracking_data_case_humidity.push(hum_ambient);
+    if (environment_tracking_data_case_humidity.length > environment_tracking_valuelimit) environment_tracking_data_case_humidity.shift();
+
+    dt = new Date();
+    environment_tracking_time.push(
+    dt.toISOString()
+    );
+    if (environment_tracking_time.length > environment_tracking_valuelimit) environment_tracking_time.shift();
+
+    chart_temp.update();
+    chart_hum.update();
 }
 
 var power_tracking_data_dig_V = [];
