@@ -156,38 +156,6 @@
                                 </div>
                             </div> <!-- col-md-2 -->
 
-                            <div class="col-xxl-2 col-xl-5 col-lg-5 col-md-5 col-sm-11 card">
-                                <div class="row">
-                                    <p class="lead text-center">ASIC Control</p>
-                                </div> <!-- row -->
-                                <div class="row contflex">
-                                    <div class="col">
-                                        <div class="card mb-3 text-center">
-                                            <div class="card-header">
-                                                VCAL Control
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="row contflex">
-                                                    <div class="col-8">
-                                                        <div class="input-group mb-3">
-                                                            <span class="input-group-text">VCAL</span>
-                                                            <input type="number" class="form-control" id="vcal-input"/>
-                                                            <span class="input-group-text">V</span>
-                                                            <button class="btn btn-outline-secondary" type="button" onclick="change_vcal()">Update</button>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-2">
-                                                        VCAL: 
-                                                        <span id="vcal-voltage">&nbsp;</span>
-                                                    </div>
-
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div> <!-- row -->
-                            </div> <!-- vol-md-2 -->
-
                             <div class="col-xxl-7 col-xl-11 col-lg-11 col-md-11 col-sm-11 card">
                                 <div class="row">
                                     <p class="lead text-center">System Power Rails</p>
@@ -458,6 +426,33 @@
                                                             </div>
                                                         </div>
                                                         -->
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header" id="headingVcalControl">
+                                                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVcalControl" aria-expanded="true" aria-controls="collapseVcalControl">
+                                                    VCAL Control
+                                                  </button>
+                                                </h2>
+                                                <div id="collapseVcalControl" class="accordion-collapse collapse" aria-labelledby="headingVcalControl" data-bs-parent="#asic-advanced-accordion">
+                                                    <div class="accordion-body">
+                                                        <div class="row contflex">
+                                                            <div class="col">
+                                                                <div class="input-group mb-3">
+                                                                    <span class="input-group-text">VCAL</span>
+                                                                    <input type="number" min=0 max=1.8 value=1.5 step=0.1 class="form-control" id="vcal-input"/>
+                                                                    <span class="input-group-text">v</span>
+                                                                    <button class="btn btn-outline-secondary" type="button" onclick="change_vcal($('#vcal-input').prop('value'))">Update</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="row contflex">
+                                                            <div class="col-5">
+                                                                VCAL: 
+                                                                <span id="vcal-voltage">&nbsp;</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

@@ -113,7 +113,16 @@ function init_power_tracking() {
             ]
         },
         options: {
-            responsive: true,
+            //animation: {
+            //    duration: 0
+            //},
+            responsiveAnimationDuration: 0,
+            elements: {
+                line: {
+                    tension: 0
+                    }
+            },
+            //responsive: true,
 	    scales: {
 	        xAxes: [{
                     type: 'time',
@@ -152,6 +161,12 @@ function init_power_tracking() {
         },
         options: {
             responsive: true,
+            responsiveAnimationDuration: 0,
+            elements: {
+                line: {
+                    tension: 0
+                    }
+            },
 	    scales: {
 	        xAxes: [{
                     type: 'time',
@@ -386,7 +401,9 @@ function update_loki_temps() {
 			    var firefly_temp = response.TEMPERATURE.toFixed(2);
 			    //console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
 			    $('#temp-firefly'+ff_id).html(firefly_temp);
-		    }
+		    } else {
+			    $('#temp-firefly'+ff_id).html('No Con');
+            }
 		},
 		error: function() {
 		    $('#temp-firefly'+ff_id).html("N/A");
@@ -403,7 +420,7 @@ function update_loki_temps() {
 		dataType: 'json',
 		timeout: 60,
 		success: function(response) {
-            console.log(response.TEMPERATURES);
+            //console.log(response.TEMPERATURES);
 			// Zynq PS Temperature
 		        if (response.TEMPERATURES.ZYNQ.PS != null) {
 				var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
@@ -424,7 +441,7 @@ function update_loki_temps() {
             // Ambient Humidity (TODO MOVE)
 		        if (response.TEMPERATURES.HUMIDITY != null) {
                     var hum_ambient = response.TEMPERATURES.HUMIDITY.toFixed(2);
-                    console.log('Humidity' + hum_ambient);
+                    //console.log('Humidity ' + hum_ambient);
                     $('#hum-ambient').html(hum_ambient);
                     //latest_asic_temp = temp_ambient;  //TODO TEMPORARY
                 } else {
@@ -442,12 +459,12 @@ function update_loki_temps() {
 
 			// ASIC Temperature
             if (response.TEMPERATURES.ASIC != null) {
-                console.log('got an ASIC temperature: ' + response.TEMPERATURES.ASIC);
+                //console.log('got an ASIC temperature: ' + response.TEMPERATURES.ASIC);
 				var temp_asic = response.TEMPERATURES.ASIC.toFixed(2);
 				$('#temp-asic').html(temp_asic);
 				latest_asic_temp = temp_asic;  //TODO TEMPORARY
 			} else {
-                console.log('ASIC temperature was null');
+                //console.log('ASIC temperature was null');
 				$('#temp-asic').html('FAIL (last ' + latest_asic_temp + ')');
             }
 		},
@@ -811,7 +828,7 @@ function update_loki_asic_serialiser_mode() {
 		timeout: 20,
 		success: function(response) {
             asic_serialiser_mode = response.ASIC_SER_MODE;
-            console.log('Got serialiser mode ' + asic_serialiser_mode);
+            //console.log('Got serialiser mode ' + asic_serialiser_mode);
 
             $('#asic-ser-mode-state').html(asic_serialiser_mode);
             $('#asic-ser-mode-state').removeClass();
@@ -826,7 +843,7 @@ function update_loki_asic_serialiser_mode() {
                     $('#asic-ser-mode-state').addClass("badge bg-success");
                     break;
                 default:
-                    console.log('Serialiser mode not recognised: ' + asic_serialiser_mode);
+                    //console.log('Serialiser mode not recognised: ' + asic_serialiser_mode);
                     $('#asic-ser-mode-state').html("Unknown");
                     $('#asic-ser-mode-state').addClass("badge bg-danger");
                     break
