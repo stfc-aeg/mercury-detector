@@ -81,6 +81,7 @@ class CarrierAdapter(ApiAdapter):
                 pin_sync_sel=8,             # NC, moved here
                 pin_asic_nrst=10,           # NC, moved here
                 pin_vreg_en=11,
+                pin_temp_nrst=None,
         )
 
         _interface_definition_ribbon = Carrier_Interface(
@@ -95,6 +96,7 @@ class CarrierAdapter(ApiAdapter):
                 pin_sync_sel=10,
                 pin_asic_nrst=3,
                 pin_vreg_en=2,
+                pin_temp_nrst=8,
         )
 
         use_iv = True

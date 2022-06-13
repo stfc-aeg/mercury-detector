@@ -35,7 +35,7 @@ class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
                  pin_firefly_1, pin_firefly_2, pin_nRead_int, pin_sync,
-                 pin_sync_sel, pin_asic_nrst, pin_vreg_en):
+                 pin_sync_sel, pin_asic_nrst, pin_vreg_en, pin_temp_nrst):
         self.i2c_device_bus = i2c_device_bus
         self.spidev_id_mercury = spidev_id_mercury
         self.spidev_id_ltc = spidev_id_ltc
@@ -47,6 +47,7 @@ class Carrier_Interface():
         self.pin_sync_sel = pin_sync_sel
         self.pin_asic_nrst = pin_asic_nrst
         self.pin_vreg_en = pin_vreg_en
+        self.pin_temp_nrst = pin_temp_nrst
 
 
 _interface_definition_default = Carrier_Interface(
@@ -60,7 +61,8 @@ _interface_definition_default = Carrier_Interface(
         pin_sync=0,
         pin_sync_sel=10,
         pin_asic_nrst=3,
-        pin_vreg_en=2
+        pin_vreg_en=2,
+        pin_temp_nrst=8
         )
 
 _vcal_default = 1.5     # TODO check this
@@ -117,6 +119,11 @@ class Carrier():
                                                    GPIO_ZynqMP.DIR_OUTPUT)
         self._gpiod_asic_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_asic_nrst,
                                                     GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_ltc_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_temp_nrst,
+                                                    GPIO_ZynqMP.DIR_OUTPUT)
+
+        # The LTC will never be disabled
+        self._gpiod_ltc_nrst.set_value(1)
 
         # Put nRST in safe state before vreg_en forced off (may occur after allocation when run after failure)
         self._gpiod_asic_nrst.set_value(0)
@@ -323,7 +330,8 @@ class Carrier():
                                           LTC2986.RTD_RSense_Channel.CH4_CH3,
                                           2000,
                                           LTC2986.RTD_Num_Wires.NUM_2_WIRES,
-                                          LTC2986.RTD_Excitation_Mode.NO_ROTATION_SHARING,
+                                          #LTC2986.RTD_Excitation_Mode.NO_ROTATION_SHARING,
+                                          LTC2986.RTD_Excitation_Mode.NO_ROTATION_NO_SHARING,
                                           LTC2986.RTD_Excitation_Current.CURRENT_500UA,
                                           LTC2986.RTD_Curve.EUROPEAN,
                                           _ltc2986_pt100_channel)
@@ -413,6 +421,8 @@ class Carrier():
                     '\nRegulators Enabled: {}\nTemp Critical: {}'.format(
                         self.get_vreg_en(), self._temperature_iscritical))
             logging.warning('Power cycle vreg after fixing cooling to recover')
+            self._pt100_temp = None
+            self._asic_temp = None
             return
 
         try:
