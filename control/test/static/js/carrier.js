@@ -872,7 +872,8 @@ function update_loki_asic_integration_time() {
 var time_last_connected = null
 function update_loki_connection() {
 	// Exists simply to check if the Zynq is connected and report time since last connection
-    $.ajax({url:'/api/' + api_version + '/' + adapter_name,
+    // Uses VREG_EN because this will return quickly (simply getting the full tree takes some time)
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_EN',
 		async: false,
 		dataType: 'json',
 		timeout: 20,
