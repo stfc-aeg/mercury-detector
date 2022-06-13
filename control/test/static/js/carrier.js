@@ -84,6 +84,34 @@ function poll_loki_slow() {
 	setTimeout(poll_loki_slow, 4000);
 }
 
+function set_chart_animation_duration(duration) {
+    chart_vol.options.animation.duration = duration
+    chart_cur.options.animation.duration = duration
+    chart_temp.options.animation.duration = duration
+    chart_hum.options.animation.duration = duration
+
+    const d = new Date();
+    exdays = 30;    // Keep this cookie for 30 days
+    d.setTime(d.getTime() + (exdays*24*60*60*1000));
+    let expires = "expires="+d.toUTCString();
+    document.cookie = "chartAnimationDuration="+duration.toString()+";"+expires+";path=/;SameSite=Strict;";
+}
+
+function get_chart_animation_duration() {
+    let decodedCookie = decodeURIComponent(document.cookie);
+    let ca = decodedCookie.split(';');
+    let name = "chartAnimationDuration=";
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+		while (c.charAt(0) == ' ') {
+          c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+          return parseInt(c.substring(name.length, c.length));
+        }
+    }
+    return 1000;  // Default duration if no cookie is found
+}
 
 var chart_vol;
 var chart_cur;
@@ -114,9 +142,9 @@ function init_power_tracking() {
             ]
         },
         options: {
-            //animation: {
-            //    duration: 0
-            //},
+            animation: {
+                duration: get_chart_animation_duration(),
+            },
             responsiveAnimationDuration: 0,
             elements: {
                 line: {
@@ -161,6 +189,9 @@ function init_power_tracking() {
             ]
         },
         options: {
+            animation: {
+                duration: get_chart_animation_duration(),
+            },
             responsive: true,
             responsiveAnimationDuration: 0,
             elements: {
@@ -210,9 +241,9 @@ function init_environment_tracking() {
             ]
         },
         options: {
-            //animation: {
-            //    duration: 0
-            //},
+            animation: {
+                duration: get_chart_animation_duration(),
+            },
             responsiveAnimationDuration: 0,
             elements: {
                 line: {
@@ -247,6 +278,9 @@ function init_environment_tracking() {
             ]
         },
         options: {
+            animation: {
+                duration: get_chart_animation_duration(),
+            },
             responsive: true,
             responsiveAnimationDuration: 0,
             elements: {
@@ -257,6 +291,9 @@ function init_environment_tracking() {
 	    scales: {
 	        xAxes: [{
                     type: 'time',
+            animation: {
+                duration: get_chart_animation_duration(),
+            },
 		    distribution: 'linear',
 			ticks: {
 	                source: 'data',
