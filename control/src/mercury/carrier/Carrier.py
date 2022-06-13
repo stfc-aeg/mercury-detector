@@ -419,7 +419,7 @@ class Carrier():
             logging.debug('self.override_critical_temp_bme: {}'.format(self._override_critical_temp_bme))
 
             # Update cached ASIC temperature
-            #self._sync_asic_temperature()
+            self._sync_asic_temperature()
 
             if not self._override_critical_temp_bme:
                 current_temperature = self.get_cached_asic_temperature()
