@@ -180,6 +180,8 @@ class Carrier():
 
         self._segment_capture_due = None        # Set to a sector number when one should be read
         self._segment_ready = False             # True when the last capture request is complete
+        self._segment_vmax = None
+        self._segment_vmin = None
 
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
@@ -891,7 +893,7 @@ class Carrier():
             ax.set_xticks(range(0,80, 4))
             ax.set_yticks(range(0,4,2))
             #mesh = ax.pcolormesh(reshaped, vmin=None, vmax=None, )
-            mesh = ax.imshow(reshaped, vmin=None, vmax=None, )
+            mesh = ax.imshow(reshaped, vmin=self._segment_vmin, vmax=self._segment_vmax)
             fig.colorbar(mesh, orientation='horizontal', fraction=0.1)
 
             # Write output to file
@@ -971,6 +973,8 @@ class Carrier():
             "ASIC_SER_MODE":(self.get_asic_serialiser_mode, self.set_asic_serialiser_mode, {"description":"ASIC Serialiser mode (init, bonding or data) as str"}),
             "ASIC_SER_PATTERN":(self.get_asic_all_serialiser_pattern, self.set_asic_all_serialiser_pattern, {"description":"ASIC Serialiser pattern (0 for serial, 7 for PRBS, 1-5 for clock div)"}),
             "ASIC_SEGMENT_CAPTURE":(lambda: {True:1, False:0}[self._segment_ready], self.trigger_asic_segment_capture, {}),
+            "ASIC_SEGMENT_VMAX":(lambda: self._segment_vmax, lambda x: self._segment_vmax=x, {"description":"Maximum for segment colour scale"}),
+            "ASIC_SEGMENT_VMIN":(lambda: self._segment_vmin, lambda x: self._segment_vmin=x, {"description":"Minimum for segment colour scale"}),
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
