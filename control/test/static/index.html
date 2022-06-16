@@ -316,10 +316,19 @@
                                         <div class="row contflex">
                                             <div class="col">
                                                 <div class="input-group mb-3">
+                                                    <div class="input-group-text">
+                                                        <input class="form-check-input mt-0" type="checkbox" value="" aria-label="Checkbox for following text input" id="segment-readout-autorange" onclick="en_dis_segment_vminmax($('#segment-readout-autorange').prop('checked'))" checked>
+                                                        <label class="form-check-label" style="margin-left: 5px">Auto</label>
+                                                    </div>
+                                                    <span class="input-group-text">Colour Range Min</span>
+                                                    <input type="number" min=0 max=4096 value=0 step=1 class="form-control" id="segment-readout-vmin" disabled/>
+                                                    <span class="input-group-text">Colour Range Max</span>
+                                                    <input type="number" min=0 max=4096 value=4096 step=1 class="form-control" id="segment-readout-vmax" disabled/>
+                                                </div>
+                                                <div class="input-group mb-3">
                                                     <span class="input-group-text">Segment Select</span>
                                                     <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="segment-readout-select"/>
-                                                    <span class="input-group-text">v</span>
-                                                    <button class="btn btn-outline-secondary" type="button" onclick="trigger_segment_readout($('#segment-readout-select').prop('value'))">Read Segment</button>
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="trigger_segment_readout($('#segment-readout-select').prop('value'),$('#segment-readout-vmin').prop('value'),$('#segment-readout-vmax').prop('value'),$('#segment-readout-autorange').prop('checked'))">Read Segment</button>
                                                 </div>
                                             </div>
                                         </div>

@@ -870,8 +870,39 @@ function update_loki_asic_integration_time() {
     });
 }
 
+function en_dis_segment_vminmax(checked) {
+    if (checked == true) {
+        console.log('disabling vminmax entry');
+        document.getElementById("segment-readout-vmin").setAttribute('disabled', '');
+        document.getElementById("segment-readout-vmax").setAttribute('disabled', '');
+    } else {
+        console.log('enabling vminmax entry');
+        document.getElementById("segment-readout-vmin").removeAttribute('disabled');
+        document.getElementById("segment-readout-vmax").removeAttribute('disabled');
+    }
+}
 var segment_new_capture = true
-function trigger_segment_readout(segment) {
+function trigger_segment_readout(segment, vmin, vmax, auto) {
+    if (auto == true) {
+        vmin = -1;
+        vmax = -1;
+    };
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_SEGMENT_VMIN': parseInt(vmin)}),
+        success: function(data) {
+        }
+	});
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_SEGMENT_VMAX': parseInt(vmax)}),
+        success: function(data) {
+        }
+	});
     $.ajax({
 		type: "PUT",
 		url: '/api/' + api_version + '/' + adapter_name,
@@ -879,9 +910,10 @@ function trigger_segment_readout(segment) {
 		data: JSON.stringify({'ASIC_SEGMENT_CAPTURE': parseInt(segment)}),
         success: function(data) {
 
-		console.log("Segment capture started for segment " + segment);
+		console.log("Segment capture started for segment " + segment + " using colour range " + vmin + " to " + vmax);
         }
 	});
+    document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
     segment_new_capture = true;
 }
 
@@ -902,16 +934,16 @@ function update_loki_asic_segment_readout() {
                     document.getElementById("segment-img").style="-webkit-filter: blur(0px)"
 
                     segment_new_capture = false;
-                    console.log('segment display updated');
+                    //console.log('segment display updated');
                 } else {
-                    console.log('segment not updated (old)');
+                    //console.log('segment not updated (old)');
                 }
             } else if (response.ASIC_SEGMENT_CAPTURE != 1) {
                 //document.getElementById("segment-img").src="";
                 // Apply a blurring effect to demonstrate that the image is no longer valid
                 document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
                 segment_new_capture = true;
-                console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
+                //console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
             }
         },
         error: function() {

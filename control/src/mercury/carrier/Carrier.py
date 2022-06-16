@@ -856,11 +856,17 @@ class Carrier():
         except ASICDisabledError:
             return None
 
-    def set_segment_color_scale(vmax=None, vmin=None):
+    def set_segment_color_scale(self, vmax=None, vmin=None):
         if vmax is not None:
-            self._segment_vmax = vmax
+            if vmax == -1:
+                self._segment_vmax = None
+            else:
+                self._segment_vmax = vmax
         if vmin is not None:
-            self._segment_vmin = vmin
+            if vmin == -1:
+                self._segment_vmin = None
+            else:
+                self._segment_vmin = vmin
 
     def trigger_asic_segment_capture(self, segment):
         if not PLOTTING_SUPPORTED:
