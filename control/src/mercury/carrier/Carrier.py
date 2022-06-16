@@ -856,6 +856,12 @@ class Carrier():
         except ASICDisabledError:
             return None
 
+    def set_segment_color_scale(vmax=None, vmin=None):
+        if vmax is not None:
+            self._segment_vmax = vmax
+        if vmin is not None:
+            self._segment_vmin = vmin
+
     def trigger_asic_segment_capture(self, segment):
         if not PLOTTING_SUPPORTED:
             logging.warning('ASIC segment readout triggered, but cannot be supported by available modules')
@@ -973,8 +979,8 @@ class Carrier():
             "ASIC_SER_MODE":(self.get_asic_serialiser_mode, self.set_asic_serialiser_mode, {"description":"ASIC Serialiser mode (init, bonding or data) as str"}),
             "ASIC_SER_PATTERN":(self.get_asic_all_serialiser_pattern, self.set_asic_all_serialiser_pattern, {"description":"ASIC Serialiser pattern (0 for serial, 7 for PRBS, 1-5 for clock div)"}),
             "ASIC_SEGMENT_CAPTURE":(lambda: {True:1, False:0}[self._segment_ready], self.trigger_asic_segment_capture, {}),
-            "ASIC_SEGMENT_VMAX":(lambda: self._segment_vmax, lambda x: self._segment_vmax=x, {"description":"Maximum for segment colour scale"}),
-            "ASIC_SEGMENT_VMIN":(lambda: self._segment_vmin, lambda x: self._segment_vmin=x, {"description":"Minimum for segment colour scale"}),
+            "ASIC_SEGMENT_VMAX":(lambda: self._segment_vmax, lambda maxval: self.set_segment_color_scale(vmax=maxval), {"description":"Maximum for segment colour scale"}),
+            "ASIC_SEGMENT_VMIN":(lambda: self._segment_vmin, lambda minval: self.set_segment_color_scale(vmin=minval), {"description":"Minimum for segment colour scale"}),
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
