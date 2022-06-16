@@ -119,6 +119,7 @@ class CarrierAdapter(ApiAdapter):
         self.firefly_update_loop()
         self.temperature_update_interval = float(3.0)
         self.temperature_update_loop()
+        self.segment_capture_loop()
 
     def power_update_loop(self):
         """
@@ -144,6 +145,9 @@ class CarrierAdapter(ApiAdapter):
         self.carrier._sync_critical_temp_monitor()
         IOLoop.instance().call_later(self.temperature_update_interval, self.temperature_update_loop)
 
+    def segment_capture_loop(self):
+        self.carrier._segment_capture_loop()
+        IOLoop.instance().call_later(0.5, self.segment_capture_loop)
 
     @response_types('application/json', default='application/json')
     def get(self, path, request):

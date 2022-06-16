@@ -59,6 +59,7 @@ function poll_loki_vregneeded() {
 	update_loki_asic_integration_time();
 	update_loki_asic_frame_length();
     update_loki_asic_serialiser_mode();
+    update_loki_asic_segment_readout();
 
 	setTimeout(poll_loki_vregneeded, 1000);
 }
@@ -866,6 +867,57 @@ function update_loki_asic_integration_time() {
         $('#asic-integration-time-state').removeClass();
         $('#asic-integration-time-state').addClass("badge bg-danger");
         console.log('failed to get integration time');
+    });
+}
+
+var segment_new_capture = true
+function trigger_segment_readout(segment) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name,
+		contentType: "application/json",
+		data: JSON.stringify({'ASIC_SEGMENT_CAPTURE': parseInt(segment)}),
+        success: function(data) {
+
+		console.log("Segment capture started for segment " + segment);
+        }
+	});
+    segment_new_capture = true;
+}
+
+function update_loki_asic_segment_readout() {
+    // Check if there is a segment image ready to be displayed
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SEGMENT_CAPTURE',
+		async: false,
+		dataType: 'json',
+		timeout: 20,
+		success: function(response) {
+            if (response.ASIC_SEGMENT_CAPTURE == 1) {
+                // Reload only if the currently valid image is new
+                if (segment_new_capture) {
+                    timestamp = new Date().getTime();   // Force update in this instance
+                    document.getElementById("segment-img").src="imgout/segment.png?t=" + timestamp;
+
+                    // Remove blurring
+                    document.getElementById("segment-img").style="-webkit-filter: blur(0px)"
+
+                    segment_new_capture = false;
+                    console.log('segment display updated');
+                } else {
+                    console.log('segment not updated (old)');
+                }
+            } else if (response.ASIC_SEGMENT_CAPTURE != 1) {
+                //document.getElementById("segment-img").src="";
+                // Apply a blurring effect to demonstrate that the image is no longer valid
+                document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
+                segment_new_capture = true;
+                console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
+            }
+        },
+        error: function() {
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get segment image');
     });
 }
 

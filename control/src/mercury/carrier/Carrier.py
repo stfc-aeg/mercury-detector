@@ -26,6 +26,16 @@ import os
 import copy
 from enum import Enum as _Enum, auto as _auto
 
+PLOTTING_SUPPORTED=False
+try:
+    import numpy as np
+    import io
+    from PIL import Image
+    import matplotlib.pyplot as plt
+    PLOTTING_SUPPORTED=True
+except ModuleNotFoundError:
+    pass
+
 logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
@@ -167,6 +177,9 @@ class Carrier():
         30M             |   15M             | No            |   No
 
         '''
+
+        self._segment_capture_due = None        # Set to a sector number when one should be read
+        self._segment_ready = False             # True when the last capture request is complete
 
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
@@ -841,6 +854,65 @@ class Carrier():
         except ASICDisabledError:
             return None
 
+    def trigger_asic_segment_capture(self, segment):
+        if not PLOTTING_SUPPORTED:
+            logging.warning('ASIC segment readout triggered, but cannot be supported by available modules')
+        self._segment_ready = False
+        self._segment_capture_due = segment
+        logging.info('ASIC segment read for segment {} has been scheduled'.format(segment))
+        return None
+
+    def _segment_capture_loop(self):
+        if self._segment_capture_due is not None:
+            self.perform_asic_segment_capture(self._segment_capture_due)
+            self._segment_capture_due = None
+
+    def perform_asic_segment_capture(self, segment):
+        logging.info('Capturing image from segment {}'.format(segment))
+
+        try:
+            # Get the segment pattern read from the ASIC, 320 pixel values
+            patternout_12bit = self.asic.read_test_pattern(segment)
+            logging.warning('Pattern out: {}'.format(patternout_12bit))
+
+            # Re-order the data with numpy
+            reshaped = np.empty((4,80), dtype=np.uint16)
+            for scol in range(20):
+                idx = scol*16
+                ridx = scol*4
+                reshaped[::, ridx:ridx+4] = np.array(patternout_12bit)[idx:idx+16].reshape(4,4)
+
+            logging.warning('Reshaped array: {}'.format(reshaped))
+
+            # Plot the reshaped array as color mapped mesh
+            #plt.rcParams["figure.figsize"] = (15,2)
+            fig, ax = plt.subplots(1, 1)
+            plt.title('Segment {}'.format(segment))
+            ax.set_xticks(range(0,80, 4))
+            ax.set_yticks(range(0,4,2))
+            #mesh = ax.pcolormesh(reshaped, vmin=None, vmax=None, )
+            mesh = ax.imshow(reshaped, vmin=None, vmax=None, )
+            fig.colorbar(mesh, orientation='horizontal', fraction=0.1)
+
+            # Write output to file
+            time_now = time.localtime()
+            tstamp = "{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(time_now.tm_year,
+                                                                    time_now.tm_mon,
+                                                                    time_now.tm_mday,
+                                                                    time_now.tm_hour,
+                                                                    time_now.tm_min,
+                                                                    time_now.tm_sec,
+                                                                    int((time.time() % 1) * 1000))
+            #filename = '/opt/loki-detector/exports/{}_seg{}.png'.format(tstamp, segment)
+            filename = 'test/static/imgout/segment.png'.format(tstamp, segment)
+            plt.savefig(filename, dpi=400, transparent=True, bbox_inches='tight')
+
+            self._segment_ready = True
+
+        except ASICDisabledError:
+            logging.error('Could not trigger segment readout due to disabled ASIC')
+            return None
+
     def _paramtree_setup(self):
 
         # Sync single-read items
@@ -898,6 +970,7 @@ class Carrier():
             "ASIC_FEEDBACK_CAPACITANCE":(self.get_asic_feedback_capacitance, self.set_asic_feedback_capacitance, {"description":"ASIC Preamo feedback capacitance"}),
             "ASIC_SER_MODE":(self.get_asic_serialiser_mode, self.set_asic_serialiser_mode, {"description":"ASIC Serialiser mode (init, bonding or data) as str"}),
             "ASIC_SER_PATTERN":(self.get_asic_all_serialiser_pattern, self.set_asic_all_serialiser_pattern, {"description":"ASIC Serialiser pattern (0 for serial, 7 for PRBS, 1-5 for clock div)"}),
+            "ASIC_SEGMENT_CAPTURE":(lambda: {True:1, False:0}[self._segment_ready], self.trigger_asic_segment_capture, {}),
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{

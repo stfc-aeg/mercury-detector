@@ -312,6 +312,19 @@
                                     <div class="card-header">
                                         Segment Readout
                                     </div>
+                                    <div class="card-body">
+                                        <div class="row contflex">
+                                            <div class="col">
+                                                <div class="input-group mb-3">
+                                                    <span class="input-group-text">Segment Select</span>
+                                                    <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="segment-readout-select"/>
+                                                    <span class="input-group-text">v</span>
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="trigger_segment_readout($('#segment-readout-select').prop('value'))">Read Segment</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <img id="segment-img" src="" class="card-img-bottom" alt="...">
                                 </div>
                             </div>
                             <div class="col col-xl-5 col-lg-12 col-md-12 col-sm-12 col-xs-12">
