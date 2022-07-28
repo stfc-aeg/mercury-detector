@@ -332,7 +332,7 @@ class Asic():
         self.write_register(0x03, 0x7F)
 
         # Enable calibrate
-        self.enable_calibration_test_pattern(True)
+        #self.enable_calibration_test_pattern(True)
 
         self._logger.info("Global mode configured")
 
@@ -461,12 +461,17 @@ class Asic():
         row_bits = []
         column_bits = []
 
+        sector = int(sector)
+        division = int(division)
+
         # Only rows with pixels in the correct sector will be highlighted
         for row_id in range(0, 80):
             sector_id = int(row_id / 4)
             if sector_id == sector:
                 row_bits.append(1)
             else:
+                self._logger.debug('{}: did not accept sector id {} from row {} to match sector {}'.format(
+                    sector_id == sector, sector_id, row_id, sector))
                 row_bits.append(0)
 
         # Only columns with pixels in the correct division will be highlighted
@@ -478,6 +483,7 @@ class Asic():
                 column_bits.append(0)
 
         self._logger.info("Generated calibration test pattern to highlight sector {}, division {}".format(sector, division))
+        self._logger.debug("In bit form:\n\trows: {}\n\tcolumns:{}".format(row_bits, column_bits))
 
         # Submit the test pattern and enable it
         self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)

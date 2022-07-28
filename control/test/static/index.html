@@ -497,6 +497,41 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            <div class="accordion-item">
+                                                <h2 class="accordion-header" id="headingCalPattern">
+                                                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCalPattern" aria-expanded="true" aria-controls="collapseCalPattern">
+                                                    Calibration Pattern Control
+                                                  </button>
+                                                </h2>
+                                                <div id="collapseCalPattern" class="accordion-collapse collapse" aria-labelledby="headingCalPattern" data-bs-parent="#asic-advanced-accordion">
+                                                    <div class="accordion-body">
+                                                        <div class="row contflex pb-3">
+                                                            <div class="col">
+                                                                Calibration Pattern Enable: 
+                                                            </div>
+                                                            <div class="col">
+                                                                <input type="checkbox" name="cali-pattern-en" checked>
+                                                            </div>
+                                                        </div>
+                                                        <div class="row contflex">
+                                                            <div class="col">
+                                                                <div class="input-group mb-3">
+                                                                    <span class="input-group-text">Sector</span>
+                                                                    <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="highlight-sec-input"/>
+                                                                    <span class="input-group-text">Division</span>
+                                                                    <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="highlight-div-input"/>
+                                                                    <button class="btn btn-outline-secondary" type="button" onclick="set_calibration_pattern_highlight($('#highlight-sec-input').prop('value'),$('#highlight-div-input').prop('value'))">Highlight Division x Sector</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="row contflex">
+                                                            <div class="col">
+                                                                    <button class="btn btn-outline-secondary" type="button" onclick="set_calibration_pattern_default()">Set default test pattern</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

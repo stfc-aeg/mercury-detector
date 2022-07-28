@@ -55,6 +55,7 @@ function poll_loki_vregneeded() {
 	update_loki_ff_data();		// Updated in adapter at slower rate
 	update_loki_power_monitor();	// Updated in adapter at slower rate
 
+    update_loki_asic_cal_pattern_en();
 	update_loki_asic_preamp();
 	update_loki_asic_integration_time();
 	update_loki_asic_frame_length();
@@ -1221,7 +1222,17 @@ function set_calibration_pattern_enable(pattern_en) {
 	});
 }
 
-function update_calibration_pattern_enable() {
+function callback_CalPatternEn_Switch(event, state) {
+    if ($("[name='cali-pattern-en']").bootstrapSwitch('disabled')) {
+        // Ignore if the switch is disabled
+    } else {
+        console.log("Calibration pattern enable switch fired with disable state " + !state);
+        set_calibration_pattern_enable(state)
+        $("[name='cali-pattern-en']").bootstrapSwitch('disabled', true);    // Disable until next read
+    }
+}
+
+function update_loki_asic_cal_pattern_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN/ENABLE',
 		async: false,
 		dataType: 'json',
@@ -1231,6 +1242,18 @@ function update_calibration_pattern_enable() {
 
             console.log('Got calibration pattern enable as ' + cal_pattern_en);
             //TODO somehow set the radio state
+            $("[name='cali-pattern-en']").bootstrapSwitch();
+            $("[name='cali-pattern-en']").bootstrapSwitch('onText', 'Enabled');
+            $("[name='cali-pattern-en']").bootstrapSwitch('offText', 'Disabled');
+            $("[name='cali-pattern-en']").bootstrapSwitch('offColor', 'danger');
+            $("[name='cali-pattern-en']").bootstrapSwitch('disabled', false);
+            //$("input[name='"+switchname+"']").on('switchChange.bootstrapSwitch', function(event,state) {
+            $("[name='cali-pattern-en']").bootstrapSwitch('onSwitchChange', callback_CalPatternEn_Switch);
+            if (cal_pattern_en) {
+                $("[name='cali-pattern-en']").bootstrapSwitch('state', true);
+            } else {
+                $("[name='cali-pattern-en']").bootstrapSwitch('state', false);
+            }
         },
         error: function() {
             console.log('Error retrieving calibration pattern enable state');
