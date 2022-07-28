@@ -1,10 +1,16 @@
 import time
 import logging
+import itertools
 from odin_devices.spi_device import SPIDevice
 
 REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
 REGISTER_ADDRESS_MASK = 0b01111111
+
+CAL_PATTERN_DEFAULT_BYTES = {
+        'rows': [0x55]*10,
+        'cols': [0xAA]*10
+        }
 
 class ASICDisabledError (Exception):
     def __init__(self, message):
@@ -71,6 +77,7 @@ class Asic():
         self._STATE_integration_time = None
         self._STATE_serialiser_mode = None
         self._STATE_all_serialiser_pattern = None
+        self._STATE_calibration_test_pattern_en = None
 
     """ SPI Register Access Functions """
     def _reset_page(self):
@@ -174,10 +181,14 @@ class Asic():
         self.spi.transfer(transfer_buffer)
 
     def set_register_bit(self, register, bit):
+        if not self.get_enabled():
+            raise ASICDisabledError('Cannot write, ASIC disabled')
         original = self.read_register(register)[1]
         self.write_register(register, original | bit)
 
     def clear_register_bit(self, register, bit):
+        if not self.get_enabled():
+            raise ASICDisabledError('Cannot write, ASIC disabled')
         original = self.read_register(register)[1]
         self.write_register(register, original & (~bit))
 
@@ -205,6 +216,24 @@ class Asic():
                 val_index = 0
             else:
                 val_index += 1
+
+        return output_array
+
+    @staticmethod
+    def convert_12bit_8bit(values_12bit):
+        output_array = []
+        for i in range(len(values_12bit)):
+            if i % 2 == 0:      # First 12-bit value in pair
+                val_12bit_1 = values_12bit[i]
+            else:               # Second 12-bit value in pair
+                val_12bit_2 = values_12bit[i]
+
+                # All 24-bits have been collected and can be converted to 8-bit
+                byte1 = (val_12bit_1 >> 4) & 0xFF
+                byte2 = (((val_12bit_1 & 0xF) << 4) + (val_12bit_2 >> 8)) & 0xFF
+                byte3 = (val_12bit_2 & 0xFF)
+
+                output_array.extend(byte1, byte2, byte3)
 
         return output_array
 
@@ -303,7 +332,7 @@ class Asic():
         self.write_register(0x03, 0x7F)
 
         # Enable calibrate
-        self.write_register(0x00, 0x54)
+        self.enable_calibration_test_pattern(True)
 
         self._logger.info("Global mode configured")
 
@@ -339,11 +368,134 @@ class Asic():
 
         return readout_12bit
 
+    def write_test_pattern(self, pattern_data_12bit, sector):
+        # Write a test pattern to the test shift register for a single sector.
+        # The input is taken as an array of 360 12-bit pixel values, written in 4x4
+        # grids from left to right. Each grid is supplied with values starting at
+        # the bottom left pixel, moving horizontally then up one row (see the ASIC
+        # manual Test Shfit Reigster Data Order (v1.3 section 5.7.2).
+
+        # Prepare the 8-bit data
+        pattern_data_8bit = Asic.convert_12bit_8bit(pattern_data_12bit)
+
+        # Set the test register to shift mode
+        self.write_register(0x07, 0x01 | (sector << 2))
+
+        # Burst write register 127 with the 8-bit data
+        self.burst_write(pattern_data_8bit, 480)
+
+        # Set the test register to write mode
+        self.write_register(0x07, 0x03 | (sector << 2))
+
+    def test_pattern_identify_sector_division(self, sector):
+        # Send data to a given sector that will identify individual 4x4 grids with
+        # set pattern. Each pixel in the 4x4 grid will have the same value, which is
+        # incremented counting the grids from left to right and then top to bottom.
+        # Grid numbering will start at 1 to ensure there is something to receive.
+        # (i.e. the second grid in the third sector will contain pixel values 43)
+
+        sector_offset = (sector * 20) + 1 # Sector numbering starts at 0, first value 1
+
+        # Generate the 4x4 grid 12-bit values
+        pattern_12bit = []
+        for grid_id in range(sector_offset, sector_offset+20):
+            grid_values = [grid_id] * 20
+            pattern_12bit.extend(grid_values)
+
+        # Submit the test pattern
+        self.write_test_pattern(pattern_12bit, sector)
+
+    def enable_calibration_test_pattern(self, enable=True):
+        if enable:
+            self.set_register_bit(0x00, 0b100)
+            self._STATE_calibration_test_pattern_en = True
+        else:
+            self.clear_register_bit(0x00, 0b100)
+            self._STATE_calibration_test_pattern_en = False
+        self._logger.info(("Enabled" if enable else "Disabled") + " calibration pattern mode")
+
+    def get_calibration_test_pattern_enabled(self, direct=False):
+        if direct or self._STATE_calibration_test_pattern_en is None:
+            # Read from ASIC and set locally stored state
+            latest_value = (self.read_register(0x00)[0] & 0b100) > 0
+            self._STATE_calibration_test_pattern_en = latest_value
+
+        return self._STATE_calibration_test_pattern_en
+
+    def set_calibration_test_pattern(self, row_bytes, column_bytes):
+        # Submit a calibration test pattern, which consists of two arrays (one for
+        # row and the other for columns). Each array contains binary pixel values.
+        # The row and column patterns are ANDed toghether, so only pixels that have
+        # a high value in both row and column will be high. The ASIC cycles through
+        # 4 patterns (rising, falling, and 2 blanks) using this base pattern.
+        #
+        # Bytes are MSB-first, but the rows are loaded in reverse from 79 to 0 (i.e.
+        # to set only the first pixel, the last row byte would be 0b00000001 and the
+        # first column byte would be 0b10000000.
+
+        self._logger.debug('Writing calibration test pattern {}'.format(
+            [hex(x) for x in (row_bytes + column_bytes)]))
+
+        self.burst_write(126, row_bytes + column_bytes)
+
+    def set_calibration_test_pattern_bits(self, row_bits, column_bits):
+        # Constructs a calibration pattern using arrays of bits for rows and columns.
+        # Ordering is from pixel count 0 to 79 for each.
+
+        # Reverse the row array, since it is loaded from pixel 79 to 0.
+        row_bits_reversed = reversed(row_bits)
+
+        # Convert bits to byte array, MSB First
+        row_bytes = [sum([byte[b] << (7- b) for b in range(7,-1,-1)])
+                for byte in zip(*(iter(row_bits_reversed),) * 8)]
+        column_bytes = [sum([byte[b] << (7- b) for b in range(7,-1,-1)])
+                for byte in zip(*(iter(column_bits),) * 8)]
+
+        self.set_calibration_test_pattern(row_bytes=row_bytes, column_bytes=column_bytes)
+
+    def cal_pattern_highlight_sector_division(self, sector, division):
+        # Use the calibration test pattern to (within a single sector) zero all pixels
+        # except those in a certain division and sector, which will be filled with all
+        # high bits. There is one bit per pixel in the calibration pattern.
+
+        row_bits = []
+        column_bits = []
+
+        # Only rows with pixels in the correct sector will be highlighted
+        for row_id in range(0, 80):
+            sector_id = int(row_id / 4)
+            if sector_id == sector:
+                row_bits.append(1)
+            else:
+                row_bits.append(0)
+
+        # Only columns with pixels in the correct division will be highlighted
+        for column_id in range(0, 80):
+            division_id = int(column_id / 4)
+            if division_id == division:
+                column_bits.append(1)
+            else:
+                column_bits.append(0)
+
+        self._logger.info("Generated calibration test pattern to highlight sector {}, division {}".format(sector, division))
+
+        # Submit the test pattern and enable it
+        self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
+        self.enable_calibration_test_pattern(True)
+
+    def cal_pattern_set_default(self):
+        self.set_calibration_test_pattern(CAL_PATTERN_DEFAULT_BYTES['rows'],
+                CAL_PATTERN_DEFAULT_BYTES['cols'])
+
+        self._logger.info("Set calibration test pattern to default value")
+
     def set_tdc_local_vcal(self, local_vcal_en=True):
         # Enable to use VCAL as the direct comparator input rather than the
         # default.
-        bitval = {True: 0b1, False: 0b0}[local_vcal_en]
-        self.set_register_bit(0x04, bitval << 6)
+        if local_vcal_en:
+            self.set_register_bit(0x04, 0b1 << 6)
+        else:
+            self.clear_register_bit(0x04, 0b1 << 6)
 
     def set_all_ramp_bias(self, bias):
         # Set the ramp bias value for all 40 ramps in the ASIC.

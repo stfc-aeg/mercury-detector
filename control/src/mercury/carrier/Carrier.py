@@ -183,6 +183,9 @@ class Carrier():
         self._segment_vmax = None
         self._segment_vmin = None
 
+        self._asic_cal_highlight_div = None
+        self._asic_cal_highlight_sec = None
+
         # Set default pin states
         self._gpiod_sync.set_value(_LVDS_sync_idle_state)
         self.set_sync_sel_aux(False)                        # Set sync Zynq-controlled
@@ -856,6 +859,43 @@ class Carrier():
         except ASICDisabledError:
             return None
 
+    def get_asic_cal_pattern_en(self):
+        try:
+            # Read cached value from the ASIC
+            return self.asic.get_calibration_test_pattern_enabled(direct=False)
+        except ASICDisabledError:
+            return None
+
+    def set_asic_cal_pattern_en(self, enable=True):
+        try:
+            self.asic.enable_calibration_test_pattern(enable=enable)
+        except ASICDisabledError:
+            return None
+
+    def set_asic_cal_pattern(self, pattern_name):
+        try:
+            if pattern_name == "default":
+                self.asic.cal_pattern_set_default()
+            elif pattern_name == "highlight":
+                if self._asic_cal_highlight_div is not None and self._asic_cal_highlight_sec:
+                    self.asic.cal_pattern_highlight_sector_division(
+                            sector=self._asic_cal_highlight_sec,
+                            division=self._asic_cal_highlight_div)
+                else:
+                    logging.error("Could not request sector/division highlight, please configure first")
+            else:
+                logging.error("Unsupported calibration pattern name. Please choose default or highlight")
+
+        except ASICDisabledError:
+            return None
+
+    def cfg_asic_highlight(self, division=None, sector=None):
+        if division is not None:
+            self._asic_cal_highlight_div = division
+        if sector is not None:
+            self._asic_cal_highlight_sec = sector
+
+
     def set_segment_color_scale(self, vmax=None, vmin=None):
         if vmax is not None:
             if vmax == -1:
@@ -987,6 +1027,12 @@ class Carrier():
             "ASIC_SEGMENT_CAPTURE":(lambda: {True:1, False:0}[self._segment_ready], self.trigger_asic_segment_capture, {}),
             "ASIC_SEGMENT_VMAX":(lambda: self._segment_vmax, lambda maxval: self.set_segment_color_scale(vmax=maxval), {"description":"Maximum for segment colour scale"}),
             "ASIC_SEGMENT_VMIN":(lambda: self._segment_vmin, lambda minval: self.set_segment_color_scale(vmin=minval), {"description":"Minimum for segment colour scale"}),
+            "ASIC_CAL_PATTERN":{
+                "ENABLE":(self.get_asic_cal_pattern_en, self.set_asic_cal_pattern_en, {"description":"Enable ASIC calibration pattern injection"}),
+                "PATTERN":(None, self.set_asic_cal_pattern, {"description":"Selection of pattern type: default or highlight"}),
+                "HIGHLIGHT_DIVISION":(lambda: self._asic_cal_highlight_div, lambda division: self.cfg_asic_highlight(division=division), {"description":"Division chosen for 4x4 grid highlighting via calibration pattern"}),
+                "HIGHLIGHT_SECTOR":(lambda: self._asic_cal_highlight_sec, lambda sector: self.cfg_asic_highlight(sector=sector), {"description":"Sector chosen for 4x4 grid highlighting via calibration pattern"}),
+            },
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{

@@ -1170,6 +1170,76 @@ function change_vcal() {
 	});
 }
 
+function set_calibration_pattern_highlight(sector, division) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN',
+		contentType: "application/json",
+		data: JSON.stringify({'HIGHLIGHT_DIVISION': division}),
+        success: function(data) {
+        }
+	});
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN',
+		contentType: "application/json",
+		data: JSON.stringify({'HIGHLIGHT_SECTOR': sector}),
+        success: function(data) {
+        }
+	});
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN',
+		contentType: "application/json",
+		data: JSON.stringify({'PATTERN': 'highlight'}),
+        success: function(data) {
+            console.log('Set calibration pattern to highlight');
+        }
+	});
+}
+
+function set_calibration_pattern_default() {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN',
+		contentType: "application/json",
+		data: JSON.stringify({'PATTERN': 'default'}),
+        success: function(data) {
+            console.log('Set calibration pattern to default');
+        }
+	});
+}
+
+function set_calibration_pattern_enable(pattern_en) {
+    $.ajax({
+		type: "PUT",
+		url: '/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN',
+		contentType: "application/json",
+		data: JSON.stringify({'ENABLE': pattern_en}),
+        success: function(data) {
+        }
+	});
+}
+
+function update_calibration_pattern_enable() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN/ENABLE',
+		async: false,
+		dataType: 'json',
+		timeout: 20,
+		success: function(response) {
+            cal_pattern_en = response.ENABLE;
+
+            console.log('Got calibration pattern enable as ' + cal_pattern_en);
+            //TODO somehow set the radio state
+        },
+        error: function() {
+            console.log('Error retrieving calibration pattern enable state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get calibration pattern enable state');
+    });
+}
+
 function change_sync_sel_aux(aux_en) {
     $.ajax({
 		type: "PUT",
