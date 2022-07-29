@@ -41,6 +41,10 @@ logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 # If true, derive power from PAC1921 IV readings if they are being taken instead of reading it
 _RAIL_MONITOR_DERIVE_POWER = True
 
+vdddcntrl_rail_name = 'VDDDCNTRL'
+vdddasic_rail_name = 'VDDD ASIC'
+vddaasic_rail_name = 'VDDA ASIC'
+
 class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
@@ -98,7 +102,7 @@ class Carrier():
                  vcal=_vcal_default,
                  asic_spi_speed_hz=2000000):
 
-        self._POWER_CYCLING = False
+        self._POWER_CYCLING = True
         self._PARAMTREE_FIRSTINIT = True
 
         self._interface_definition = interface_definition
@@ -117,7 +121,7 @@ class Carrier():
         # Set the critical temperature limit
         self._critical_temperature_limit = critical_temp_limit
         self._override_critical_temp_bme = override_critical_temp_bme
-        self._temperature_iscritical = True     # Start assuming temperature critical until checked
+        self._temperature_iscritical = False     # Start assuming temperature critical until checked
 
         # Get LOKI GPIO pin bus
         self._gpio_bus = GPIO_ZynqMP
@@ -191,7 +195,18 @@ class Carrier():
         self.set_sync_sel_aux(False)                        # Set sync Zynq-controlled
         self.set_asic_rst(True)                             # Init device in reset
         logging.warning('triggering first power cycle')
-        self.vreg_power_cycle_init(None)                    # Contains device setup
+        #self.vreg_power_cycle_init(None)                    # Contains device setup
+        self._POWER_CYCLING=True
+
+        self._firefly_1 = None
+        self._firefly_2 = None
+        self._ltc2986 = None
+        self._max5306 = None
+        self._bme280 = None
+        self._pac1921_array = None
+        self._asic_temp = None  # Init cached ASIC temperature to None
+        self._pt100_temp = None  # Init cached PT100 temperature to None
+        self._paramtree_setup()
 
 
     def _gen_FireFly_Tree(self, ff_num):
@@ -287,15 +302,15 @@ class Carrier():
         # Init PAC1921 monitors in power mode (generic settings)
         try:
             self._pac1921_u3 = pac1921.PAC1921(address_resistance=470,
-                                               name='VDDDCNTRL',
+                                               name=vdddcntrl_rail_name,
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
             self._pac1921_u2 = pac1921.PAC1921(address_resistance=620,
-                                               name='VDDD ASIC',
+                                               name=vdddasic_rail_name,
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
             self._pac1921_u1 = pac1921.PAC1921(address_resistance=820,
-                                               name='VDDA ASIC',
+                                               name=vddaasic_rail_name,
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
             self._pac1921_u3.config_gain(di_gain=1, dv_gain=8)
@@ -978,22 +993,22 @@ class Carrier():
 
         # Sync repeating readings
         self._POWER_SUPPLY_READINGS_EMPTY = {
-            self._pac1921_u3.get_name(): {'POWER': None, 'VOLTAGE': None, 'CURRENT': None},
-            self._pac1921_u2.get_name(): {'POWER': None, 'VOLTAGE': None, 'CURRENT': None},
-            self._pac1921_u1.get_name(): {'POWER': None, 'VOLTAGE': None, 'CURRENT': None}}
+            vdddcntrl_rail_name: {'POWER': None, 'VOLTAGE': None, 'CURRENT': None}, # u3
+            vdddasic_rail_name: {'POWER': None, 'VOLTAGE': None, 'CURRENT': None},  # u2
+            vddaasic_rail_name: {'POWER': None, 'VOLTAGE': None, 'CURRENT': None}}  # u1
         if self._PARAMTREE_FIRSTINIT:
             self._power_supply_readings = copy.deepcopy(self._POWER_SUPPLY_READINGS_EMPTY)
-        self._firefly_channelstates = {1: {}, 2: {}}
-        #self.sync_power_readings()
-        self.sync_firefly_readings()
 
-        # Define ParameterTree Sub-dictionaries
-        firefly_tree_1 = self._gen_FireFly_Tree(1) if self._firefly_1 is not None else {}
-        firefly_tree_2 = self._gen_FireFly_Tree(2) if self._firefly_2 is not None else {}
         rail_monitor_tree = self._gen_RailMonitor_Tree(
-                self._pac1921_u3.get_name(), self._pac1921_u2.get_name(), self._pac1921_u1.get_name(),
+                vdddcntrl_rail_name, vdddasic_rail_name, vddaasic_rail_name,
                 self._rail_monitor_mode,
                 self.get_power_supply_readings)
+
+        # Define ParameterTree Sub-dictionaries
+        self._firefly_channelstates = {1: {}, 2: {}}
+        self.sync_firefly_readings()
+        firefly_tree_1 = self._gen_FireFly_Tree(1) if self._firefly_1 is not None else {}
+        firefly_tree_2 = self._gen_FireFly_Tree(2) if self._firefly_2 is not None else {}
 
         logging.info(rail_monitor_tree)
 
