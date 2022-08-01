@@ -135,6 +135,8 @@ class Carrier():
                                                     GPIO_ZynqMP.DIR_OUTPUT)
         self._gpiod_ltc_nrst = GPIO_ZynqMP.get_pin(self._interface_definition.pin_temp_nrst,
                                                     GPIO_ZynqMP.DIR_OUTPUT)
+        self._gpiod_ltc_int = GPIO_ZynqMP.get_pin(9, GPIO_ZynqMP.DIR_INPUT)
+        self._gpiod_los_xaxb = GPIO_ZynqMP.get_pin(5, GPIO_ZynqMP.DIR_INPUT)
 
         # The LTC will never be disabled
         self._gpiod_ltc_nrst.set_value(1)
@@ -197,6 +199,7 @@ class Carrier():
         logging.warning('triggering first power cycle')
         #self.vreg_power_cycle_init(None)                    # Contains device setup
         self._POWER_CYCLING=True
+        self._BOARD_PWR_LOW_DETECTED=False
 
         self._firefly_1 = None
         self._firefly_2 = None
@@ -279,8 +282,31 @@ class Carrier():
         except AttributeError:
             raise ParameterTreeError
 
+    def get_board_pwr_low_detected(self):
+        logging.error('board contect error reported as {}'.format(self._BOARD_PWR_LOW_DETECTED))
+        return self._BOARD_PWR_LOW_DETECTED
+
+    def _brd_connection_check(self):
+        #ltc_intpin = self._gpiod_ltc_int.get_value()
+        ltc_intpin = self._gpiod_los_xaxb.get_value()
+        logging.info("connection check pin read as {}".format(ltc_intpin))
+        if (ltc_intpin):
+            self._BOARD_PWR_LOW_DETECTED = False
+            logging.info("Checked board connection: OK")
+        else:
+            self._BOARD_PWR_LOW_DETECTED = True
+            self.set_vreg_en(False)
+            logging.error("Detected power to PCB bad / PCB disconnected. Flagged and regulators disabled.")
+
+        return self._BOARD_PWR_LOW_DETECTED
+
     def POR_init_devices(self):
         """Init the devices on the board after a power-on-reset with current configuration"""
+
+        # Check that the board is connected and powered
+        if self._brd_connection_check():
+            logging.error("Aborting init...")
+            return
 
         # Init FireFlies and power down all channels
         try:
@@ -785,6 +811,7 @@ class Carrier():
 
             # Re-init the board devices
             logging.info("Board VREG power cycled, re-init devices")
+            self._BOARD_PWR_LOW_DETECTED = False
             self.POR_init_devices()
 
             # Re-configure the device tree (some things depend on up-to-date device info
@@ -1028,7 +1055,8 @@ class Carrier():
                 "ASIC":(self.get_cached_asic_temperature, None, {"description":"ASIC internal diode temperature", "units":"C"}),
                 "HUMIDITY":(self.get_ambient_humidity, None, {"description":"Board ambient humidity from BME280", "units":"%RH"})
             },
-            "CRITICAL_TEMP": (self.get_critical_temp_status, None, {"description":"Read 1 if system has a critical temperature"}),
+            "ERR_CRITICAL_TEMP": (self.get_critical_temp_status, None, {"description":"Read 1 if system has a critical temperature"}),
+            "ERR_BOARD_CONTACT": (self.get_board_pwr_low_detected, None, {"description":"Read 1 if system has detected that PCB may have no power / may not be connected."}),
             "VCAL": (self.get_vcal_in, self.set_vcal_in, {"description":"Analogue VCAL_IN", "units":"V"}),
             "SYNC": (self.get_sync, self.send_sync, {"description":"Write to send sync to ASIC. Ignore read"}),
             "SYNC_SEL_AUX": (self.get_sync_sel_aux, self.set_sync_sel_aux, {"description":"Set true to get sync signal externally"}),

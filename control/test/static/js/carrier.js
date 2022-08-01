@@ -33,6 +33,8 @@ function init() {
 
     init_power_tracking();
     init_environment_tracking();
+
+    $('#power-cycle-spinner').hide()
 }
 
 function update_api_version() {
@@ -75,6 +77,8 @@ function poll_loki() {
 
 	update_loki_connection();
 	update_loki_critical_temp();
+    update_loki_contact_err();
+    update_loki_error_msg();
 
 	setTimeout(poll_loki, 1000);
 }
@@ -1112,24 +1116,25 @@ $('.toast').on('shown.bs.toast', function() {
 	toast_shown = true
 })
 
+critical_temp_state=false;
 function update_loki_critical_temp() {
 	// Check to see if the temperature is currently critical, which shuts down regulators.
-    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/CRITICAL_TEMP',
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ERR_CRITICAL_TEMP',
 		async: false,
 		dataType: 'json',
 		timeout: 20,
 		success: function(response) {
-            critical_temp_state = response.CRITICAL_TEMP;
+            critical_temp_state = response.ERR_CRITICAL_TEMP;
             //TODO send popup, add UI elements etc
 
             if (critical_temp_state) {
-                if(!toast_shown) $('.toast').toast('show');
-		console.log('Critical temperature reported (latest ' + latest_asic_temp + ')');
-		$('#latest_critical_temperature').html(latest_asic_temp);
-	    } else {
-		$('.toast').toast('hide');
-		    toast_shown = false;
-	    }
+                //if(!toast_shown) $('.toast').toast('show');
+                console.log('Critical temperature reported (latest ' + latest_asic_temp + ')');
+                $('#latest_critical_temperature').html('Critical ASIC Temperature: ' + latest_asic_temp + 'C');
+            } else {
+                //$('.toast').toast('hide');
+                //toast_shown = false;
+            }
 
             //console.log("Got critical temperature state: " + critical_temp_state)
         },
@@ -1139,6 +1144,62 @@ function update_loki_critical_temp() {
     }).fail(function(xhr, status) {
         console.log('failed to get critical temperature state');
     });
+}
+
+contact_err_state=false;
+function update_loki_contact_err() {
+    $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ERR_BOARD_CONTACT',
+		async: false,
+		dataType: 'json',
+		timeout: 20,
+		success: function(response) {
+            contact_err_state = response.ERR_BOARD_CONTACT;
+            //TODO send popup, add UI elements etc
+
+            if (contact_err_state) {
+                //if(!toast_shown) $('.toast').toast('show');
+                console.log('Board contact issue reported');
+                //$('#latest_critical_temperature').html('No contact with board' + 27);
+            } else {
+                //$('.toast').toast('hide');
+                //toast_shown = false;
+                console.log('Board contact issue not present');
+            }
+        },
+        error: function() {
+            console.log('Error retrieving board contact state');
+        }
+    }).fail(function(xhr, status) {
+        console.log('failed to get board contact state');
+    });
+}
+
+function update_loki_error_msg() {
+    error_msg = '';
+    if (contact_err_state) {
+        error_msg = 'No contact with board';
+    }
+    if (critical_temp_state) {
+        error_msg = 'Critical ASIC Temperature: ' + latest_asic_temp + 'C';
+    }
+
+    if (contact_err_state || critical_temp_state) {
+        console.log('Error(s), showing toast with message: ' + error_msg);
+        try {
+            if(!toast_shown) $('.toast').toast('show');
+        } catch (TypeError) {
+            console.log('caught error');
+        }
+        $('#latest_critical_temperature').html(error_msg);
+    } else {
+        console.log('no errors, not showing toast');
+        try {
+            $('.toast').toast('hide');
+        } catch (TypeError) {
+            console.log('caught error');
+        }
+        toast_shown = false;
+    }
 }
 
 
@@ -1385,6 +1446,7 @@ function run_vreg_cycle() {
 		data: JSON.stringify({'VREG_CYCLE': true}),
 	success: function(data) {
 		$('#power-cycle-spinner').show()
+        toast_shown = false;
 	}
 	});
 
