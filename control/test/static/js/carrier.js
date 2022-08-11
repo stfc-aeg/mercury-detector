@@ -22,12 +22,12 @@ function init() {
     // Generate the firefly channel switches
     document.getElementById('ff1_chtable').innerHTML = generateFireFlyChannelTable(1,
         12,     // 12 Channels
-        3,      // Arrange in 3 columns
+        2,      // Arrange in 3 columns
         false); // Do not include additional state column (indicated by switch)
     generateFireFlyChannelSwitches(1, 12);
     document.getElementById('ff2_chtable').innerHTML = generateFireFlyChannelTable(2,
         12,     // 12 Channels
-        3,      // Arrange in 3 columns
+        2,      // Arrange in 3 columns
         false); // Do not include additional state column (indicated by switch)
     generateFireFlyChannelSwitches(2, 12);
 
@@ -474,9 +474,12 @@ function update_loki_ff_static_data() {
 }
 
 function update_loki_ff_data() {
+    any_channel_down = false;
+    any_firefly_present = false;
 	// Channel States
     for (let ff_id = 1; ff_id <=2; ff_id++) {
         $.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/CHANNELS', function(response) {
+            any_firefly_present = true;
 
             // FireFly Disabled Channels
             var firefly_ch_dis = response.CHANNELS;
@@ -484,6 +487,7 @@ function update_loki_ff_data() {
             var channel_states = "";
 
             for (const [key, value] of Object.entries(firefly_ch_dis)) {
+                if (value.Disabled) any_channel_down = True;
                 //console.log(value);
                 channel_states = channel_states.concat(" " + key + ": " + value.Disabled);
 
@@ -501,6 +505,18 @@ function update_loki_ff_data() {
                 }
             }
             $('#firefly-'+ff_id+'-ch-dis').html(channel_states);
+
+
+            if (any_channel_down) {
+                console.log('A down firefly channel was detected');
+                $('#all-ff-down-state').html("At least one disabled");
+                $('#all-ff-down-state').removeClass();
+                $('#all-ff-down-state').addClass("badge bg-danger");
+            } else {
+                $('#all-ff-down-state').html("All Enabled");
+                $('#all-ff-down-state').removeClass();
+                $('#all-ff-down-state').addClass("badge bg-success");
+            }
         })
         .error(function(data) {
             // If there is no response from the firefly query, disable the channel switches
@@ -508,8 +524,20 @@ function update_loki_ff_data() {
             for (channel_num = 0; channel_num < 12; channel_num++) {
                 $("[name='firefly-"+ff_id+"-CH"+channel_num+"-switch']").bootstrapSwitch('disabled', true);
             }
-
         });
+    }
+
+    // If there is no firefly to control, indicate this and disable the
+    // button. Otherwise enable the global enable button
+    if (any_firefly_present) {
+        $('#firefly-global-allon-button').removeClass("disabled");
+        $('#firefly-global-alloff-button').removeClass("disabled");
+    } else {
+        $('#all-ff-down-state').html("No FireFly");
+        $('#all-ff-down-state').removeClass();
+        $('#all-ff-down-state').addClass("badge bg-warning");
+        $('#firefly-global-allon-button').addClass("disabled");
+        $('#firefly-global-alloff-button').addClass("disabled");
     }
 }
 
