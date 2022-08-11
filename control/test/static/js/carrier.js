@@ -33,6 +33,7 @@ function init() {
 
     init_power_tracking();
     init_environment_tracking();
+    create_load_chart();
 }
 
 function update_api_version() {
@@ -73,7 +74,8 @@ function poll_loki() {
         update_loki_asic_sync_aux();    // Call before sync
         update_loki_asic_sync();
 
-	update_loki_connection();
+    update_loki_connection();
+	update_loki_performance();
 	update_loki_critical_temp();
 
 	setTimeout(poll_loki, 1000);
@@ -675,6 +677,108 @@ function update_loki_temps() {
 
     chart_temp.update();
     chart_hum.update();
+}
+
+var loki_load_data = [];
+function create_load_chart() {
+    var chart_element = document.getElementById("loki-load-chart").getContext('2d');
+
+    var data = {
+        labels: ['1m', '5m', '15m'],
+        datasets: [{
+              label: 'LOKI Load',
+              data: loki_load_data,
+              backgroundColor: [
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                      ],
+              borderColor: [
+                        'rgb(75, 192, 192)',
+                        'rgb(54, 162, 235)',
+                        'rgb(153, 102, 255)',
+                      ],
+              borderWidth: 1
+            }]
+    };
+
+    chart_load = new Chart(chart_element,
+    {
+        type: 'bar',
+        yAxisID: 'Load',
+        data: data,
+        options: {
+            animation: {
+                duration: get_chart_animation_duration(),
+            },
+            responsiveAnimationDuration: 0,
+            elements: {
+                line: {
+                    tension: 0
+                    }
+            },
+            //responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    //chart_load.update();
+}
+
+function update_loki_performance() {
+	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/LOKI_PERFORMANCE',
+		async: false,
+		dataType: 'json',
+		timeout: 60,
+		success: function(response) {
+
+            // Memory
+            var total_mem = 0;
+            // Memory
+            if (response.LOKI_PERFORMANCE.MEM != null) {
+				total_mem = response.LOKI_PERFORMANCE.MEM.TOTAL.toFixed(2);
+			} else {
+            }
+
+            if (response.LOKI_PERFORMANCE.MEM != null) {
+				var freemem = response.LOKI_PERFORMANCE.MEM.FREE.toFixed(2);
+                var freemem_perc = (freemem / total_mem) * 100;
+                console.log('free memory percentage: ' + freemem_perc);
+                document.getElementById("loki-mem-free").style.width=freemem_perc + "%";
+                document.getElementById("loki-mem-free").innerHTML=parseInt(freemem / (1024*1024)) + "MB free";
+			} else {
+                document.getElementById("loki-mem-free").style.width="0%";
+            }
+
+            if (response.LOKI_PERFORMANCE.MEM != null) {
+				var availmem = response.LOKI_PERFORMANCE.MEM.AVAILABLE.toFixed(2);
+                var availmem_perc = (availmem / total_mem) * 100;
+                console.log('free memory percentage: ' + availmem_perc);
+                document.getElementById("loki-mem-avail").style.width=availmem_perc + "%";
+                document.getElementById("loki-mem-avail").innerHTML=parseInt(availmem / (1024*1024)) + "MB available";
+			} else {
+                document.getElementById("loki-mem-avail").style.width="0%";
+            }
+
+
+            // Load
+            if (response.LOKI_PERFORMANCE.LOAD != null) {
+                loki_load_data = response.LOKI_PERFORMANCE.LOAD;
+                chart_load.data.datasets[0].data = loki_load_data;
+                console.log(loki_load_data);
+                chart_load.update();
+            }
+		},
+		error: function() {
+			console.log('LOKI Temperature reading error');
+		}
+	}).fail(function(xhr, status) {
+		console.log('fail');
+	});
 }
 
 var power_tracking_data_dig_V = [];

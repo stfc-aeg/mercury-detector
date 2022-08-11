@@ -227,8 +227,17 @@
                                     <div class="card-body">
                                         <div class="container-fluid">
                                             <div class="row justify-content-around">
-                                                <div class="col-auto align-self-center">
+                                                <div class="col align-self-center">
+                                                    Memory
+                                                    <div class="progress">
+                                                        <div class="progress-bar bg-success" role="progress-bar" id="loki-mem-free"></div>
+                                                        <div class="progress-bar" role="progress-bar bg-info" id="loki-mem-avail"></div>
+                                                    </div>
                                                 </div> <!-- col -->
+                                                <div class="col-12">
+                                                    Load
+                                                    <canvas id="loki-load-chart" height=50 width=200 style="height:50px; width:200px"></canvas>
+                                                </div>
 
                                                 <div class="col-12">
                                                 </div> <!-- col -->
@@ -291,10 +300,10 @@
                                                     </div>
                                                     <div class="row">
                                                         <div class="col">
-                                                        <button type="button" class="btn btn-primary btn-sm" id="firefly-global-allon-button" onclick="callback_FireFly_Channel_GlobalState_Button(1, 12, true);callback_FireFly_Channel_GlobalState_Button(2, 12, true)">En All</button>
+                                                            <button type="button" class="btn btn-primary btn-sm" id="firefly-global-allon-button" onclick="callback_FireFly_Channel_GlobalState_Button(1, 12, true);callback_FireFly_Channel_GlobalState_Button(2, 12, true)">En All</button>
                                                         </div>
                                                         <div class="col">
-                                                        <button type="button" class="btn btn-danger btn-sm" id="firefly-global-alloff-button" onclick="callback_FireFly_Channel_GlobalState_Button(1, 12, false);callback_FireFly_Channel_GlobalState_Button(2, 12, false)">Dis All</button>
+                                                            <button type="button" class="btn btn-danger btn-sm" id="firefly-global-alloff-button" onclick="callback_FireFly_Channel_GlobalState_Button(1, 12, false);callback_FireFly_Channel_GlobalState_Button(2, 12, false)">Dis All</button>
                                                         </div>
                                                     </div>
                                                 </div>
