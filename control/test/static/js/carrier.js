@@ -586,13 +586,6 @@ function update_loki_temps() {
 		timeout: 60,
 		success: function(response) {
             //console.log(response.TEMPERATURES);
-			// Zynq PS Temperature
-		        if (response.TEMPERATURES.ZYNQ.PS != null) {
-				var temp_zynqps = response.TEMPERATURES.ZYNQ.PS.toFixed(2);
-				$('#temp-zynqps').html(temp_zynqps);
-			} else {
-				$('#temp-ambient').html('No Con');
-            }
 
 			// Ambient Temperature
 		        if (response.TEMPERATURES.AMBIENT != null) {
@@ -635,6 +628,27 @@ function update_loki_temps() {
 		},
 		error: function() {
 			console.log('PCB Temperature reading error');
+		}
+	}).fail(function(xhr, status) {
+		console.log('fail');
+	});
+
+	// LOKI System Temperature
+	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/LOKI_PERFORMANCE/TEMPERATURES',
+		async: false,
+		dataType: 'json',
+		timeout: 60,
+		success: function(response) {
+			// Zynq PS Temperature
+		        if (response.TEMPERATURES.PS != null) {
+				var temp_zynqps = response.TEMPERATURES.PS.toFixed(2);
+				$('#temp-zynqps').html(temp_zynqps);
+			} else {
+				$('#temp-ambient').html('No Con');
+            }
+		},
+		error: function() {
+			console.log('LOKI Temperature reading error');
 		}
 	}).fail(function(xhr, status) {
 		console.log('fail');

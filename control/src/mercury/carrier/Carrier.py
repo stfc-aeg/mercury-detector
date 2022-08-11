@@ -24,6 +24,8 @@ import time
 import sys
 import os
 import copy
+import psutil
+import datetime
 from enum import Enum as _Enum, auto as _auto
 
 PLOTTING_SUPPORTED=False
@@ -262,6 +264,27 @@ class Carrier():
                         None, {"description":rail_chipname+" supply current", "units":"A"})
 
             tree[rail_treename] = tmp_railtree
+
+        return tree
+
+    def _gen_loki_performance_tree(self):
+        tree = {}
+
+        tree['LOAD'] = (psutil.getloadavg, None , {"description":"Load Average, last 1 minute, 5 minutes, and 15 minutes"})
+
+        tree['MEM'] = {
+                'FREE': (lambda: psutil.virtual_memory().free, None, {"description":"Free memory in bytes"}),
+                'AVAILABLE': (lambda: psutil.virtual_memory().available, None, {"description":"Available memory in bytes"}),
+                'TOTAL': (lambda: psutil.virtual_memory().total, None, {"description":"Total memory in bytes"})
+                }
+
+        tree['UPTIME'] = (lambda: str(datetime.timedelta(seconds=int(time.time() - psutil.boot_time()))), None, {})
+
+        tree['TEMPERATURES'] = {
+                    "PS":(lambda: self.get_zynq_ams_temp('0_ps'), None, {"description":"Zynq system PS Temperature", "units":"C"}),
+                    "REMOTE":(lambda: self.get_zynq_ams_temp('1_remote'), None, {"description":"Zynq system Remote Temperature", "units":"C"}),
+                    "PL":(lambda: self.get_zynq_ams_temp('2_pl'), None, {"description":"Zynq system PL Temperature", "units":"C"}),
+                }
 
         return tree
 
@@ -1009,6 +1032,7 @@ class Carrier():
         self.sync_firefly_readings()
         firefly_tree_1 = self._gen_FireFly_Tree(1) if self._firefly_1 is not None else {}
         firefly_tree_2 = self._gen_FireFly_Tree(2) if self._firefly_2 is not None else {}
+        loki_performance_tree = self._gen_loki_performance_tree()
 
         logging.info(rail_monitor_tree)
 
@@ -1018,11 +1042,6 @@ class Carrier():
             "FIREFLY1": firefly_tree_1,
             "FIREFLY2": firefly_tree_2,
             "TEMPERATURES":{
-                "ZYNQ": {
-                    "PS":(lambda: self.get_zynq_ams_temp('0_ps'), None, {"description":"Zynq system PS Temperature", "units":"C"}),
-                    "REMOTE":(lambda: self.get_zynq_ams_temp('1_remote'), None, {"description":"Zynq system Remote Temperature", "units":"C"}),
-                    "PL":(lambda: self.get_zynq_ams_temp('2_pl'), None, {"description":"Zynq system PL Temperature", "units":"C"}),
-                },
                 "AMBIENT":(self.get_ambient_temperature, None, {"description":"Board ambient temperature from BME280", "units":"C"}),
                 "PT100":(self.get_cached_pt100_temperature, None, {"description":"PT100 temperature", "units":"C"}),
                 "ASIC":(self.get_cached_asic_temperature, None, {"description":"ASIC internal diode temperature", "units":"C"}),
@@ -1057,7 +1076,8 @@ class Carrier():
                 "CKSER_STEP":(None, lambda dir: self.step_clk(1, dir), {"description": "Step frequency of SER clock up or down"}),
                 "CK200_STEP":(None, lambda dir: self.step_clk(2, dir), {"description": "Step frequency of 200 clock up or down"}),
                 "CKDBG_STEP":(None, lambda dir: self.step_clk(3, dir), {"description": "Step frequency of the debug header clock up or down"}),
-            }
+            },
+            "LOKI_PERFORMANCE": loki_performance_tree
         })
 
         self._PARAMTREE_FIRSTINIT = False
