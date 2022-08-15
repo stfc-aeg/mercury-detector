@@ -1,6 +1,7 @@
 api_version = '0.1';
 // adapter_name = 'loki';
 adapter_name = 'carrier';
+ajax_timeout_ms = 1000;
 
 $( document ).ready(function() {
 
@@ -42,7 +43,7 @@ function update_api_version() {
     $.ajax({url:'/api/',
         async: true,
         dataType: 'json',
-        timeout: 500,
+        timeout: ajax_timeout_ms,
         success: function(response, textStatus, requestObj) {
             $('#api-version').html(response.api);
             api_version = response.api;
@@ -54,7 +55,7 @@ function update_api_adapters() {
     $.ajax({url:'/api/' + api_version + '/adapters/',
         async: true,
         dataType: 'json',
-        timeout: 500,
+        timeout: ajax_timeout_ms,
         success: function(response, textStatus, requestObj) {
             adapter_list = response.adapters.join(", ");
             $('#api-adapters').html(adapter_list);
@@ -460,7 +461,7 @@ function update_loki_ff_static_data() {
         $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/VENDORID',
             async: true,
             dataType: 'json',
-            timeout: 500,
+            timeout: ajax_timeout_ms,
             success: function(response, textStatus, requestObj) {
                 // Recover the firefly number from the request context, rather than the loop
                 // (so that this can be called asynchronously).
@@ -489,7 +490,7 @@ function update_loki_ff_static_data() {
         $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/PARTNUMBER',
             async: true,
             dataType: 'json',
-            timeout: 500,
+            timeout: ajax_timeout_ms,
             success: function(response, textStatus, requestObj) {
                 // Recover the firefly number from the request context, rather than the loop
                 // (so that this can be called asynchronously).
@@ -520,8 +521,8 @@ function update_loki_ff_data() {
 
     // If there is no firefly to control, indicate this and disable the
     // button. Otherwise enable the global enable button
-    console.log('Any FireFly present: ' + any_firefly_present);
-    console.log('Any FireFly channel down: ' + any_firefly_channel_down);
+    //console.log('Any FireFly present: ' + any_firefly_present);
+    //console.log('Any FireFly channel down: ' + any_firefly_channel_down);
     if (any_firefly_present) {
         // If any of the channels is down while at least one firefly
         // is present, indicate this to propmpt the user to enable.
@@ -550,7 +551,7 @@ function update_loki_ff_data() {
         $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/CHANNELS',
             async: true,
             dataType: 'json',
-            timeout: 500,
+            timeout: ajax_timeout_ms,
             success: function(response, textStatus, requestObj) {
                 // Recover the firefly number from the request context, rather than the loop
                 // (so that this can be called asynchronously).
@@ -614,7 +615,7 @@ function update_loki_temps() {
         $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE',
             async: true,
             dataType: 'json',
-            timeout: 500,
+            timeout: ajax_timeout_ms,
             success: function(response, textStatus, requestObj) {
                 // Recover the firefly number from the request context, rather than the loop
                 // (so that this can be called asynchronously).
@@ -645,7 +646,7 @@ function update_loki_temps() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/TEMPERATURES',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             //console.log(response.TEMPERATURES);
 
@@ -721,7 +722,7 @@ function update_loki_temps() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/LOKI_PERFORMANCE/TEMPERATURES',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
 			// Zynq PS Temperature
 		        if (response.TEMPERATURES.PS != null) {
@@ -793,7 +794,7 @@ function update_loki_performance() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/LOKI_PERFORMANCE',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
 
             // Memory
@@ -807,7 +808,7 @@ function update_loki_performance() {
             if (response.LOKI_PERFORMANCE.MEM != null) {
 				var freemem = response.LOKI_PERFORMANCE.MEM.FREE.toFixed(2);
                 var freemem_perc = (freemem / total_mem) * 100;
-                console.log('free memory percentage: ' + freemem_perc);
+                //console.log('free memory percentage: ' + freemem_perc);
                 document.getElementById("loki-mem-free").style.width=freemem_perc + "%";
                 document.getElementById("loki-mem-free").innerHTML=parseInt(freemem / (1024*1024)) + "MB free";
 			} else {
@@ -817,7 +818,7 @@ function update_loki_performance() {
             if (response.LOKI_PERFORMANCE.MEM != null) {
 				var availmem = response.LOKI_PERFORMANCE.MEM.AVAILABLE.toFixed(2);
                 var availmem_perc = (availmem / total_mem) * 100;
-                console.log('free memory percentage: ' + availmem_perc);
+                //console.log('available memory percentage: ' + availmem_perc);
                 document.getElementById("loki-mem-avail").style.width=availmem_perc + "%";
                 document.getElementById("loki-mem-avail").innerHTML=parseInt(availmem / (1024*1024)) + "MB available";
 			} else {
@@ -829,7 +830,7 @@ function update_loki_performance() {
             if (response.LOKI_PERFORMANCE.LOAD != null) {
                 loki_load_data = response.LOKI_PERFORMANCE.LOAD;
                 chart_load.data.datasets[0].data = loki_load_data;
-                console.log(loki_load_data);
+                //console.log(loki_load_data);
                 chart_load.update();
             }
 		},
@@ -865,7 +866,7 @@ function update_loki_power_monitor() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/PSU',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             try {psu_analogue_pwr = response.PSU.ANALOGUE.POWER.toFixed(5);} catch (TypeError) {}
 			try {psu_dig_pwr = response.PSU.DIG.POWER.toFixed(5);} catch (TypeError) {}
@@ -925,7 +926,7 @@ function update_loki_vcal() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VCAL',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
         vcal_voltage = response.VCAL;
 
@@ -939,9 +940,9 @@ function update_loki_vcal() {
         }
     }).fail(function(xhr, status) {
         console.log('failed to get VCAL');
-        $('#vcal-voltage').html(("No con"));
+        $('#vcal-voltage').html(("No Con"));
         $('#vcal-voltage').removeClass();
-        $('#vcal-voltage').addClass("badge bg-danger");
+        $('#vcal-voltage').addClass("badge bg-warning");
     });
 }
 
@@ -949,7 +950,7 @@ function update_loki_asic_nrst() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_RST',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
         asic_rst_state = response.ASIC_RST;
 
@@ -978,9 +979,9 @@ function update_loki_asic_nrst() {
         }
     }).fail(function(xhr, status) {
         console.log('failed to get ASIC_RST');
-        $('#asic-rst-state').html(("No con"));
+        $('#asic-rst-state').html(("No Con"));
         $('#asic-rst-state').removeClass();
-        $('#asic-rst-state').addClass("badge bg-danger");
+        $('#asic-rst-state').addClass("badge bg-warning");
     });
 }
 
@@ -988,7 +989,7 @@ function update_loki_vreg_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_CYCLE',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
         vreg_en_state = response.VREG_CYCLE;
 
@@ -1014,9 +1015,9 @@ function update_loki_vreg_en() {
             console.log('Error retrieving vreg_en state');
         }
     }).fail(function(xhr, status) {
-        $('#vreg-en-state').html(("No con"));
+        $('#vreg-en-state').html(("No Con"));
         $('#vreg-en-state').removeClass();
-        $('#vreg-en-state').addClass("badge bg-danger");
+        $('#vreg-en-state').addClass("badge bg-warning");
         console.log('failed to get VREG_EN');
     });
 }
@@ -1025,25 +1026,32 @@ function update_loki_asic_preamp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FEEDBACK_CAPACITANCE',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             asic_feedback_capacitance_state = response.ASIC_FEEDBACK_CAPACITANCE;
 
-        // Update the badge
-        $('#asic-feedback-capacitance-state').html((asic_feedback_capacitance_state + " fF"));
-        $('#asic-feedback-capacitance-state').removeClass();
-        $('#asic-feedback-capacitance-state').addClass("badge bg-success");
+            asic_feedback_allowed_values = ["0", "7", "14", "21"];
+            if (asic_feedback_allowed_values.includes(asic_feedback_capacitance_state)) {
+                // Update the badge
+                $('#asic-feedback-capacitance-state').html((asic_feedback_capacitance_state + " fF"));
+                $('#asic-feedback-capacitance-state').removeClass();
+                $('#asic-feedback-capacitance-state').addClass("badge bg-success");
 
-        // Update the selection box
-        //TODO
+                // Update the selection box
+                //TODO
+            } else {
+                $('#asic-feedback-capacitance-state').html(("No Con"));
+                $('#asic-feedback-capacitance-state').removeClass();
+                $('#asic-feedback-capacitance-state').addClass("badge bg-warning");
+            }
         },
         error: function() {
             console.log('Error retrieving vreg_en state');
         }
     }).fail(function(xhr, status) {
-        $('#asic-feedback-capacitance-state').html(("No con"));
+        $('#asic-feedback-capacitance-state').html(("No Con"));
         $('#asic-feedback-capacitance-state').removeClass();
-        $('#asic-feedback-capacitance-state').addClass("badge bg-danger");
+        $('#asic-feedback-capacitance-state').addClass("badge bg-warning");
         console.log('failed to get VREG_EN');
     });
 }
@@ -1052,7 +1060,7 @@ function update_loki_asic_integration_time() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_INTEGRATION_TIME',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             integration_time = response.ASIC_INTEGRATION_TIME;
 
@@ -1065,9 +1073,9 @@ function update_loki_asic_integration_time() {
             console.log('Error retrieving vreg_en state');
         }
     }).fail(function(xhr, status) {
-        $('#asic-integration-time-state').html(("No con"));
+        $('#asic-integration-time-state').html(("No Con"));
         $('#asic-integration-time-state').removeClass();
-        $('#asic-integration-time-state').addClass("badge bg-danger");
+        $('#asic-integration-time-state').addClass("badge bg-warning");
         console.log('failed to get integration time');
     });
 }
@@ -1124,7 +1132,7 @@ function update_loki_asic_segment_readout() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SEGMENT_CAPTURE',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             if (response.ASIC_SEGMENT_CAPTURE == 1) {
                 // Reload only if the currently valid image is new
@@ -1162,7 +1170,7 @@ function update_loki_connection() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_EN',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
 			time_last_connected = new Date()
 		$('#zynq-connection-state').html("Connected");
@@ -1176,7 +1184,7 @@ function update_loki_connection() {
 	    seconds_down = Math.round(((timenow.getTime() - time_last_connected.getTime())/1000))
         $('#zynq-connection-state').html("No Connection for " + seconds_down + "s");
         $('#zynq-connection-state').removeClass();
-        $('#zynq-connection-state').addClass("badge bg-danger");
+        $('#zynq-connection-state').addClass("badge bg-warning");
         console.log('failed to get connection');
     });
 }
@@ -1185,7 +1193,7 @@ function update_loki_asic_frame_length() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FRAME_LENGTH',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             frame_length = response.ASIC_FRAME_LENGTH;
 
@@ -1198,9 +1206,9 @@ function update_loki_asic_frame_length() {
             console.log('Error retrieving vreg_en state');
         }
     }).fail(function(xhr, status) {
-        $('#asic-frame-length-state').html(("No con"));
+        $('#asic-frame-length-state').html(("No Con"));
         $('#asic-frame-length-state').removeClass();
-        $('#asic-frame-length-state').addClass("badge bg-danger");
+        $('#asic-frame-length-state').addClass("badge bg-warning");
         console.log('failed to get frame length');
     });
 }
@@ -1209,7 +1217,7 @@ function update_loki_asic_sync() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             asic_sync_state = response.SYNC;
 
@@ -1232,7 +1240,7 @@ function update_loki_asic_sync() {
         error: function() {
             $('#asic-sync-state').html("No Con");
             $('#asic-sync-state').removeClass();
-            $('#asic-sync-state').addClass("badge bg-danger");
+            $('#asic-sync-state').addClass("badge bg-warning");
             console.log('Error retrieving SYNC reset state');
         }
     }).fail(function(xhr, status) {
@@ -1246,7 +1254,7 @@ function update_loki_asic_sync_aux(){
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC_SEL_AUX',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             asic_sync_sel_aux = response.SYNC_SEL_AUX;
 
@@ -1269,7 +1277,7 @@ function update_loki_asic_serialiser_mode() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SER_MODE',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             asic_serialiser_mode = response.ASIC_SER_MODE;
             //console.log('Got serialiser mode ' + asic_serialiser_mode);
@@ -1289,14 +1297,14 @@ function update_loki_asic_serialiser_mode() {
                 default:
                     //console.log('Serialiser mode not recognised: ' + asic_serialiser_mode);
                     $('#asic-ser-mode-state').html("Unknown");
-                    $('#asic-ser-mode-state').addClass("badge bg-danger");
+                    $('#asic-ser-mode-state').addClass("badge bg-warning");
                     break
             }
         },
         error: function() {
             $('#asic-ser-mode-state').html("No Con");
             $('#asic-ser-mode-state').removeClass();
-            $('#asic-ser-mode-state').addClass("badge bg-danger");
+            $('#asic-ser-mode-state').addClass("badge bg-warning");
             console.log('Error retrieving serialiser mode state');
         }
     }).fail(function(xhr, status) {
@@ -1318,7 +1326,7 @@ function update_loki_critical_temp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/CRITICAL_TEMP',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             critical_temp_state = response.CRITICAL_TEMP;
             //TODO send popup, add UI elements etc
@@ -1437,11 +1445,11 @@ function update_loki_asic_cal_pattern_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN/ENABLE',
 		async: true,
 		dataType: 'json',
-		timeout: 500,
+		timeout: ajax_timeout_ms,
 		success: function(response) {
             cal_pattern_en = response.ENABLE;
 
-            console.log('Got calibration pattern enable as ' + cal_pattern_en);
+            //console.log('Got calibration pattern enable as ' + cal_pattern_en);
             //TODO somehow set the radio state
             $("[name='cali-pattern-en']").bootstrapSwitch();
             $("[name='cali-pattern-en']").bootstrapSwitch('onText', 'Enabled');
