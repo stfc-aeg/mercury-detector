@@ -739,9 +739,9 @@ function create_load_chart() {
 
 function update_loki_performance() {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/LOKI_PERFORMANCE',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 60,
+		timeout: 500,
 		success: function(response) {
 
             // Memory
@@ -876,9 +876,9 @@ function update_loki_power_monitor() {
 
 function update_loki_vcal() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VCAL',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
         vcal_voltage = response.VCAL;
 
@@ -900,9 +900,9 @@ function update_loki_vcal() {
 
 function update_loki_asic_nrst() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_RST',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
         asic_rst_state = response.ASIC_RST;
 
@@ -939,9 +939,9 @@ function update_loki_asic_nrst() {
 
 function update_loki_vreg_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_CYCLE',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
         vreg_en_state = response.VREG_CYCLE;
 
@@ -976,9 +976,9 @@ function update_loki_vreg_en() {
 
 function update_loki_asic_preamp() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FEEDBACK_CAPACITANCE',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             asic_feedback_capacitance_state = response.ASIC_FEEDBACK_CAPACITANCE;
 
@@ -1003,9 +1003,9 @@ function update_loki_asic_preamp() {
 
 function update_loki_asic_integration_time() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_INTEGRATION_TIME',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             integration_time = response.ASIC_INTEGRATION_TIME;
 
@@ -1075,9 +1075,9 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
 function update_loki_asic_segment_readout() {
     // Check if there is a segment image ready to be displayed
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SEGMENT_CAPTURE',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             if (response.ASIC_SEGMENT_CAPTURE == 1) {
                 // Reload only if the currently valid image is new
@@ -1113,9 +1113,9 @@ function update_loki_connection() {
 	// Exists simply to check if the Zynq is connected and report time since last connection
     // Uses VREG_EN because this will return quickly (simply getting the full tree takes some time)
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/VREG_EN',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
 			time_last_connected = new Date()
 		$('#zynq-connection-state').html("Connected");
@@ -1136,9 +1136,9 @@ function update_loki_connection() {
 
 function update_loki_asic_frame_length() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_FRAME_LENGTH',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             frame_length = response.ASIC_FRAME_LENGTH;
 
@@ -1160,9 +1160,9 @@ function update_loki_asic_frame_length() {
 
 function update_loki_asic_sync() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             asic_sync_state = response.SYNC;
 
@@ -1197,9 +1197,9 @@ var asic_sync_sel_aux = NaN;
 
 function update_loki_asic_sync_aux(){
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/SYNC_SEL_AUX',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             asic_sync_sel_aux = response.SYNC_SEL_AUX;
 
@@ -1220,9 +1220,9 @@ function update_loki_asic_sync_aux(){
 
 function update_loki_asic_serialiser_mode() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_SER_MODE',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             asic_serialiser_mode = response.ASIC_SER_MODE;
             //console.log('Got serialiser mode ' + asic_serialiser_mode);
@@ -1269,9 +1269,9 @@ $('.toast').on('shown.bs.toast', function() {
 function update_loki_critical_temp() {
 	// Check to see if the temperature is currently critical, which shuts down regulators.
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/CRITICAL_TEMP',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             critical_temp_state = response.CRITICAL_TEMP;
             //TODO send popup, add UI elements etc
