@@ -39,16 +39,26 @@ function init() {
 }
 
 function update_api_version() {
-    $.getJSON('/api', function(response) {
-        $('#api-version').html(response.api);
-        api_version = response.api;
+    $.ajax({url:'/api/',
+        async: true,
+        dataType: 'json',
+        timeout: 500,
+        success: function(response, textStatus, requestObj) {
+            $('#api-version').html(response.api);
+            api_version = response.api;
+        }
     });
 }
 
 function update_api_adapters() {
-    $.getJSON('/api/' + api_version + '/adapters/', function(response) {
-        adapter_list = response.adapters.join(", ");
-        $('#api-adapters').html(adapter_list);
+    $.ajax({url:'/api/' + api_version + '/adapters/',
+        async: true,
+        dataType: 'json',
+        timeout: 500,
+        success: function(response, textStatus, requestObj) {
+            adapter_list = response.adapters.join(", ");
+            $('#api-adapters').html(adapter_list);
+        }
     });
 }
 
@@ -447,34 +457,60 @@ function update_loki_ff_static_data() {
         var firefly_product = "";
 
         // Vendor ID
-        $.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/VENDORID', function(response) {
-            any_firefly_present = true;
-            firefly_vendorid = response.VENDORID;
-            //console.log("Got FireFly VendorID: "+firefly_vendorid);
-            $('#firefly-'+ff_id+'-venid').html(firefly_vendorid);
-            $('#firefly-'+ff_id+'-venid').removeClass();
-            $('#firefly-'+ff_id+'-venid').addClass("badge bg-info");
-        })
-        .error(function(data) {
-            // If there is no response to from the FireFly query, indicate this
-            $('#firefly-'+ff_id+'-venid').html('NO RESPONSE');
-            $('#firefly-'+ff_id+'-venid').removeClass();
-            $('#firefly-'+ff_id+'-venid').addClass("badge bg-warning");
+        $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/VENDORID',
+            async: true,
+            dataType: 'json',
+            timeout: 500,
+            success: function(response, textStatus, requestObj) {
+                // Recover the firefly number from the request context, rather than the loop
+                // (so that this can be called asynchronously).
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+
+                any_firefly_present = true;
+                firefly_vendorid = response.VENDORID;
+                //console.log("Got FireFly VendorID: "+firefly_vendorid);
+                $('#firefly-'+ff_id_recovered+'-venid').html(firefly_vendorid);
+                $('#firefly-'+ff_id_recovered+'-venid').removeClass();
+                $('#firefly-'+ff_id_recovered+'-venid').addClass("badge bg-info");
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+
+                // If there is no response to from the FireFly query, indicate this
+                $('#firefly-'+ff_id_recovered+'-venid').html('NO RESPONSE');
+                $('#firefly-'+ff_id_recovered+'-venid').removeClass();
+                $('#firefly-'+ff_id_recovered+'-venid').addClass("badge bg-warning");
+            }
         });
 
         // Part Number
-        $.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/PARTNUMBER', function(response) {
-            firefly_product = response.PARTNUMBER;
-            console.log(document.getElementById('firefly-'+ff_id+'-prodid'));
-            $('#firefly-'+ff_id+'-prodid').html(firefly_product);
-            $('#firefly-'+ff_id+'-prodid').removeClass();
-            $('#firefly-'+ff_id+'-prodid').addClass("badge bg-info");
-        })
-        .error(function(data) {
-            // If there is no response to from the FireFly query, indicate this
-            $('#firefly-'+ff_id+'-prodid').html('NO RESPONSE');
-            $('#firefly-'+ff_id+'-prodid').removeClass();
-            $('#firefly-'+ff_id+'-prodid').addClass("badge bg-warning");
+        $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/PARTNUMBER',
+            async: true,
+            dataType: 'json',
+            timeout: 500,
+            success: function(response, textStatus, requestObj) {
+                // Recover the firefly number from the request context, rather than the loop
+                // (so that this can be called asynchronously).
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+
+                firefly_product = response.PARTNUMBER;
+                console.log(document.getElementById('firefly-'+ff_id+'-prodid'));
+                $('#firefly-'+ff_id_recovered+'-prodid').html(firefly_product);
+                $('#firefly-'+ff_id_recovered+'-prodid').removeClass();
+                $('#firefly-'+ff_id_recovered+'-prodid').addClass("badge bg-info");
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+
+                // If there is no response to from the FireFly query, indicate this
+                $('#firefly-'+ff_id_recovered+'-prodid').html('NO RESPONSE');
+                $('#firefly-'+ff_id_recovered+'-prodid').removeClass();
+                $('#firefly-'+ff_id_recovered+'-prodid').addClass("badge bg-warning");
+            }
         });
     }
 }
@@ -511,41 +547,50 @@ function update_loki_ff_data() {
 
 	// Channel States
     for (let ff_id = 1; ff_id <=2; ff_id++) {
-        $.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/CHANNELS', function(response) {
+        $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/CHANNELS',
+            async: true,
+            dataType: 'json',
+            timeout: 500,
+            success: function(response, textStatus, requestObj) {
+                // Recover the firefly number from the request context, rather than the loop
+                // (so that this can be called asynchronously).
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
 
-            // FireFly Disabled Channels
-            var firefly_ch_dis = response.CHANNELS;
-            var firefly_ch_dis_ch0 = response.CHANNELS.CH0.Disabled;
-            var channel_states = "";
+                // FireFly Disabled Channels
+                var firefly_ch_dis = response.CHANNELS;
+                var firefly_ch_dis_ch0 = response.CHANNELS.CH0.Disabled;
+                var channel_states = "";
 
-            any_firefly_channel_down[ff_id-1] = false;
-            for (const [key, value] of Object.entries(firefly_ch_dis)) {
-                if (value.Disabled) any_firefly_channel_down[ff_id-1] = true;
-                //console.log(value);
-                channel_states = channel_states.concat(" " + key + ": " + value.Disabled);
+                any_firefly_channel_down[ff_id_recovered-1] = false;
+                for (const [key, value] of Object.entries(firefly_ch_dis)) {
+                    if (value.Disabled) any_firefly_channel_down[ff_id_recovered-1] = true;
+                    //console.log(value);
+                    channel_states = channel_states.concat(" " + key + ": " + value.Disabled);
 
-                $('#firefly-'+ff_id+'-'+key+'-dis').html(value.Disabled ? "Disabled" : "Enabled");
+                    $('#firefly-'+ff_id_recovered+'-'+key+'-dis').html(value.Disabled ? "Disabled" : "Enabled");
 
-                // Rewrite and enable the channel switches
-                button_target_disabled_state = !$("[name='firefly-"+ff_id+"-"+key+"-switch']").bootstrapSwitch('state');
-                if (button_target_disabled_state != value.Disabled) {
-                    //console.log("CH " +key+ " Value not yet updated");
-                    $("[name='firefly-"+ff_id+"-"+key+"-switch']").bootstrapSwitch('state', !(value.Disabled), true);
-                } else {
-                    //console.log("CH " +key+ " Value now at target");
-                    $("[name='firefly-"+ff_id+"-"+key+"-switch']").bootstrapSwitch('state', !(value.Disabled));
-                    $("[name='firefly-"+ff_id+"-"+key+"-switch']").bootstrapSwitch('disabled', false);
+                    // Rewrite and enable the channel switches
+                    button_target_disabled_state = !$("[name='firefly-"+ff_id_recovered+"-"+key+"-switch']").bootstrapSwitch('state');
+                    if (button_target_disabled_state != value.Disabled) {
+                        //console.log("CH " +key+ " Value not yet updated");
+                        $("[name='firefly-"+ff_id_recovered+"-"+key+"-switch']").bootstrapSwitch('state', !(value.Disabled), true);
+                    } else {
+                        //console.log("CH " +key+ " Value now at target");
+                        $("[name='firefly-"+ff_id_recovered+"-"+key+"-switch']").bootstrapSwitch('state', !(value.Disabled));
+                        $("[name='firefly-"+ff_id_recovered+"-"+key+"-switch']").bootstrapSwitch('disabled', false);
+                    }
                 }
-            }
-            $('#firefly-'+ff_id+'-ch-dis').html(channel_states);
-
-
-        })
-        .error(function(data) {
-            // If there is no response from the firefly query, disable the channel switches
-            //console.log("No response to FireFly "+ff_id+" query");
-            for (channel_num = 0; channel_num < 12; channel_num++) {
-                $("[name='firefly-"+ff_id+"-CH"+channel_num+"-switch']").bootstrapSwitch('disabled', true);
+                $('#firefly-'+ff_id_recovered+'-ch-dis').html(channel_states);
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                // If there is no response from the firefly query, disable the channel switches
+                //console.log("No response to FireFly "+ff_id+" query");
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+                for (channel_num = 0; channel_num < 12; channel_num++) {
+                    $("[name='firefly-"+ff_id_recovered+"-CH"+channel_num+"-switch']").bootstrapSwitch('disabled', true);
+                }
             }
         });
     }
@@ -818,9 +863,9 @@ function update_loki_power_monitor() {
 	var psu_dig_ctrl_cur = NaN;
 
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/PSU',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             try {psu_analogue_pwr = response.PSU.ANALOGUE.POWER.toFixed(5);} catch (TypeError) {}
 			try {psu_dig_pwr = response.PSU.DIG.POWER.toFixed(5);} catch (TypeError) {}
@@ -842,42 +887,37 @@ function update_loki_power_monitor() {
 			$('#psu-analogue-cur').html(psu_analogue_cur);
 			$('#psu-dig-cur').html(psu_dig_cur);
 			$('#psu-dig-ctrl-cur').html(psu_dig_ctrl_cur);
-		},
-		error: function() {
-			console.log('Error retrieving power supply data');
-		}
+
+            // Update chart data
+            power_tracking_data_dig_V.push(psu_dig_vol);
+            if (power_tracking_data_dig_V.length > power_tracking_valuelimit) power_tracking_data_dig_V.shift();
+            power_tracking_data_digctrl_V.push(psu_dig_ctrl_vol);
+            if (power_tracking_data_digctrl_V.length > power_tracking_valuelimit) power_tracking_data_digctrl_V.shift();
+            power_tracking_data_analogue_V.push(psu_analogue_vol);
+            if (power_tracking_data_analogue_V.length > power_tracking_valuelimit) power_tracking_data_analogue_V.shift();
+
+            power_tracking_data_dig_I.push(psu_dig_cur);
+            if (power_tracking_data_dig_I.length > power_tracking_valuelimit) power_tracking_data_dig_I.shift();
+            power_tracking_data_digctrl_I.push(psu_dig_ctrl_cur);
+            if (power_tracking_data_digctrl_I.length > power_tracking_valuelimit) power_tracking_data_digctrl_I.shift();
+            power_tracking_data_analogue_I.push(psu_analogue_cur);
+            if (power_tracking_data_analogue_I.length > power_tracking_valuelimit) power_tracking_data_analogue_I.shift();
+
+            dt = new Date();
+            power_tracking_time.push(
+            dt.toISOString()
+            );
+            if (power_tracking_time.length > power_tracking_valuelimit) power_tracking_time.shift();
+
+            chart_vol.update();
+            chart_cur.update();
+        },
+        error: function() {
+            console.log('Error retrieving power supply data');
+        }
 	}).fail(function(xhr, status) {
 		console.log('fail');
 	});
-
-        // Update chart data
-        power_tracking_data_dig_V.push(psu_dig_vol);
-        if (power_tracking_data_dig_V.length > power_tracking_valuelimit) power_tracking_data_dig_V.shift();
-        power_tracking_data_digctrl_V.push(psu_dig_ctrl_vol);
-        if (power_tracking_data_digctrl_V.length > power_tracking_valuelimit) power_tracking_data_digctrl_V.shift();
-        power_tracking_data_analogue_V.push(psu_analogue_vol);
-        if (power_tracking_data_analogue_V.length > power_tracking_valuelimit) power_tracking_data_analogue_V.shift();
-
-        power_tracking_data_dig_I.push(psu_dig_cur);
-        if (power_tracking_data_dig_I.length > power_tracking_valuelimit) power_tracking_data_dig_I.shift();
-        power_tracking_data_digctrl_I.push(psu_dig_ctrl_cur);
-        if (power_tracking_data_digctrl_I.length > power_tracking_valuelimit) power_tracking_data_digctrl_I.shift();
-        power_tracking_data_analogue_I.push(psu_analogue_cur);
-        if (power_tracking_data_analogue_I.length > power_tracking_valuelimit) power_tracking_data_analogue_I.shift();
-
-        dt = new Date();
-        /*power_tracking_time.push(
-            dt.getHours().toString() + ':' +
-            dt.getMinutes().toString() + ':' +
-            dt.getSeconds().toString()
-        );*/
-        power_tracking_time.push(
-	    dt.toISOString()
-        );
-        if (power_tracking_time.length > power_tracking_valuelimit) power_tracking_time.shift();
-
-        chart_vol.update();
-        chart_cur.update();
 
 }
 
@@ -1395,9 +1435,9 @@ function callback_CalPatternEn_Switch(event, state) {
 
 function update_loki_asic_cal_pattern_en() {
     $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/ASIC_CAL_PATTERN/ENABLE',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 20,
+		timeout: 500,
 		success: function(response) {
             cal_pattern_en = response.ENABLE;
 
