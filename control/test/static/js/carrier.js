@@ -34,6 +34,8 @@ function init() {
     init_power_tracking();
     init_environment_tracking();
     create_load_chart();
+
+    $('#power-cycle-spinner').hide()
 }
 
 function update_api_version() {
