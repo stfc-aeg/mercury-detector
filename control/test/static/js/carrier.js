@@ -566,34 +566,41 @@ function update_loki_temps() {
 
 	// FireFly Temperatures
     for (let ff_id = 1; ff_id <=2; ff_id++) {
-        //$.getJSON('/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE/', function(response) {
-	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE',
-		async: false,
-		dataType: 'json',
-		timeout: 60,
-		success: function(response) {
-		    if (response.TEMPERATURE != null) {
-			    var firefly_temp = response.TEMPERATURE.toFixed(2);
-			    //console.log("FireFly "+ff_id+" temperature: "+firefly_temp);
-			    $('#temp-firefly'+ff_id).html(firefly_temp);
-		    } else {
-			    $('#temp-firefly'+ff_id).html('No Con');
+        $.ajax({url:'/api/' + api_version + '/' + adapter_name + '/FIREFLY'+ff_id+'/TEMPERATURE',
+            async: true,
+            dataType: 'json',
+            timeout: 500,
+            success: function(response, textStatus, requestObj) {
+                // Recover the firefly number from the request context, rather than the loop
+                // (so that this can be called asynchronously).
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+
+                if (response.TEMPERATURE != null) {
+                    var firefly_temp = response.TEMPERATURE.toFixed(2);
+                    //console.log("FireFly "+ff_id_recovered+" temperature: "+firefly_temp);
+                    $('#temp-firefly'+ff_id_recovered).html(firefly_temp);
+                } else {
+                    $('#temp-firefly'+ff_id_recovered).html('No Con');
+                }
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+                $('#temp-firefly'+ff_id_recovered).html("N/A");
             }
-		},
-		error: function() {
-		    $('#temp-firefly'+ff_id).html("N/A");
-	    	}
-        }).fail(function(xhr, status) {
-	console.log('failed to get temperature for ff id ' + ff_id)
-	});
+            }).fail(function(xhr, status) {
+                ajax_url = $(this)[0].url;
+                ff_id_recovered = ajax_url.split("/").find(element => element.includes("FIREFLY")).substring(7);
+                console.log('failed to get temperature for ff id ' + ff_id_recovered)
+        });
     }
 
 	// Other System Temperatures
-	//$.getJSON('/api/' + api_version + '/' + adapter_name + '/TEMPERATURES', function(response) {
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/TEMPERATURES',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 60,
+		timeout: 500,
 		success: function(response) {
             //console.log(response.TEMPERATURES);
 
@@ -635,6 +642,28 @@ function update_loki_temps() {
                 //console.log('ASIC temperature was null');
 				$('#temp-asic').html('FAIL (last ' + latest_asic_temp + ')');
             }
+
+            // Update chart data
+            environment_tracking_data_case_temp.push(temp_ambient);
+            if (environment_tracking_data_case_temp.length > environment_tracking_valuelimit) environment_tracking_data_case_temp.shift();
+
+            environment_tracking_data_pt100_temp.push(temp_pt100);
+            if (environment_tracking_data_pt100_temp.length > environment_tracking_valuelimit) environment_tracking_data_pt100_temp.shift();
+
+            environment_tracking_data_asic_diode_temp.push(temp_asic);
+            if (environment_tracking_data_asic_diode_temp.length > environment_tracking_valuelimit) environment_tracking_data_asic_diode_temp.shift();
+
+            environment_tracking_data_case_humidity.push(hum_ambient);
+            if (environment_tracking_data_case_humidity.length > environment_tracking_valuelimit) environment_tracking_data_case_humidity.shift();
+
+            dt = new Date();
+            environment_tracking_time.push(
+            dt.toISOString()
+            );
+            if (environment_tracking_time.length > environment_tracking_valuelimit) environment_tracking_time.shift();
+
+            chart_temp.update();
+            chart_hum.update();
 		},
 		error: function() {
 			console.log('PCB Temperature reading error');
@@ -645,9 +674,9 @@ function update_loki_temps() {
 
 	// LOKI System Temperature
 	$.ajax({url:'/api/' + api_version + '/' + adapter_name + '/LOKI_PERFORMANCE/TEMPERATURES',
-		async: false,
+		async: true,
 		dataType: 'json',
-		timeout: 60,
+		timeout: 500,
 		success: function(response) {
 			// Zynq PS Temperature
 		        if (response.TEMPERATURES.PS != null) {
@@ -663,28 +692,6 @@ function update_loki_temps() {
 	}).fail(function(xhr, status) {
 		console.log('fail');
 	});
-
-    // Update chart data
-    environment_tracking_data_case_temp.push(temp_ambient);
-    if (environment_tracking_data_case_temp.length > environment_tracking_valuelimit) environment_tracking_data_case_temp.shift();
-
-    environment_tracking_data_pt100_temp.push(temp_pt100);
-    if (environment_tracking_data_pt100_temp.length > environment_tracking_valuelimit) environment_tracking_data_pt100_temp.shift();
-
-    environment_tracking_data_asic_diode_temp.push(temp_asic);
-    if (environment_tracking_data_asic_diode_temp.length > environment_tracking_valuelimit) environment_tracking_data_asic_diode_temp.shift();
-
-    environment_tracking_data_case_humidity.push(hum_ambient);
-    if (environment_tracking_data_case_humidity.length > environment_tracking_valuelimit) environment_tracking_data_case_humidity.shift();
-
-    dt = new Date();
-    environment_tracking_time.push(
-    dt.toISOString()
-    );
-    if (environment_tracking_time.length > environment_tracking_valuelimit) environment_tracking_time.shift();
-
-    chart_temp.update();
-    chart_hum.update();
 }
 
 var loki_load_data = [];
