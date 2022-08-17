@@ -12,8 +12,6 @@ $( document ).ready(function() {
 let carrier_endpoint;
 async function init() {
 
-    await update_api_version();
-
     // Generate the firefly channel switches
     document.getElementById('ff1_chtable').innerHTML = generateFireFlyChannelTable(1,
         12,     // 12 Channels
@@ -26,14 +24,19 @@ async function init() {
         false); // Do not include additional state column (indicated by switch)
     generateFireFlyChannelSwitches(2, 12);
 
+    console.log('Setting up monitoring loops');
     init_power_tracking();
     init_environment_tracking();
     create_load_chart();
 
     $('#power-cycle-spinner').hide()
 
-    // Loki additions
+    // Read the API version, available adapters and create endpoint
+    carrier_endpoint = await init_adapter_endpoint();
+
     update_loki_ff_static_data();
+
+    console.log('Starting polling loops');
     poll_loki();
     poll_loki_vregneeded();
     poll_loki_slow();
@@ -50,10 +53,13 @@ function on_vreg_disabled() {
     any_firefly_present = false;
 }
 
-let api_version = 0.0;
-async function update_api_version() {
+async function init_adapter_endpoint() {
     // Cannot use odin_control.js get because it prepends the API version and adapter
     // await so that on return, following requests can be made with the API version.
+    let api_version = null;
+    let carrier_endpoint;
+
+    // Get API version
     await fetch(
         'api',
         {
@@ -71,6 +77,8 @@ async function update_api_version() {
     .catch(error => {
         throw new Error(`Could not recover an API version: ${error.message}`);
     })
+
+    // List available adapters for the API version recovered
     .then((apiver) => {
         return fetch(
             `api/${api_version}/adapters`,
@@ -88,8 +96,10 @@ async function update_api_version() {
         return (adapter_list);
     })
     .catch(error => {
-        console.log(`Failed to get avalable adapters for API version ${api_version}: ${error}`);
+        throw new Error(`Failed to get avalable adapters for API version ${api_version} \n(${error})`);
     })
+
+    // Check the desired adapter exists, and create and endpoint
     .then((adapter_list) => {
         if (adapter_list.includes(adapter_name)) {
             // Generate the Adatper Endpoint for get/put requests
@@ -98,30 +108,10 @@ async function update_api_version() {
         }
     })
     .catch(error => {
-        console.log('Failed to create AdapterEndpoint');
+        throw new Error(`Failed to create AdapterEndpoint \n(${error})`);
     });
 
-    return 1;
-}
-
-function update_api_adapters() {
-    // Cannot use odin_control.js get because it prepends the API version and adapter
-    fetch(
-        `api/${api_version}/adapters`,
-        {
-            method: 'GET',
-            headers: {'Accept': 'application/json'}
-        }
-    )
-    .then((response) => response.json())
-    .then((response) => {
-        adapter_list = response.adapters.join(", ");
-        $('#api-adapters').html(adapter_list);
-        console.log(`Adapters available on API version ${api_version}: ${adapter_list}`);
-    })
-    .catch(error => {
-        console.log(`Failed to get avalable adapters for API version ${api_version}: ${error}`);
-    });
+    return carrier_endpoint;
 }
 
 function poll_loki_vregneeded() {
@@ -544,7 +534,7 @@ async function update_loki_ff_static_data() {
         await carrier_endpoint.get('FIREFLY'+ff_id+'/PARTNUMBER', timeout=ajax_timeout_ms)
         .then(response => {
             firefly_product = response.PARTNUMBER;
-            console.log(document.getElementById('firefly-'+ff_id+'-prodid'));
+            //console.log(document.getElementById('firefly-'+ff_id+'-prodid'));
             $('#firefly-'+ff_id+'-prodid').html(firefly_product);
             $('#firefly-'+ff_id+'-prodid').removeClass();
             $('#firefly-'+ff_id+'-prodid').addClass("badge bg-info");
@@ -572,7 +562,13 @@ async function update_loki_ff_data() {
 
             any_firefly_channel_down[ff_id-1] = false;
             for (const [key, value] of Object.entries(firefly_ch_dis)) {
-                if (value.Disabled) any_firefly_channel_down[ff_id-1] = true;
+
+                // If any channel reports being disabled, record for this firefly
+                if ([true, null].includes(value.Disabled)) any_firefly_channel_down[ff_id-1] = true;
+
+                // If any channel reports 'null', there is no connection, return error
+                if (value.Disabled == null) throw new Error('FireFly channel state read null (no connection)');
+
                 //console.log(value);
                 channel_states = channel_states.concat(" " + key + ": " + value.Disabled);
 
@@ -973,6 +969,7 @@ function update_loki_asic_nrst() {
     });
 }
 
+var on_vreg_first_en_complete = false;
 function update_loki_vreg_en() {
     carrier_endpoint.get('VREG_CYCLE', timeout=ajax_timeout_ms)
     .then(response => {
@@ -988,10 +985,21 @@ function update_loki_vreg_en() {
             // Enable buttons that do not make sense when there is no power
             $('#button-power-down-regulators').removeClass("disabled");
             $('#button-en-global').removeClass("disabled");
+
+            // Execute operations required once after regulators on
+            if (!on_vreg_first_en_complete) {
+                on_vreg_first_en();
+                on_vreg_first_en_complete = true;
+            }
+
         } else {
             // Disable buttons that do not make sense when there is no power
             $('#button-power-down-regulators').addClass("disabled");
             $('#button-en-global').addClass("disabled");
+
+            // Once the regulators are detected as on, will be triggered
+            on_vreg_first_en_complete = false;
+            on_vreg_disabled();
         }
 
     })
@@ -1027,7 +1035,7 @@ function update_loki_asic_preamp() {
         $('#asic-feedback-capacitance-state').html(("No Con"));
         $('#asic-feedback-capacitance-state').removeClass();
         $('#asic-feedback-capacitance-state').addClass("badge bg-warning");
-        console.log('Error retrieving vreg_en state: ' + error);
+        console.log('Error retrieving pre-amp capacitance state: ' + error);
     });
 }
 
@@ -1045,7 +1053,7 @@ function update_loki_asic_integration_time() {
         $('#asic-integration-time-state').html(("No Con"));
         $('#asic-integration-time-state').removeClass();
         $('#asic-integration-time-state').addClass("badge bg-warning");
-        console.log('Error retrieving vreg_en state: ' + error);
+        console.log('Error retrieving integration time state: ' + error);
     });
 }
 
@@ -1265,7 +1273,7 @@ function update_loki_critical_temp() {
 
 
 function change_ff_ch_dis(disabled, ff, ch) {
-    carrier_endpoint.put(disabled, '/FIREFLY' + ff + '/CHANNELS/CH' + ch + '/Disabled', timeout=ajax_timeout_ms)
+    carrier_endpoint.put(disabled, 'FIREFLY' + ff + '/CHANNELS/CH' + ch + '/Disabled', timeout=ajax_timeout_ms)
     .then((response) => {
         update_loki_ff_data();
         console.log("Firefly " + ff + " CH " + ch + " Disable Changed to " + (disabled ? "true" : "false"));
