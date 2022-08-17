@@ -1,4 +1,3 @@
-api_version = '0.1';
 // adapter_name = 'loki';
 adapter_name = 'carrier';
 ajax_timeout_ms = 1000;
@@ -8,21 +7,12 @@ $( document ).ready(function() {
     // Init UI
     init();
 
-    update_api_version();
-    update_api_adapters();
-
-    // Loki additions
-    update_loki_ff_static_data();
-    poll_loki();
-    poll_loki_vregneeded();
-    poll_loki_slow();
 });
 
 let carrier_endpoint;
-function init() {
+async function init() {
 
-    // Generate the Adatper Endpoint for get/put requests
-    carrier_endpoint = new AdapterEndpoint(adapter_name, api_version);
+    await update_api_version();
 
     // Generate the firefly channel switches
     document.getElementById('ff1_chtable').innerHTML = generateFireFlyChannelTable(1,
@@ -41,29 +31,96 @@ function init() {
     create_load_chart();
 
     $('#power-cycle-spinner').hide()
+
+    // Loki additions
+    update_loki_ff_static_data();
+    poll_loki();
+    poll_loki_vregneeded();
+    poll_loki_slow();
 }
 
-function update_api_version() {
-    $.ajax({url:'/api/',
-        async: true,
-        dataType: 'json',
-        timeout: ajax_timeout_ms,
-        success: function(response, textStatus, requestObj) {
-            $('#api-version').html(response.api);
-            api_version = response.api;
+function on_vreg_first_en() {
+    // Execute any single-shot requests that should be called when the regulators
+    // are detected as enabled
+    update_loki_ff_static_data();
+}
+
+function on_vreg_disabled() {
+    // Reset any variables that become invalid once the regulators have been disabled
+    any_firefly_present = false;
+}
+
+let api_version = 0.0;
+async function update_api_version() {
+    // Cannot use odin_control.js get because it prepends the API version and adapter
+    // await so that on return, following requests can be made with the API version.
+    await fetch(
+        'api',
+        {
+            method: 'GET',
+            headers: {'Accept': 'application/json'}
         }
+    )
+    .then((response) => response.json())
+    .then((response) => {
+        $('#api-version').html(response.api);
+        api_version = response.api;
+        console.log(`API version recovered as ${api_version}`);
+        return response.api;
+    })
+    .catch(error => {
+        throw new Error(`Could not recover an API version: ${error.message}`);
+    })
+    .then((apiver) => {
+        return fetch(
+            `api/${api_version}/adapters`,
+            {
+                method: 'GET',
+                headers: {'Accept': 'application/json'}
+            }
+        )
+    })
+    .then((response) => response.json())
+    .then((response) => {
+        adapter_list = response.adapters.join(", ");
+        $('#api-adapters').html(adapter_list);
+        console.log(`Adapters available on API version ${api_version}: ${adapter_list}`);
+        return (adapter_list);
+    })
+    .catch(error => {
+        console.log(`Failed to get avalable adapters for API version ${api_version}: ${error}`);
+    })
+    .then((adapter_list) => {
+        if (adapter_list.includes(adapter_name)) {
+            // Generate the Adatper Endpoint for get/put requests
+            carrier_endpoint = new AdapterEndpoint(adapter_name, api_version);
+            console.log(`AdapterEndpoint created for api ${api_version} on adapter ${adapter_name}`);
+        }
+    })
+    .catch(error => {
+        console.log('Failed to create AdapterEndpoint');
     });
+
+    return 1;
 }
 
 function update_api_adapters() {
-    $.ajax({url:'/api/' + api_version + '/adapters/',
-        async: true,
-        dataType: 'json',
-        timeout: ajax_timeout_ms,
-        success: function(response, textStatus, requestObj) {
-            adapter_list = response.adapters.join(", ");
-            $('#api-adapters').html(adapter_list);
+    // Cannot use odin_control.js get because it prepends the API version and adapter
+    fetch(
+        `api/${api_version}/adapters`,
+        {
+            method: 'GET',
+            headers: {'Accept': 'application/json'}
         }
+    )
+    .then((response) => response.json())
+    .then((response) => {
+        adapter_list = response.adapters.join(", ");
+        $('#api-adapters').html(adapter_list);
+        console.log(`Adapters available on API version ${api_version}: ${adapter_list}`);
+    })
+    .catch(error => {
+        console.log(`Failed to get avalable adapters for API version ${api_version}: ${error}`);
     });
 }
 
