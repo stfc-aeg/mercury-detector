@@ -13,16 +13,30 @@ class AdapterEndpoint
         return `api/${this.api_version}/${this.adapter}/${path}`;
     }
 
-    async get(path='') 
+    async get(path='', timeout=8000) 
     {
+        const abort_controller = new AbortController();
+        const abort_promise = setTimeout(() => abort_controller.abort(), timeout);
+
         const url = this.build_url(path);
         const response = await fetch(
             url,
             { 
                 method: 'GET',
-                headers: {'Accept': 'application/json'}
+                headers: {'Accept': 'application/json'},
+                signal: abort_controller.signal
             }
-        );
+        )
+        .catch(error => {
+            if (error.name == 'AbortError') {
+                throw new Error(`GET request to ${url} timed out after ${timeout}ms`);
+            }
+            else {
+                throw error;
+            }
+        });
+
+        clearTimeout(abort_promise);
 
         if (!response.ok) {
             var message;
@@ -40,8 +54,11 @@ class AdapterEndpoint
         return result;
     }
 
-    async put(data, path='')
+    async put(data, path='', timeout=8000)
     {
+        const abort_controller = new AbortController();
+        const abort_promise = setTimeout(() => abort_controller.abort(), timeout);
+
         const url = this.build_url(path);
         const response = await fetch(
             url,
@@ -51,9 +68,20 @@ class AdapterEndpoint
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify(data),
+                signal: abort_controller.signal
             }
-        );
+        )
+        .catch(error => {
+            if (error.name == 'AbortError') {
+                throw new Error(`PUT request to ${url} timed out after ${timeout}ms`);
+            }
+            else {
+                throw error;
+            }
+        });
+
+        clearTimeout(abort_promise);
 
         if (!response.ok) {
             var message;
