@@ -387,7 +387,6 @@ function update_execution_progress()
 {
     sequencer_endpoint.get('execution_progress')
     .then(result => {
-        console.log(result)
         var current = result.execution_progress.current;
         var total = result.execution_progress.total;
         if (total != -1)
