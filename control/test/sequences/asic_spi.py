@@ -31,6 +31,8 @@ provides = [
 'ASIC_register_dump',
 'printcmds',
 'timedel',
+'set_experiment_session_name',
+'get_experiment_session_name',
 ]
 
 REGISTER_WRITE_TRANSACTION = 0X00
@@ -475,12 +477,12 @@ def serialiser_global_change(register=0,data=0):
 def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 0.5, 1.0], test_name='', test_index=0, suppress_progress_update=False):
     mercury_carrier = get_context('carrier')
 
-    # Create a new destination directory for this batch of tests
-    export_root = "/opt/loki-detector/exports/Diamond_Aug22_day4/"
+    # Create a new destination directory for this batch of tests, using the current session
+    export_root = "/opt/loki-detector/exports/" + get_experiment_session_name() + "/"
     export_subdir = export_root + test_name
 
     # Create the test directory if it does not exist
-    Path(export_subdir).mkdir(parents=False, exist_ok=True)
+    Path(export_subdir).mkdir(parents=True, exist_ok=True)
 
     # Determine filename to store results in, based on test name and timestamp
     time_now = time.localtime()
@@ -576,3 +578,30 @@ def printcmds():
 
 def timedel():
     time.sleep(10)
+
+SESSION_NAME_FILE_LOCATION = '/opt/loki-detector/exports/SESSION'
+SESSION_NAME_READ_DUE = True                                        # If file not read yet
+SESSION_NAME = None
+def set_experiment_session_name(session_name='default'):
+    # Allow the user to store a non-volatile (assumed) session name
+    # that will define the folder all experiments will be saved to
+    # (within their own sub-folders). This is stored within the
+    # exports directory, which for an experimental setup will have
+    # been bound to a non-volatile filesystem.
+
+    with open(SESSION_NAME_FILE_LOCATION, 'w') as f:
+        f.write(session_name)
+        SESSION_NAME_READ_DUE = True
+        print("Saved new session name as {}".format(session_name))
+
+def get_experiment_session_name():
+    # Return the above stored session name, or a default value if one
+    # has not been set.
+
+    if SESSION_NAME_READ_DUE:
+        with open(SESSION_NAME_FILE_LOCATION, 'r') as f:
+            session_name = f.readline()
+            print("Recovered session name {} from file".format(session_name))
+            return session_name
+    else:
+        return SESSION_NAME
