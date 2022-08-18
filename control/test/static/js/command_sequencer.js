@@ -3,7 +3,12 @@ let last_message_timestamp = '';
 let sequence_modules = {};
 let is_executing;
 let sequencer_endpoint;
-let detect_changes_switch;
+let detect_changes_switch  = document.getElementById('detect-module-changes-toggle');
+let execution_spinner = document.getElementById("execution-status-spinner");
+let execution_text = document.getElementById("execution-status-text");
+let execution_progress = document.getElementById("execution-progress");
+let execution_progress_bar = document.getElementById("execution-progress-bar");
+let execution_status_progress = document.getElementById("execution-status-progress");
 
 const ALERT_ID = {
     'sequencer_error': '#command-sequencer-error-alert',
@@ -12,7 +17,8 @@ const ALERT_ID = {
 
 const BUTTON_ID = {
     'all_execute': '.execute-btn',
-    'reload': '#reload-btn'
+    'reload': '#reload-btn',
+    'abort': '#abort-btn'
 };
 
 /**
@@ -26,12 +32,6 @@ document.addEventListener("DOMContentLoaded", function () {
     // Initialise the sequencer adapter endpoint
     sequencer_endpoint = new AdapterEndpoint("odin_sequencer");
 
-    build_control_button_row();
-    build_alerts_row();
-
-    detect_changes_switch  = document.getElementById('command-sequencer-detect-module-changes-toggle');
-    detect_changes_switch.addEventListener("change", detect_changes_switch_handler);
-
     build_sequence_modules_layout();
     display_log_messages();
 
@@ -42,8 +42,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (is_executing) {
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
+            disable_buttons(`${BUTTON_ID['abort']}`, false);
+            display_execution(result.execute);
             await_execution_complete();
             await_process_execution_complete();
+        }
+        else
+        {
+            disable_buttons(`${BUTTON_ID['abort']}`, true);
+            hide_execution();
         }
 
         set_detect_module_changes_toggle(detect_module_modifications);
@@ -63,7 +70,7 @@ document.addEventListener("DOMContentLoaded", function () {
  * it calls the await_module_changes function to listen for module changes. It also
  * displays an alert message if an error occurs.
  */
-function detect_changes_switch_handler() {
+detect_changes_switch.addEventListener("change", function() {
     enabled = detect_changes_switch.checked;
     sequencer_endpoint.put({ 'detect_module_modifications': enabled })
     .then(() => {
@@ -78,7 +85,7 @@ function detect_changes_switch_handler() {
         }
         display_alert(ALERT_ID['sequencer_error'], error.message);
     });
-}
+});
 
 /**
  * This function listens for module changes by calling itself every second. It displays
@@ -140,6 +147,24 @@ function reload_modules() {
     });
 }
 
+function abort_sequence() {
+    hide_alerts(`${ALERT_ID['sequencer_info']},${ALERT_ID['sequencer_error']}`);
+
+    alert_id = '';
+    alert_message = '';
+    sequencer_endpoint.put({ 'abort': true })
+    .then(() => {
+        alert_id = ALERT_ID['sequencer_info'];
+        alert_message = "Abort sent to currently executing sequence";
+    })
+    .catch(error => {
+        alert_id = ALERT_ID['sequencer_error'];
+        alert_message = error.message;
+    })
+    .then(() => {
+        display_alert(alert_id, alert_message);
+    });
+}
 /**
  * This function replicates the equivalent jQuery isEmptyObject, returning true if the
  * object passed as an parameter is empty.
@@ -172,6 +197,8 @@ function execute_sequence(button) {
         .then(() => {
             hide_alerts(`${ALERT_ID['sequencer_info']},${ALERT_ID['sequencer_error']},.sequence-alert`);
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
+            disable_buttons(`${BUTTON_ID['abort']}`, false);
+            display_execution(`${seq_module_name}/${seq_name}`);
 
             sequencer_endpoint.put({ 'execute': seq_name })
             .catch(error => {
@@ -188,6 +215,7 @@ function execute_sequence(button) {
         })
         .catch(error => {
             alert_message = error.message;
+            console.log(error);
             if (alert_message.startsWith('Type mismatch updating')) {
                 last_slash = alert_message.lastIndexOf('/');
                 second_to_last_slash = alert_message.lastIndexOf('/', last_slash - 1);
@@ -199,7 +227,10 @@ function execute_sequence(button) {
         });
 
     } else {
-        disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true)
+        disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
+        disable_buttons(`${BUTTON_ID['abort']}`, false);
+        display_execution(`${seq_module_name}/${seq_name}`);
+        //hide_execution();
         sequencer_endpoint.put({ 'execute': seq_name })
         .catch(error => {
             alert_message = error.message;
@@ -274,9 +305,12 @@ function await_execution_complete() {
         display_log_messages();
         is_executing = result.is_executing
         if (is_executing) {
+            update_execution_progress();
             setTimeout(await_execution_complete, 500);
         } else {
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, false);
+            disable_buttons(`${BUTTON_ID['abort']}`, true);
+            hide_execution();
         }
     });
 }
@@ -320,6 +354,57 @@ function hide_alerts(alert_id_or_ids) {
     //$(alert_id_or_ids).addClass('d-none').html('');
 }
 
+/*
+ * This function displays the excution progress elements on the UI
+ */
+function display_execution(sequence_name)
+{
+    execution_spinner.classList.remove('d-none');
+    execution_text.innerHTML = "<b>Executing:&nbsp;" + sequence_name + "</b>";
+    execution_progress_bar.style.width = "0%";
+    execution_progress_bar.setAttribute('aria-valuenow', 0);
+    execution_status_progress.innerHTML = ""
+
+    execution_progress.classList.remove('d-none');
+}
+
+/*
+ * This function hides the eexcution progress elements on the UI
+ */
+function hide_execution()
+{
+    execution_progress.classList.add('d-none');
+    execution_spinner.classList.add('d-none');
+    execution_text.innerHTML = "";
+    execution_status_progress.innerHTML = "";
+}
+
+/*
+ * This function updates the execution progress bar
+ */
+
+function update_execution_progress()
+{
+    sequencer_endpoint.get('execution_progress')
+    .then(result => {
+        console.log(result)
+        var current = result.execution_progress.current;
+        var total = result.execution_progress.total;
+        if (total != -1)
+        {
+            var percent_complete = Math.floor((100.0 * current) / total);
+            execution_progress_bar.style.width = percent_complete + "%";
+            execution_progress_bar.setAttribute('aria-valuenow', percent_complete);
+            execution_status_progress.innerHTML = "<b>(" + current + "/" + total + ")</b>";
+        }
+        else
+        {
+            execution_progress_bar.style.width = "100%";
+            execution_status_progress.innerHTML = "";
+        }
+    });
+}
+
 /**
  * This function disables the button(s) if disabled is True, otherwise it enables them.
  */
@@ -353,7 +438,7 @@ function display_log_messages() {
         if (!is_empty_object(log_messages)) {
             last_message_timestamp = log_messages[log_messages.length - 1][0];
 
-            pre_scrollable = document.querySelector('#command-sequencer-log-messages');
+            pre_scrollable = document.querySelector('#log-messages');
             for (log_message in log_messages) {
                 timestamp = log_messages[log_message][0];
                 timestamp = timestamp.substr(0, timestamp.length - 3);
@@ -376,40 +461,6 @@ function get_log_messages() {
     return sequencer_endpoint.put({ 'last_message_timestamp': last_message_timestamp })
         .then(sequencer_endpoint.get('log_messages')
     );
-}
-
-/**
- * If required, build a row of button controls that can be injected as a whole.
- */
-function build_control_button_row() {
-    html_text = '';
-
-    html_text += `
-                    <div class="row">
-                        <div class="col-md-7">
-                            <label>&nbsp;</label><br>
-                            <button type="submit" class="btn btn-primary" onclick="reload_modules()" id="reload-btn">Reload</button>
-                        </div>
-                        <div class="col-md-5" align="center">
-                            <label><b>Detect Changes</b></label><br>
-                            <input type="checkbox" data-toggle="toggle" data-on="Enabled" data-off="Disabled" id="command-sequencer-detect-module-changes-toggle">
-                        </div>
-                    </div>
-    `;
-
-    document.querySelector('#command-sequencer-control-buttons').innerHTML = html_text;
-}
-
-function build_alerts_row() {
-    html_text = '';
-
-    html_text += `
-                    <div class="row">
-                        <div class="alert alert-info mb-1 d-none" role="alert" id="command-sequencer-info-alert"></div>
-                        <div class="alert alert-danger mb-1 d-none" role="alert" id="command-sequencer-error-alert"></div>
-                    </div>
-    `
-    document.querySelector('#command-sequencer-alerts-row').innerHTML = html_text;
 }
 
 /**
@@ -446,7 +497,7 @@ function build_sequence_modules_layout() {
             }
 
             html_text += '</div>';
-            document.querySelector('#command-sequencer-sequence-modules-layout').innerHTML = html_text;
+            document.querySelector('#sequence-modules-layout').innerHTML = html_text;
         } else {
             error_message = 'There are no sequence modules loaded';
             display_alert(ALERT_ID['sequencer_info'], error_message);
