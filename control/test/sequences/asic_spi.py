@@ -628,9 +628,12 @@ def get_experiment_session_name():
     # has not been set.
 
     if SESSION_NAME_READ_DUE:
-        with open(SESSION_NAME_FILE_LOCATION, 'r') as f:
-            session_name = f.readline()
-            print("Recovered session name {} from file".format(session_name))
-            return session_name
+        try:
+            with open(SESSION_NAME_FILE_LOCATION, 'r') as f:
+                session_name = f.readline()
+                print("Recovered session name {} from file".format(session_name))
+                return session_name
+        except FileNotFoundError:
+            return 'default'
     else:
         return SESSION_NAME
