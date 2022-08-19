@@ -198,18 +198,18 @@ function init_power_tracking() {
             datasets: [{
                 label: "Digital",
                 data: power_tracking_data_dig_V,
-                backgroundColor: ['rgba(255, 0, 0, .2)'],
+                borderColor: ['rgba(255, 0, 0, .5)'],
                 spanGaps: false
                 },
                 {
                 label: "Digital Control",
                 data: power_tracking_data_digctrl_V,
-                backgroundColor: ['rgba(0, 0, 255, .2)'],
+                borderColor: ['rgba(0, 0, 255, .5)'],
                 },
                 {
                 label: "Analogue",
                 data: power_tracking_data_analogue_V,
-                backgroundColor: ['rgba(0, 255, 0, .2)'],
+                borderColor: ['rgba(0, 255, 0, .5)'],
                 }
             ]
         },
@@ -220,19 +220,27 @@ function init_power_tracking() {
             responsiveAnimationDuration: 0,
             elements: {
                 line: {
-                    tension: 0
+                    tension: 0,
+                    fill: false
                     }
             },
             //responsive: true,
-	    scales: {
-	        xAxes: [{
+            scales: {
+                xAxes: [{
                     type: 'time',
-		    distribution: 'linear',
-		    ticks: {
-	                source: 'data',
-		    }
-		}]
-	    }
+                    time: {
+                        displayFormats: {
+                            seconds: 'hh:mm:ss'
+                        },
+                        units: 'seconds',
+                    },
+                    //type: 'realtime',
+                    distribution: 'linear',
+                    ticks: {
+                        source: 'data',
+                    }
+                }]
+            }
         }
     });
 
@@ -246,17 +254,17 @@ function init_power_tracking() {
             datasets: [{
                 label: "Digital",
                 data: power_tracking_data_dig_I,
-                backgroundColor: ['rgba(255, 0, 0, .2)'],
+                borderColor: ['rgba(255, 0, 0, .5)'],
                 },
                 {
                 label: "Digital Control",
                 data: power_tracking_data_digctrl_I,
-                backgroundColor: ['rgba(0, 0, 255, .2)'],
+                borderColor: ['rgba(0, 0, 255, .5)'],
                 },
                 {
                 label: "Analogue",
                 data: power_tracking_data_analogue_I,
-                backgroundColor: ['rgba(0, 255, 0, .2)'],
+                borderColor: ['rgba(0, 255, 0, .5)'],
                 }
             ]
         },
@@ -268,18 +276,19 @@ function init_power_tracking() {
             responsiveAnimationDuration: 0,
             elements: {
                 line: {
-                    tension: 0
-                    }
+                    tension: 0,
+                    fill: false
+                }
             },
-	    scales: {
-	        xAxes: [{
+            scales: {
+                xAxes: [{
                     type: 'time',
-		    distribution: 'linear',
-			ticks: {
-	                source: 'data',
-		    }
-		}]
-	    }
+                    distribution: 'linear',
+                    ticks: {
+                        source: 'data',
+                    }
+                }]
+            }
         }
     });
 }
@@ -297,18 +306,18 @@ function init_environment_tracking() {
             datasets: [{
                 label: "Case",
                 data: environment_tracking_data_case_temp,
-                backgroundColor: ['rgba(255, 0, 0, .2)'],
+                borderColor: ['rgba(255, 0, 0, .5)'],
                 spanGaps: false
                 },
                 {
                 label: "PT100",
                 data: environment_tracking_data_pt100_temp,
-                backgroundColor: ['rgba(0, 0, 255, .2)'],
+                borderColor: ['rgba(0, 0, 255, .5)'],
                 },
                 {
                 label: "ASIC Diode",
                 data: environment_tracking_data_asic_diode_temp,
-                backgroundColor: ['rgba(0, 255, 0, .2)'],
+                borderColor: ['rgba(0, 255, 0, .5)'],
                 }
             ]
         },
@@ -319,19 +328,20 @@ function init_environment_tracking() {
             responsiveAnimationDuration: 0,
             elements: {
                 line: {
-                    tension: 0
-                    }
+                    tension: 0,
+                    fill: false
+                }
             },
             //responsive: true,
-	    scales: {
-	        xAxes: [{
+            scales: {
+                xAxes: [{
                     type: 'time',
-		    distribution: 'linear',
-		    ticks: {
-	                source: 'data',
-		    }
-		}]
-	    }
+                    distribution: 'linear',
+                    ticks: {
+                        source: 'data',
+                    }
+                }]
+            }
         }
     });
 
@@ -345,7 +355,7 @@ function init_environment_tracking() {
             datasets: [{
                 label: "Case",
                 data: environment_tracking_data_case_humidity,
-                backgroundColor: ['rgba(255, 0, 0, .2)'],
+                borderColor: 'rgba(255, 0, 0, .5)',
                 }
             ]
         },
@@ -357,21 +367,22 @@ function init_environment_tracking() {
             responsiveAnimationDuration: 0,
             elements: {
                 line: {
-                    tension: 0
+                    tension: 0,
+                    fill: false,
                     }
             },
-	    scales: {
-	        xAxes: [{
+            scales: {
+                xAxes: [{
                     type: 'time',
-            animation: {
-                duration: get_chart_animation_duration(),
-            },
-		    distribution: 'linear',
-			ticks: {
-	                source: 'data',
-		    }
-		}]
-	    }
+                    animation: {
+                        duration: get_chart_animation_duration(),
+                    },
+                    distribution: 'linear',
+                    ticks: {
+                        source: 'data',
+                    }
+                }]
+            }
         }
     });
 }
@@ -727,6 +738,31 @@ async function update_loki_temps() {
         );
         if (environment_tracking_time.length > environment_tracking_valuelimit) environment_tracking_time.shift();
 
+        // Update min max y scale to ensure enough is in view (will move to nearest int,
+        // and add a border if required).
+        // If using Chart.js 3.0+, `yAxes[0].ticks` becomes `y`
+        let min_int_border_hum = 1;
+        let min_int_border_temp = 0;
+        chart_hum.options.scales.yAxes[0].ticks.suggestedMin = Math.floor(Math.min(
+            hum_ambient
+        )) - min_int_border_hum;
+        chart_hum.options.scales.yAxes[0].ticks.suggestedMax = Math.ceil(Math.max(
+            hum_ambient
+        )) + min_int_border_hum;
+
+        chart_temp.options.scales.yAxes[0].ticks.suggestedMin = Math.floor(Math.min(
+            // Ignore null / NaN
+            temp_ambient ? temp_ambient : 999,
+            temp_asic ? temp_ambient : 999,
+            temp_pt100 ? temp_ambient : 999
+        )) - min_int_border_temp;
+        chart_temp.options.scales.yAxes[0].ticks.suggestedMax = Math.ceil(Math.max(
+            // Ignore null / NaN
+            temp_ambient ? temp_ambient : -999,
+            temp_asic ? temp_ambient : -999,
+            temp_pt100 ? temp_ambient : -999
+        )) + min_int_border_temp;
+
         chart_temp.update();
         chart_hum.update();
     })
@@ -786,7 +822,7 @@ function create_load_chart() {
             elements: {
                 line: {
                     tension: 0
-                    }
+                }
             },
             //responsive: true,
             scales: {
@@ -831,6 +867,14 @@ function update_loki_performance() {
             document.getElementById("loki-mem-avail").style.width="0%";
         }
 
+        /*if (response.LOKI_PERFORMANCE.MEM != null) {
+            var cachedmem = response.LOKI_PERFORMANCE.MEM.CACHED.toFixed(2);
+            var cachedmem_perc = (cachedmem / total_mem) * 100;
+            document.getElementById("loki-mem-cached").style.width=cachedmem_perc + "%";
+            document.getElementById("loki-mem-cached").innerHTML=parseInt(cachedmem / (1024*1024)) + "MB cached";
+        } else {
+            document.getElementById("loki-mem-cached").style.width="0%";
+        }*/
 
         // Load
         if (response.LOKI_PERFORMANCE.LOAD != null) {
@@ -909,6 +953,39 @@ function update_loki_power_monitor() {
         dt.toISOString()
         );
         if (power_tracking_time.length > power_tracking_valuelimit) power_tracking_time.shift();
+
+        // Update min max y scale to ensure enough is in view (will move to nearest int,
+        // and add a border if required).
+        // If using Chart.js 3.0+, `yAxes[0].ticks` becomes `y`
+        let min_int_border_volcur = 0;
+        let force_scale_volcur_y = false;
+        if (force_scale_volcur_y) {
+            chart_vol.options.scales.yAxes[0].ticks.suggestedMin = Math.floor(Math.min(
+                // Ignore null / NaN
+                psu_dig_vol         ? psu_dig_vol       : 999,
+                psu_dig_ctrl_vol    ? psu_dig_ctrl_vol  : 999,
+                psu_analogue_vol    ? psu_analogue_vol  : 999
+            )) - min_int_border_volcur;
+            chart_vol.options.scales.yAxes[0].ticks.suggestedMax = Math.ceil(Math.max(
+                // Ignore null / NaN
+                psu_dig_vol         ? psu_dig_vol       : -999,
+                psu_dig_ctrl_vol    ? psu_dig_ctrl_vol  : -999,
+                psu_analogue_vol    ? psu_analogue_vol  : -999
+            )) + min_int_border_volcur;
+
+            chart_cur.options.scales.yAxes[0].ticks.suggestedMin = Math.floor(Math.min(
+                // Ignore null / NaN
+                psu_dig_cur         ? psu_dig_cur       : 999,
+                psu_dig_ctrl_cur    ? psu_dig_ctrl_cur  : 999,
+                psu_analogue_cur    ? psu_analogue_cur  : 999
+            )) - min_int_border_volcur;
+            chart_cur.options.scales.yAxes[0].ticks.suggestedMax = Math.ceil(Math.max(
+                // Ignore null / NaN
+                psu_dig_cur         ? psu_dig_cur       : -999,
+                psu_dig_ctrl_cur    ? psu_dig_ctrl_cur  : -999,
+                psu_analogue_cur    ? psu_analogue_cur  : -999
+            )) + min_int_border_volcur;
+        }
 
         chart_vol.update();
         chart_cur.update();
