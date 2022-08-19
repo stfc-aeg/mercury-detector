@@ -275,7 +275,8 @@ class Carrier():
         tree['MEM'] = {
                 'FREE': (lambda: psutil.virtual_memory().free, None, {"description":"Free memory in bytes"}),
                 'AVAILABLE': (lambda: psutil.virtual_memory().available, None, {"description":"Available memory in bytes"}),
-                'TOTAL': (lambda: psutil.virtual_memory().total, None, {"description":"Total memory in bytes"})
+                'TOTAL': (lambda: psutil.virtual_memory().total, None, {"description":"Total memory in bytes"}),
+                'CACHED': (lambda: psutil.virtual_memory().cached, None, {"description":"Cached memory in bytes"}),
                 }
 
         tree['UPTIME'] = (lambda: str(datetime.timedelta(seconds=int(time.time() - psutil.boot_time()))), None, {})
