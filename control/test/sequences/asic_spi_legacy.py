@@ -72,7 +72,9 @@ def vcal_noise_test(local_vcal=False, sector_samples=50, all_sectors=False, vcal
 
                 # Check if an execution abort has been requested
                 if abort_sequence():
-                    return
+                    # Dirty abort
+                    raise Exception('Sequence has been aborted')
+                    #return
 
     print("VCAL samples gathered and stored in {}".format(filename))
 

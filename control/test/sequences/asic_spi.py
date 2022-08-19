@@ -472,9 +472,31 @@ def serialiser_global_change(register=0,data=0):
     print("changed all 10 segment controls for register part {0} to {1}".format(registers_strings[register],str(data)))
 
 
-
 # Use this in preference to vcal_noise_test
-def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 0.5, 1.0], test_name='', test_index=0, suppress_progress_update=False):
+'''
+sector_samples:
+    Number of samples to take for each sector supplied
+sector_array:
+    An array of sector numbers that will be collected, all samples from each in turn
+vcal_values:
+    If multiples values are selected, each sector * sector samples will be sampled
+    after changing the VCAL setting to each desired value.
+test_name: (optional)
+    A human name for the test. The results will be placed in a folder of this name
+    with named files to distinguish results from different tests.
+test_index: (optional)
+    An index that will also be included in the filename, can be useful if a certain
+    property is incremented over a set of tests.
+suppress_progress_update: (optional)
+    If set True, the progress bar will not be updated with the progress of samples
+    taken. This could be useful if the caller wants to operate the progress bar with
+    an external count.
+timesleep: (optional)
+    timesleep will sleep briefly before each sample reading. The minimum this can be
+    set to keep the UI responsive is 1ms, which incurs ~20% time penalty. If it is
+    set to 0, will run flat-out but freeze the UI.
+'''
+def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 0.5, 1.0], test_name='', test_index=0, suppress_progress_update=False, timesleep=0.001):
     mercury_carrier = get_context('carrier')
 
     # Create a new destination directory for this batch of tests, using the current session
@@ -488,7 +510,7 @@ def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 
     time_now = time.localtime()
     time_str = "{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec, int((time.time() % 1) * 1000))
     filename = "{}/{}_{}_{}.csv".format(export_subdir, test_name, test_index, time_str)
-    print("Will write to {}".format(filename))
+    print("\tWill write to {}".format(filename))
 
     for vcal_setting in vcal_values:
         # Set the new vcal voltage
@@ -496,19 +518,26 @@ def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 
 
         # Read out results from select sectors
         for sector in sector_array:
-            print("Begin reading samples for sector {} with VCAL: {}".format(sector, vcal_setting))
+            print("\tBegin reading samples for sector {} with VCAL: {}".format(sector, vcal_setting))
             time.sleep(0.5)
 
             # Sample the sector by the number of times specified, one at a time
             with open(filename, 'a') as file:
                 for sector_sample_number in range(0, sector_samples):
+                    # Force a delay to keep the UI responsive (stops lock-up)
+                    time.sleep(timesleep)
+
                     # Update progress bar
                     if not suppress_progress_update:
                         set_progress(sector_sample_number, sector_samples)
 
                     # Check if an execution abort has been requested
                     if abort_sequence():
-                        return
+                        # A cleaner solution would be to simply return, which would allow the caller
+                        # to perform their own cleanup. However, this will stop execution even if the
+                        # caller never checks the flag.
+                        raise Exception('Sequence has been aborted')
+                        #return
 
                     sample = read_test_pattern(sector=sector, num_samples=1, store=False, printout=False)[0]
 
@@ -521,7 +550,7 @@ def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 
                     file.write(','.join([str(x) for x in (first_columns + sample)]))
                     file.write('\n')
 
-    print("VCAL samples gathered and stored in {}".format(filename))
+    print("\tVCAL samples gathered and stored in {}".format(filename))
 
     return filename
 
