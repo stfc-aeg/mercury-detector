@@ -5,6 +5,7 @@ from odin_devices.max5306 import MAX5306
 from odin_devices.si534x import SI5344
 from odin_devices.bme280 import BME280
 from odin_devices.i2c_device import I2CException
+from odin_devices.i2c_device import I2CDevice
 from odin_devices.spi_device import SPIDevice
 
 from .asic import Asic, ASICDisabledError
@@ -327,6 +328,54 @@ class Carrier():
                 self._gpiod_firefly_2, sys.exc_info()[1]))
             self._firefly_2 = None
 
+        # Init LTC2986
+        try:
+            ltc2986_bus, ltc2986_device = self._interface_definition.spidev_id_ltc
+            self._ltc2986 = LTC2986(bus=ltc2986_bus, device=ltc2986_device)
+            self._ltc2986.add_rtd_channel(LTC2986.Sensor_Type.SENSOR_TYPE_RTD_PT100,
+                                          LTC2986.RTD_RSense_Channel.CH4_CH3,
+                                          2000,
+                                          LTC2986.RTD_Num_Wires.NUM_2_WIRES,
+                                          #LTC2986.RTD_Excitation_Mode.NO_ROTATION_SHARING,
+                                          LTC2986.RTD_Excitation_Mode.NO_ROTATION_NO_SHARING,
+                                          LTC2986.RTD_Excitation_Current.CURRENT_500UA,
+                                          LTC2986.RTD_Curve.EUROPEAN,
+                                          _ltc2986_pt100_channel)
+            self._ltc2986.add_diode_channel(endedness=LTC2986.Diode_Endedness.DIFFERENTIAL,
+                                            conversion_cycles=LTC2986.Diode_Conversion_Cycles.CYCLES_2,
+                                            average_en=LTC2986.Diode_Running_Average_En.OFF,
+                                            excitation_current=LTC2986.Diode_Excitation_Current.CUR_80UA_320UA_640UA,
+                                            diode_non_ideality=1.0,
+                                            channel_num=_ltc2986_diode_channel)
+            # raise Exception()
+        except Exception as e:
+            logging.error("LTC2986 init failed: {}".format(e))
+            self._ltc2986 = None
+            # exit()  # Temp
+
+            # Flag that low board power is detected, and abort the init
+            #self._BOARD_PWR_LOW_DETECTED = True
+            #logging.error("Failed to contact LTC, assuming power to PCB bad / PCB disconnected. Flagging and aborting init.")
+            #self.set_vreg_en(False)
+            #return
+
+        self._asic_temp = None  # Init cached ASIC temperature to None
+        self._pt100_temp =None  # Init cached PT100 temperature to None
+
+        # Init BME280 as I2C device on address 0x77
+        try:
+            I2CDevice.enable_exceptions()
+            self._bme280 = BME280(use_spi=False, bus=self._interface_definition.i2c_device_bus)
+        except Exception as e:
+            logging.error("BME280 failed init: {}".format(e))
+            self._bme280 = None
+
+            logging.error("Delaying 20s..")
+            time.sleep(20)
+            logging.error("Trying again...")
+            self._bme280 = BME280(use_spi=False, bus=self._interface_definition.i2c_device_bus)
+            exit()
+
         # Init PAC1921 monitors in power mode (generic settings)
         try:
             self._pac1921_u3 = pac1921.PAC1921(address_resistance=470,
@@ -416,13 +465,6 @@ class Carrier():
             self._si5344.apply_register_map(self._si5344_config_directory + self._si5344_config_filename)
         except FileNotFoundError:
             raise
-
-        # Init BME280 as I2C device on address 0x77
-        try:
-            self._bme280 = BME280(use_spi=False, bus=self._interface_definition.i2c_device_bus)
-        except Exception as e:
-            logging.error("BME280 failed init: {}".format(e))
-            self._bme280 = None
 
         logging.debug("Devices Init: FF1: {}, FF2: {}, LTC: {}, MAX: {}, BME: {}, PACs: {}, SI: {}".format(
             self._firefly_1,

@@ -634,6 +634,7 @@ def get_experiment_session_name():
                 print("Recovered session name {} from file".format(session_name))
                 return session_name
         except FileNotFoundError:
+            print("Failed to recover session name, using default")
             return 'default'
     else:
         return SESSION_NAME

@@ -341,8 +341,9 @@ class Asic():
         self.clear_register_bit(0x04, 0b10) # ana
         self.clear_register_bit(0x04, 0b01) # digi
         time.sleep(0.5)
-        self.set_register_bit(0x04, 0b10)   # ana
+        # self.set_register_bit(0x04, 0b10)   # ana
         self.set_register_bit(0x04, 0b01)   # digi
+        self.set_register_bit(0x04, 0b10)   # ana
         self._logger.info("Serialiser encoding state force reset")
 
     def read_test_pattern(self, sector):
