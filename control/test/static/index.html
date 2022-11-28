@@ -588,6 +588,15 @@
                                                                     <button class="btn btn-outline-secondary" type="button" onclick="set_calibration_pattern_highlight($('#highlight-sec-input').prop('value'),$('#highlight-div-input').prop('value'))">Highlight Division x Sector</button>
                                                                 </div>
                                                             </div>
+                                                            <div class="col">
+                                                                <div class="input-group mb-3">
+                                                                    <span class="input-group-text">Row</span>
+                                                                    <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="highlight-row-input"/>
+                                                                    <span class="input-group-text">Column</span>
+                                                                    <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="highlight-col-input"/>
+                                                                    <button class="btn btn-outline-secondary" type="button" onclick="set_calibration_pattern_highlightpixel($('#highlight-row-input').prop('value'),$('#highlight-col-input').prop('value'))">Highlight Row x Column</button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                         <div class="row contflex">
                                                             <div class="col">

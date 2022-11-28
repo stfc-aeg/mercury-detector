@@ -489,6 +489,21 @@ class Asic():
         self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
         self.enable_calibration_test_pattern(True)
 
+    def cal_pattern_highlight_pixel(self, column, row):
+        # Use the calibration tesst pattern to zero all pixels except one defined pixel
+        # location, which will be high. The exact output of this is defined by the ASIC
+        # calibration pattern cycle. 1/4 frames will be the highest contrast.
+
+        row_bits = [0] * row + [1] + [0] * (80-row)
+        column_bits = [0] * column + [1] + [0] * (80-column)
+
+        self._logger.info("Generated calibration test pattern to highlight pixel row {}, column {}".format(row, column))
+        self._logger.debug("In bit form:\n\trows: {}\n\tcolumns:{}".format(row_bits, column_bits))
+
+        # Submit the test pattern and enable it
+        self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
+        self.enable_calibration_test_pattern(True)
+
     def cal_pattern_set_default(self):
         self.set_calibration_test_pattern(CAL_PATTERN_DEFAULT_BYTES['rows'],
                 CAL_PATTERN_DEFAULT_BYTES['cols'])

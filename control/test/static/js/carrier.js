@@ -1381,6 +1381,15 @@ function set_calibration_pattern_highlight(sector, division) {
     });
 }
 
+function set_calibration_pattern_highlightpixel(row, column) {
+    carrier_endpoint.put(row, 'ASIC_CAL_PATTERN/HIGHLIGHT_ROW', timeout=ajax_timeout_ms)
+    .then((response) => carrier_endpoint.put(column, 'ASIC_CAL_PATTERN/HIGHLIGHT_COLUMN', timeout=ajax_timeout_ms))
+    .then((response) => carrier_endpoint.put('highlightpixel', 'ASIC_CAL_PATTERN/PATTERN', timeout=ajax_timeout_ms))
+    .catch(error => {
+        console.log('Error setting calibration pattern highlight pixel: ' + error);
+    });
+}
+
 function set_calibration_pattern_default() {
     carrier_endpoint.put('default', 'ASIC_CAL_PATTERN/PATTERN', timeout=ajax_timeout_ms)
     .then((response) => {
