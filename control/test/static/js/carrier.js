@@ -993,6 +993,14 @@ function update_loki_power_monitor() {
     .catch(error => {
         console.log('Error retrieving power supply data: ' + error);
     });
+    
+    carrier_endpoint.get('PSU_STATUS', timeout=ajax_timeout_ms)
+    .then(response => {
+        console.log(response.PSU_STATUS);
+    })
+    .catch(error => {
+        console.log("Error getting power monitor status text");
+    })
 }
 
 function update_loki_vcal() {

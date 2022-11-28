@@ -189,6 +189,8 @@ class Carrier():
         self._segment_vmax = None
         self._segment_vmin = None
 
+        self._psu_status = "No Run"
+
         self._asic_cal_highlight_div = None
         self._asic_cal_highlight_sec = None
         self._asic_cal_highlight_row = None
@@ -523,8 +525,11 @@ class Carrier():
     ''' PAC1921 '''
 
     def _sync_power_supply_readings(self):
+        self._psu_status = "OK"
+
         if self._pac1921_array is None:
             logging.error("PAC1921 array is not present, cannot read")
+            self._psu_status = "No Read"
             return
 
         if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
@@ -555,7 +560,26 @@ class Carrier():
                         else:
                             raise
 
-
+                # Check that all rails are above the minimum for regulator operation
+                power_rail_regulator_target = 1.8               # This PCB has regulators set to 1.8v
+                power_rail_regulator_dropout_worst = 0.510      # LT3083 can have up to 510mV dropout
+                regulator_input_limit = power_rail_regulator_target + power_rail_regulator_dropout_worst
+                try:
+                    if self._power_supply_readings[monitor.get_name()]['VOLTAGE'] < regulator_input_limit:
+                        # Report potential issue with power supply to board
+                        logging.critical("Power supply error on rail {}, regulator requires {}v but is at {}v".format(
+                            monitor.get_name(),
+                            regulator_input_limit,
+                            self._power_supply_readings[monitor.get_name()]['VOLTAGE']
+                        ))
+                        
+                        newstatus = "{} input low".format(monitor.get_name())
+                        if self._psu_status == "OK":
+                            self._psu_status = newstatus
+                        else:
+                            self._psu_status += ", " + newstatus
+                except Exception as e:
+                    logging.error("{}".format(e))
 
             logging.debug("Readings taken, {}".format(self._power_supply_readings))
 
@@ -1052,6 +1076,7 @@ class Carrier():
         # Define the ParameterTree
         self._param_tree = ParameterTree({
             "PSU": rail_monitor_tree,
+            "PSU_STATUS" :(lambda: self._psu_status, None, {"description":"Status text for power rails. If no issues detected, will report OK"}),
             "FIREFLY1": firefly_tree_1,
             "FIREFLY2": firefly_tree_2,
             "TEMPERATURES":{
