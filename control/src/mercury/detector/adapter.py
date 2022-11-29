@@ -35,7 +35,7 @@ class MercuryDetectorAdapter(AsyncApiAdapter):
 
         logging.debug("MercuryDetectorAdapter loaded")
 
-    def initialize(self, adapters):
+    async def initialize(self, adapters):
         """Initialize internal list of registered adapters.
 
         This method, if present, is called by odin-control once all adapters have been loaded. It

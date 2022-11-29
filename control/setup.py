@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 import versioneer
 
 install_requires = [
-    'odin @ git+https://github.com/odin-detector/odin-control@1.0.0#egg=odin',
-    'odin_sequencer @ git+https://github.com/stfc-aeg/odin-sequencer@0.1.0#egg=odin_sequencer',
+    'odin_control @ git+https://github.com/odin-detector/odin-control@1.3.0#egg=odin_control',
+    'odin_sequencer @ git+https://github.com/stfc-aeg/odin-sequencer@0.2.0#egg=odin_sequencer',
     'pyzmq>=22.0',
     'msgpack>=1.0'
 ]

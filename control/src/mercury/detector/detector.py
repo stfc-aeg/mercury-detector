@@ -4,11 +4,13 @@ This module implements the top-level control interface for the MERCURY detector 
 
 Tim Nicholls, STFC Detector Systems Software Group
 """
+import asyncio
 import logging
 
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from mercury.asic.device import MercuryAsicDevice
 from .context import SyncContext
+from .proxy import MunirProxyContext
 
 
 class MercuryDetectorError(Exception):
@@ -43,6 +45,7 @@ class MercuryDetector:
         self.adapters = {}
         self.needed_adapters = [
             "odin_sequencer",
+            "proxy"
         ]
 
     def initialize(self, adapters):
@@ -72,9 +75,13 @@ class MercuryDetector:
             logging.debug("Registering contexts with sequencer")
             self.adapters["odin_sequencer"].add_context("detector", self)
 
-            self.sync_context = SyncContext()
-            self.adapters["odin_sequencer"].add_context("asic", self.sync_context)
-            self.asic.register_context(self.sync_context)
+            self.asic_context = SyncContext()
+            self.adapters["odin_sequencer"].add_context("asic", self.asic_context)
+            self.asic.register_context(self.asic_context)
+
+            if "proxy" in self.adapters:
+                self.munir_context = MunirProxyContext(self.adapters["proxy"])
+                self.adapters["odin_sequencer"].add_context("munir", self.munir_context)
 
     async def get(self, path):
         """Get values from the detector paramter tree.

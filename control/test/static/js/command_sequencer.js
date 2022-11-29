@@ -4,6 +4,11 @@ let sequence_modules = {};
 let is_executing;
 let sequencer_endpoint;
 let detect_changes_switch  = document.getElementById('detect-module-changes-toggle');
+let execution_spinner = document.getElementById("execution-status-spinner");
+let execution_text = document.getElementById("execution-status-text");
+let execution_progress = document.getElementById("execution-progress");
+let execution_progress_bar = document.getElementById("execution-progress-bar");
+let execution_status_progress = document.getElementById("execution-status-progress");
 
 const ALERT_ID = {
     'sequencer_error': '#command-sequencer-error-alert',
@@ -12,7 +17,8 @@ const ALERT_ID = {
 
 const BUTTON_ID = {
     'all_execute': '.execute-btn',
-    'reload': '#reload-btn'
+    'reload': '#reload-btn',
+    'abort': '#abort-btn'
 };
 
 /**
@@ -36,8 +42,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (is_executing) {
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
+            disable_buttons(`${BUTTON_ID['abort']}`, false);
+            display_execution(result.execute);
             await_execution_complete();
             await_process_execution_complete();
+        }
+        else
+        {
+            disable_buttons(`${BUTTON_ID['abort']}`, true);
+            hide_execution();
         }
 
         set_detect_module_changes_toggle(detect_module_modifications);
@@ -134,6 +147,24 @@ function reload_modules() {
     });
 }
 
+function abort_sequence() {
+    hide_alerts(`${ALERT_ID['sequencer_info']},${ALERT_ID['sequencer_error']}`);
+
+    alert_id = '';
+    alert_message = '';
+    sequencer_endpoint.put({ 'abort': true })
+    .then(() => {
+        alert_id = ALERT_ID['sequencer_info'];
+        alert_message = "Abort sent to currently executing sequence";
+    })
+    .catch(error => {
+        alert_id = ALERT_ID['sequencer_error'];
+        alert_message = error.message;
+    })
+    .then(() => {
+        display_alert(alert_id, alert_message);
+    });
+}
 /**
  * This function replicates the equivalent jQuery isEmptyObject, returning true if the
  * object passed as an parameter is empty.
@@ -166,6 +197,8 @@ function execute_sequence(button) {
         .then(() => {
             hide_alerts(`${ALERT_ID['sequencer_info']},${ALERT_ID['sequencer_error']},.sequence-alert`);
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
+            disable_buttons(`${BUTTON_ID['abort']}`, false);
+            display_execution(`${seq_module_name}/${seq_name}`);
 
             sequencer_endpoint.put({ 'execute': seq_name })
             .catch(error => {
@@ -193,7 +226,9 @@ function execute_sequence(button) {
         });
 
     } else {
-        disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true)
+        disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, true);
+        disable_buttons(`${BUTTON_ID['abort']}`, false);
+        display_execution(`${seq_module_name}/${seq_name}`);
         sequencer_endpoint.put({ 'execute': seq_name })
         .catch(error => {
             alert_message = error.message;
@@ -268,9 +303,12 @@ function await_execution_complete() {
         display_log_messages();
         is_executing = result.is_executing
         if (is_executing) {
-            setTimeout(await_execution_complete, 1000);
+            update_execution_progress();
+            setTimeout(await_execution_complete, 500);
         } else {
             disable_buttons(`${BUTTON_ID['all_execute']},${BUTTON_ID['reload']}`, false);
+            disable_buttons(`${BUTTON_ID['abort']}`, true);
+            hide_execution();
         }
     });
 }
@@ -312,6 +350,56 @@ function hide_alerts(alert_id_or_ids) {
         element.classList.add('d-none');
     });
     //$(alert_id_or_ids).addClass('d-none').html('');
+}
+
+/*
+ * This function displays the excution progress elements on the UI
+ */
+function display_execution(sequence_name)
+{
+    execution_spinner.classList.remove('d-none');
+    execution_text.innerHTML = "<b>Executing:&nbsp;" + sequence_name + "</b>";
+    execution_progress_bar.style.width = "0%";
+    execution_progress_bar.setAttribute('aria-valuenow', 0);
+    execution_status_progress.innerHTML = ""
+
+    execution_progress.classList.remove('d-none');
+}
+
+/*
+ * This function hides the eexcution progress elements on the UI
+ */
+function hide_execution()
+{
+    execution_progress.classList.add('d-none');
+    execution_spinner.classList.add('d-none');
+    execution_text.innerHTML = "";
+    execution_status_progress.innerHTML = "";
+}
+
+/*
+ * This function updates the execution progress bar
+ */
+
+function update_execution_progress()
+{
+    sequencer_endpoint.get('execution_progress')
+    .then(result => {
+        var current = result.execution_progress.current;
+        var total = result.execution_progress.total;
+        if (total != -1)
+        {
+            var percent_complete = Math.floor((100.0 * current) / total);
+            execution_progress_bar.style.width = percent_complete + "%";
+            execution_progress_bar.setAttribute('aria-valuenow', percent_complete);
+            execution_status_progress.innerHTML = "<b>(" + current + "/" + total + ")</b>";
+        }
+        else
+        {
+            execution_progress_bar.style.width = "100%";
+            execution_status_progress.innerHTML = "";
+        }
+    });
 }
 
 /**

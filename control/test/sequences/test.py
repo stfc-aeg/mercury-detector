@@ -1,12 +1,32 @@
-import logging
+import time
 
 provides = [
-    'show_context', 'register_read_test', 'register_write_test', 'sr_write_test', 'sr_read_test'
+    'show_contexts', 'test_capture', 'register_read_test', 'register_write_test', 'sr_write_test', 'sr_read_test'
 ]
 
-def show_context():
+def show_contexts():
     detector = get_context('detector')
     print(f"Loaded the detector context: {type(detector).__name__}")
+    asic = get_context('asic')
+    print(f"Loaded the asic context: {type(asic).__name__}")
+    munir = get_context('munir')
+    print(f"Loaded the munir proxy context: {type(munir).__name__}")
+
+def test_capture(path: str = "/tmp/", file_name: str = "capture.bin"):
+
+    munir = get_context('munir')
+
+    response = munir.get('args')
+    print(f"Current arguments: {response}")
+
+    print(f"Executing capture to path: {path} file name: {file_name}")
+    munir.execute_capture(path, file_name)
+
+    while munir.is_executing():
+        time.sleep(0.1)
+
+    status = munir.get_status()
+    print(f"Command execution completed with rc:{status['return_code']} output:{status['stdout']}")
 
 def register_read_test():
     asic = get_context('asic')
