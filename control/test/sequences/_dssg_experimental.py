@@ -6,7 +6,10 @@ provides = [
         'register_read_test',
         'register_write_test',
         'sr_write_test',
-        'sr_read_test'
+        'sr_read_test',
+        'list_gpib_devices',
+        'set_asic_bias_enable',
+        'get_psu_measurements',
 ]
 
 
@@ -67,3 +70,31 @@ def format_response(response):
     addr = response[0] & 0x7F
     response_str = f"{addr:#x} : " + ' '.join([hex(val) for val in response[1:]])
     return 
+
+def list_gpib_devices():
+    gpib = get_context('gpib')
+    devices_dict = gpib.identify_devices()
+    print(gpib.identify_devices())
+    print('GPIB Detected Devices:')
+
+    if devices_dict['psu'] is not None:
+        print('\tPower Supply: {}'.format(devices_dict['psu']['path']))
+        for part in devices_dict['psu']['ident'].split(','):
+            print('\t\t{}'.format(part))
+
+    if devices_dict['peltier'] is not None:
+        print('\tPeltier Controller: {}'.format(devices_dict['peltier']['path']))
+        for part in devices_dict['peltier']['ident'].split(','):
+            print('\t\t{}'.format(part))
+
+def set_asic_bias_enable(enable=True):
+    gpib = get_context('gpib')
+    gpib.set_psu_output_state(enable)
+    print('ASIC bias {}'.format('enabled' if enable else 'disabled'))
+
+def get_psu_measurements():
+    gpib = get_context('gpib')
+    print('ASIC Bias Measurements:')
+    print('\tVoltage: {} v'.format(gpib.get_psu_voltage_measurement()))
+    print('\tCurrent: {} A'.format(gpib.get_psu_current_measurement()))
+

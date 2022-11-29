@@ -9,7 +9,7 @@ import logging
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from mercury.asic.device import MercuryAsicDevice
 from .context import SyncContext
-from .proxy import MunirProxyContext
+from .proxy import MunirProxyContext, GPIBProxyContext
 
 
 class MercuryDetectorError(Exception):
@@ -82,7 +82,17 @@ class MercuryDetector:
             if "proxy" in self.adapters:
                 logging.debug("Proxy adapter found, assuming munir instance. Adding context to sequencer")
                 self.munir_context = MunirProxyContext(self.adapters["proxy"])
-                self.adapters["odin_sequencer"].add_context("munir", self.munir_context)
+                try:
+                    self.adapters["odin_sequencer"].add_context("munir", self.munir_context)
+                except Exception as e:
+                    logging.error(e)
+
+                self.gpib_context = GPIBProxyContext(self.adapters["proxy"])
+                try:
+                    self.adapters["odin_sequencer"].add_context("gpib", self.gpib_context)
+                except Exception as e:
+                    logging.error(e)
+
             else:
                 logging.debug("No proxy adapter found to add to sequencer")
         else:
