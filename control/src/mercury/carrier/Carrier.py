@@ -741,6 +741,15 @@ class Carrier():
             else:
                 ff.enable_tx_channels(channel_bitfield)
 
+    def set_firefly_tx_enable_all(self):
+        if self.get_vreg_en() and not self._POWER_CYCLING:
+            for ff_num in [1, 2]:
+                ff = self._get_firefly(ff_num)
+
+                channel_bitfield = 0xFFF
+
+                ff.enable_tx_channels(channel_bitfield)
+
     ''' LTC2986 '''
 
     def get_cached_pt100_temperature(self):

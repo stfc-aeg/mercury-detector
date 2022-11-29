@@ -9,6 +9,7 @@ import logging
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from mercury.asic.device import MercuryAsicDevice
 from .context import SyncContext
+from .proxy import MunirProxyContext
 
 
 class MercuryDetectorError(Exception):
@@ -43,6 +44,7 @@ class MercuryDetector:
         self.adapters = {}
         self.needed_adapters = [
             "odin_sequencer",
+            "proxy"
         ]
 
     def initialize(self, adapters):
@@ -68,13 +70,23 @@ class MercuryDetector:
             )
 
         # If a sequencer adapter is loaded, register the appropriate contexts with it
+        logging.debug("checking for sequencer presence in loaded adapters: {}".format(self.adapters))
         if "odin_sequencer" in self.adapters:
             logging.debug("Registering contexts with sequencer")
             self.adapters["odin_sequencer"].add_context("detector", self)
 
             self.sync_context = SyncContext()
-            self.adapters["odin_sequencer"].add_context("asic", self.sync_context)
+            #self.adapters["odin_sequencer"].add_context("asic", self.sync_context)
             self.asic.register_context(self.sync_context)
+
+            if "proxy" in self.adapters:
+                logging.debug("Proxy adapter found, assuming munir instance. Adding context to sequencer")
+                self.munir_context = MunirProxyContext(self.adapters["proxy"])
+                self.adapters["odin_sequencer"].add_context("munir", self.munir_context)
+            else:
+                logging.debug("No proxy adapter found to add to sequencer")
+        else:
+            logging.debug("No sequencer detected")
 
     async def get(self, path):
         """Get values from the detector paramter tree.
