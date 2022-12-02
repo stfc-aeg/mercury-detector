@@ -266,6 +266,14 @@ def track_power_runaway():
     print('Now tracking peltier controller status:')
     print('\ttime, temp, deviation, voltage, current')
     setpoint = gpib.get_peltier_setpoint()
+    starttime = time.time()
+
+    voltages = []
+    currents = []
+    temperatures = []
+    deviations = []
+    times = []
+
     while True:
         temperature = gpib.get_peltier_measurement()
         deviation = temperature - setpoint
@@ -273,17 +281,27 @@ def track_power_runaway():
         info = gpib.get_peltier_info()
         drive_current = float(info['tec_current'])
         drive_voltage = float(info['tec_voltage'])
+        timenow = time.time()
 
         print('\t{},\t{:.2f},\t{:.2f},\t{:.3f},\t{:.3f}'.format(
-            time.time(),
+            timenow,
             temperature,
             deviation,
             drive_voltage,
             drive_current
             ))
 
+        times.append(round(timenow - starttime, 3))
+        temperatures.append(round(temperature, 3))
+        deviations.append(round(deviation, 3))
+        currents.append(round(drive_current, 3))
+        voltages.append(round(drive_voltage, 3))
+
         if _sleep_abortable(20):
-            return
+            break
+
+    print('Time:\n{}\nTemperature:\n{}\nDeviation:\n{}\nCurrent:\n{}\nVoltage:\n{}'.format(
+        times, temperatures, deviations, currents, voltages))
 
 def _sleep_abortable(secs=1):
     # Returns 1 if sleep was aborted, 0 otherwise (after delay)
