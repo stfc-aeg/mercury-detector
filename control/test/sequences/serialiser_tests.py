@@ -1,6 +1,8 @@
 import time
 
-provides = ['ser_set_pattern',
+provides = ['serialiser_quickstart',
+        'serialiser_quickstart_original',
+        'ser_set_pattern',
 'ser_set_pattern_auto',
 'print_serialiser_configs',
 'set_pattern_all',
@@ -230,3 +232,111 @@ def set_strict_alignment_all(val=1):
         asic._write_serialiser_config(i)    # Force pack and write to config
         i += 1
         # time.sleep(3)
+
+def serialiser_quickstart(bypass_asic_reset=False):
+    asic = get_context('asic')
+    carrier = get_context('carrier')
+    print("Preparing to enable fast data:")
+
+    # Power Cycle The Regulators
+    # carrier.vreg_power_cycle_init(None)
+    # while not self._get_vreg_en():
+    #     pass
+    set_progress(1, 6)
+
+    # Ensure FireFlies are Turned on, all channels
+    print("\tChecking FireFlies are enabled")
+    for FF_ID in [1, 2]:                        # Both FireFlies
+        while True:                             # Loop until all channels enabled
+
+            # Search for any disabled channel
+            disabled_channel_found = False
+            for channel_no in range(0, 12):
+                if carrier.get_firefly_tx_channel_disabled(FF_ID, channel_no):
+                    print("\t\tChannel {} of FireFly {} is disabled".format(channel_no, FF_ID))
+                    disabled_channel_found = True
+                    break
+
+            # If any disabled channel is found, re-enable all channels on both devices
+            if disabled_channel_found:
+                print("\t\tEnabling all FireFly Channels on FireFly {} (at least one found disabled)".format(FF_ID))
+                time.sleep(1.0)
+                carrier.set_firefly_tx_enable_all()   # Set all channels enabled
+                time.sleep(3.0)
+            else:
+                print("\tAll channels on FireFly {} are enabled".format(FF_ID))
+                break
+    set_progress(2, 6)
+
+    # Enter Global Mode
+    if bypass_asic_reset:
+        if asic.get_enabled:
+            print("\tASIC enabled, and bypassing global mode reset")
+        else:
+            raise Excetion("ASIC reset cannot be bypassed if ASIC is in reset")
+    else:
+        print("\tEntering global mode...")
+        asic.enter_global_mode()
+    set_progress(3, 6)
+
+    # Enter and Exit Serialiser Reset
+    print("\tResetting Serialisers...")
+    time.sleep(0.5)
+    ser_enter_reset()
+    time.sleep(0.5)
+    ser_exit_reset()
+    set_progress(4, 6)
+
+    # Enter Bonding Mode
+    print("\tEntering Bonding Mode...")
+    time.sleep(0.5)
+    enter_bonding_mode()
+    set_progress(5, 6)
+
+    # Enter Data Mode
+    print("\tEntering Data Mode...")
+    time.sleep(0.5)
+    enter_data_mode()
+    set_progress(6, 6)
+
+    print("Device is now outputting fast data")
+
+def serialiser_quickstart_original():
+    asic = get_context('asic')
+    carrier = get_context('carrier')
+    print("Preparing to enable fast data:")
+
+    # Power Cycle The Regulators
+    # carrier.vreg_power_cycle_init(None)
+    # while not self._get_vreg_en():
+    #     pass
+
+    # Ensure FireFlies are Turned on, all channels
+    print("\tEnabling all FireFly Channels...")
+    for FF_ID in [1, 2]:
+        for channel_no in range(0, 12):
+            while carrier.get_firefly_tx_channel_disabled(FF_ID, channel_no):
+                carrier.set_firefly_tx_channel_disabled(FF_ID, channel_no, False)
+
+    # Enter Global Mode
+    print("\tEntering global mode...")
+    asic.enter_global_mode()
+
+    # Enter and Exit Serialiser Reset
+    print("\tResetting Serialisers...")
+    time.sleep(0.5)
+    ser_enter_reset()
+    time.sleep(0.5)
+    ser_exit_reset()
+
+    # Enter Bonding Mode
+    print("\tEntering Bonding Mode...")
+    time.sleep(0.5)
+    enter_bonding_mode()
+
+    # Enter Data Mode
+    print("\tEntering Data Mode...")
+    time.sleep(0.5)
+    enter_data_mode()
+
+    print("Device is now outputting fast data")
