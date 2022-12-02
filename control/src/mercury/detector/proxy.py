@@ -58,12 +58,18 @@ class MunirProxyContext(ProxyContext):
     def __init__(self, proxy):
         super().__init__(proxy, 'munir')
 
-    def execute_capture(self, file_path, file_name):
+    def execute_capture(self, file_path, file_name, num_frames, timeout, num_batches=1):
 
         response = self.set('', {
-            'args': {'file_path': file_path, 'file_name': file_name},
+            'args': {
+                'file_path': file_path,
+                'file_name': file_name,
+                'num_frames': num_frames,
+                'num_batches': num_batches
+                },
+            'timeout': timeout,
             'execute': True
-        })
+            })
 
         return response
 
@@ -150,3 +156,45 @@ class GPIBProxyContext(ProxyContext):
         if self._psu_path is None:
             self.identify_devices()
         return self.get('{}/current/current_measurement'.format(self._psu_path))
+
+    def get_peltier_info(self):
+        if self._peltier_path is None:
+            self.identify_devices()
+        return self.get('{}/info'.format(self._peltier_path))
+
+    def get_peltier_setpoint(self):
+        return float(self.get_peltier_info()['tec_setpoint'])
+
+    def get_peltier_measurement(self):
+        return float(self.get_peltier_info()['tec_temp_meas'])
+
+    def get_peltier_enabled(self):
+        if self._peltier_path is None:
+            self.identify_devices()
+        return self.get('{}/output_state'.format(self._peltier_path))
+
+    def set_peltier_enabled(self, enabled=True):
+        if self._peltier_path is None:
+            self.identify_devices()
+
+        if not self.get_peltier_controlled():
+            raise Exception("Peltier not under control")
+
+        response = self.set('{}'.format(self._peltier_path), {
+            'output_state': enabled
+        })
+
+        return response
+
+    def set_peltier_temp(self, temp):
+        if self._peltier_path is None:
+            self.identify_devices()
+
+        if not self.get_peltier_controlled():
+            raise Exception("Peltier not under control")
+
+        response = self.set('{}/temp'.format(self._peltier_path), {
+            'temp_set': float(temp)
+        })
+
+        return response
