@@ -44,7 +44,8 @@ class MercuryDetector:
         self.adapters = {}
         self.needed_adapters = [
             "odin_sequencer",
-            "proxy"
+            "proxy",
+            "tempmon"
         ]
 
     def initialize(self, adapters):
@@ -77,6 +78,7 @@ class MercuryDetector:
 
             self.sync_context = SyncContext()
             #self.adapters["odin_sequencer"].add_context("asic", self.sync_context)
+            self.adapters["odin_sequencer"].add_context("tempmon", self.sync_context)
             self.asic.register_context(self.sync_context)
 
             if "proxy" in self.adapters:
