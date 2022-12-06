@@ -160,22 +160,8 @@ def example_extended_capture(output_folder="default", filename="capture", store_
         print('Starting new capture {}/{}'.format(capture_count, total_period_s / interval_s))
 
         # Log PSU measurements, file shares folder and filename with experimental fast data
-        log_instrument_values(loki_output_root, filename)
         if store_instrument_info:
-            vol, cur = get_psu_measurements()
-            temp = get_peltier_status()
-
-            with open(instrument_data_path, 'a') as file:
-                timenow = time.localtime()
-                timefmt = '{}{}{}{}{}{}'.format(
-                        timenow.tm_year,
-                        timenow.tm_mon,
-                        timenow.tm_mday,
-                        timenow.tm_hour,
-                        timenow.tm_min,
-                        timenow.tm_sec)
-                file.write(','.join([str(x) for x in [timefmt, temp, cur, vol]]))
-                file.write('\n')
+            log_instrument_values(loki_output_root, filename)
 
         return_code = capture_data(
             path=fastdata_output_root,
