@@ -1,28 +1,20 @@
 import time
-import os
 
 provides = [
-        'example_extended_capture',
-        'track_power_runaway',
         'report_munir_status',
-        'capture_data',
-        'register_read_test',
-        'register_write_test',
-        'sr_write_test',
-        'sr_read_test',
-        'list_gpib_devices',
-        'set_asic_bias_enable',
-        'get_psu_measurements',
-        'get_peltier_status',
         'set_peltier_wait',
         'set_peltier_enable',
-]
-
-# Only required for the example sequence
-requires = [
-        'serialiser_tests'
+        'get_peltier_status',
+        'get_psu_measurements',
+        'set_asic_bias_enable',
+        'list_gpib_devices',
+        'sr_read_test',
+        'sr_write_test',
+        'register_write_test',
+        'register_read_test',
+        'enable_hdf5',
+        'capture_data',
         ]
-
 
 def report_munir_status(include_stdout=True):
     # Setting include_cmd to false will omit the last command output in case it is very long.
@@ -32,6 +24,10 @@ def report_munir_status(include_stdout=True):
     print('munir DKDP adapter status:')
     print('='*25 + ':')
 
+    status = munir.get_status()
+    if not status:
+        raise Exception('Failed to contact munir')
+
     for key, value in munir.get_status().items():
 
         if (not include_stdout) and key == 'stdout':
@@ -40,19 +36,28 @@ def report_munir_status(include_stdout=True):
         print('\t', key, ' : ', value)
 
 def capture_data(
-        path: str = "/data/",
-        file_name: str = "capture.bin",
+        path: str = "/dev/null",
+        file_name: str = "capture",
         num_frames: int = 100000,
         num_batches: int = 1,
         timeout: int = 10,
         include_stdout=True
         ):
+    if path == '/dev/null':
+        raise Exception('Sensible destination path not set')
+
     # Due to bug(?) cannot create a boolean with default value of True. It will just use false in UI.
     munir = get_context('munir')
 
     # Trigger munir data capture
-    print('Begin fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
-    munir.execute_capture(path, file_name, num_frames, timeout, num_batches)
+    print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
+    response = munir.execute_capture(path, file_name, num_frames, timeout, num_batches)
+
+    if response:
+        #print('response: {} (type {})'.format(response, type(response)))
+        print('Capture has started, waiting for completion...')
+    else:
+        raise Exception('No response from munir')
 
     # Wait for success, and reassure the user that execution is still occurring
     reassure_s = 5
@@ -61,7 +66,7 @@ def capture_data(
     while munir.is_executing():
         duration_s = int((time.time() - timestart))
         if duration_s % reassure_s == 0 and reassured != duration_s:
-            print('Executing for {}s'.format(duration_s))
+            print('\tExecuting for {}s...'.format(duration_s))
             reassured = duration_s
 
         time.sleep(0.1)
@@ -94,14 +99,14 @@ def register_read_test():
     asic = get_context('asic')
     addr = 0x0
     response = asic.register_read(addr, 5)
-    print(f"Register read : {format_response(response)}")
+    print(f"Register read : {_format_response(response)}")
 
 def register_write_test():
     asic = get_context('asic')
     addr = 0x1
     response = asic.register_write(addr, 1, 2, 3)
     #logging.debuf("oof")
-    print(f"Register write : {format_response(response)}")
+    print(f"Register write : {_format_response(response)}")
 
 def sr_write_test():
     asic = get_context('asic')
@@ -124,9 +129,9 @@ def sr_read_test(val: int = 0):
     asic = get_context('asic')
     addr = asic.SER_CONTROL10A
     response = asic.register_read(addr, 20)
-    print(f"SR read test: {format_response(response)}")
+    print(f"SR read test: {_format_response(response)}")
 
-def format_response(response):
+def _format_response(response):
 
     addr = response[0] & 0x7F
     response_str = f"{addr:#x} : " + ' '.join([hex(val) for val in response[1:]])
@@ -175,6 +180,8 @@ def get_peltier_status():
     print('\tActual Temperature: {}C'.format(actual))
     print('\tControl status: {}'.format('on' if enabled else 'off'))
 
+    return actual
+
 def set_peltier_enable(enable=True):
     gpib = get_context('gpib')
     gpib.set_peltier_enabled(enable)
@@ -204,111 +211,3 @@ def set_peltier_wait(temp=10, degrees_tolerance=0.1):
 
 
     print('Target temperature has been reached')
-
-def example_extended_capture():
-    # This will demonstrate what it might be like to log ASIC bias measurements as well
-    # as capturing data spaced out over a long period of time.
-    carrier = get_context('carrier')
-    asic = get_context('asic')
-    gpib = get_context('gpib')
-    munir = get_context('munir')
-
-    # Power cycle the system to get it in a known state
-    #print('Power cycling regulators...')
-    #carrier.vreg_power_cycle_init(None)
-    #while not carrier.get_vreg_en():
-    #    time.sleep(0.1)
-    #print('...done')
-
-    # Run the combined bring-up script to automate entering global mode and activating fast data
-    serialiser_quickstart()
-
-    # Loop for 10 mins, capturing 100,000 frames (one file) each 1 minute
-    total_period_s = 10 * 60
-    interval_s = 60
-    time_start = time.time()
-    time_end = time_start + total_period_s
-    capture_count = 0
-    while (time.time() < time_end):
-        set_progress(capture_count, total_period_s / interval_s)
-        print('\n')
-        print('Starting new capture {}/{}'.format(capture_count, total_period_s / interval_s))
-
-        # Print PSU measurements (would likely log these)
-        get_psu_measurements()
-
-        return_code = capture_data(
-            path="/data/",
-            file_name="capture_longduration_{}.bin".format(capture_count),
-            num_frames=100000,
-            num_batches=1,
-            include_stdout=False
-        )
-
-        if return_code != 0:
-            print('Capture failed, aborting run')
-
-        capture_count += 1
-        set_progress(capture_count, total_period_s / interval_s)
-
-        print('Delaying for {}s until next capture...'.format(interval_s))
-        for i in range(0, interval_s):
-            if abort_sequence():
-                print('SEQUENCE ABORT...')
-                return
-            time.sleep(1)
-
-    print('All captures complete')
-
-def track_power_runaway():
-    gpib = get_context('gpib')
-
-    print('Now tracking peltier controller status:')
-    print('\ttime, temp, deviation, voltage, current')
-    setpoint = gpib.get_peltier_setpoint()
-    starttime = time.time()
-
-    voltages = []
-    currents = []
-    temperatures = []
-    deviations = []
-    times = []
-
-    while True:
-        temperature = gpib.get_peltier_measurement()
-        deviation = temperature - setpoint
-
-        info = gpib.get_peltier_info()
-        drive_current = float(info['tec_current'])
-        drive_voltage = float(info['tec_voltage'])
-        timenow = time.time()
-
-        print('\t{},\t{:.2f},\t{:.2f},\t{:.3f},\t{:.3f}'.format(
-            timenow,
-            temperature,
-            deviation,
-            drive_voltage,
-            drive_current
-            ))
-
-        times.append(round(timenow - starttime, 3))
-        temperatures.append(round(temperature, 3))
-        deviations.append(round(deviation, 3))
-        currents.append(round(drive_current, 3))
-        voltages.append(round(drive_voltage, 3))
-
-        if _sleep_abortable(20):
-            break
-
-    print('Time:\n{}\nTemperature:\n{}\nDeviation:\n{}\nCurrent:\n{}\nVoltage:\n{}'.format(
-        times, temperatures, deviations, currents, voltages))
-
-def _sleep_abortable(secs=1):
-    # Returns 1 if sleep was aborted, 0 otherwise (after delay)
-    for i in range(0, secs):
-        if abort_sequence():
-            print('SEQUENCE ABORT...')
-            return 1
-        time.sleep(1)
-
-    return 0

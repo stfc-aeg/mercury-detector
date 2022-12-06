@@ -60,6 +60,9 @@ class MunirProxyContext(ProxyContext):
 
     def execute_capture(self, file_path, file_name, num_frames, timeout, num_batches=1):
 
+        if not file_path.endswith('/'):
+            file_path = file_path + '/'
+
         response = self.set('', {
             'args': {
                 'file_path': file_path,

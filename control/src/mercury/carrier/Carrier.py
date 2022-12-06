@@ -366,6 +366,7 @@ class Carrier():
         try:
             I2CDevice.enable_exceptions()
             self._bme280 = BME280(use_spi=False, bus=self._interface_definition.i2c_device_bus)
+            logging.debug('Init BME280 successfully')
         except Exception as e:
             logging.error("BME280 failed init: {}".format(e))
             self._bme280 = None
