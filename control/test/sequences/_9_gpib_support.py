@@ -10,8 +10,8 @@ provides = [
         'list_gpib_devices',
         'sr_read_test',
         'sr_write_test',
-        'register_write_test',
-        'register_read_test',
+        'dpdk_register_write_test',
+        'dpdk_register_read_test',
         'enable_hdf5',
         'capture_data',
         ]
@@ -95,13 +95,13 @@ def enable_hdf5(use_hdf5=True):
     munir.enable_hdf5(use_udf5)
     print('HDF5 output {}'.format('enabled' if enable else 'disabled'))
 
-def register_read_test():
+def dpdk_register_read_test():
     asic = get_context('asic')
     addr = 0x0
     response = asic.register_read(addr, 5)
     print(f"Register read : {_format_response(response)}")
 
-def register_write_test():
+def dpdk_register_write_test():
     asic = get_context('asic')
     addr = 0x1
     response = asic.register_write(addr, 1, 2, 3)
