@@ -117,6 +117,8 @@ class Carrier():
         self._si5344_config_directory = si5344_config_directory
         self._si5344_config_filename = si5344_config_filename
 
+        self._external_disable_asserted = []
+
         # Set VCAL to default or argument
         self._vcal = vcal
         self.vcal_limit = 1.8       # Over 1.8v can damage MERCURY
@@ -518,6 +520,16 @@ class Carrier():
     ''' Critical temperature monitoring '''
     def _sync_critical_temp_monitor(self):
 
+        # Check if there are external disables
+        if len(self._external_disable_asserted) > 0:
+            self._temperature_iscritical = True
+            self.set_vreg_en(False)                 # Force regulators off
+            logging.warning('Regulators have been disabled externally')
+        else:
+            # Do not turn regulators back on; this is up to the user
+            # critical temperature will stay indicated until the user enables regulators again...
+            pass
+
         #TODO Without VREG_EN enabled, the temperature cannot (currently) be checked
         if (not self.get_vreg_en()) or self._POWER_CYCLING:
             logging.warning('ASIC temp could not be read due to disabled regulators:' + \
@@ -528,38 +540,24 @@ class Carrier():
             self._asic_temp = None
             return
 
-        try:
-            logging.debug('self.override_critical_temp_bme: {}'.format(self._override_critical_temp_bme))
+        logging.debug('self.override_critical_temp_bme: {}'.format(self._override_critical_temp_bme))
 
-            # Update cached ASIC temperature
-            self._sync_asic_temperature()
+        # Update cached ASIC temperature
+        self._sync_asic_temperature()
 
-            if not self._override_critical_temp_bme:
-                current_temperature = self.get_cached_asic_temperature()
-            else:
-                current_temperature = self.get_ambient_temperature()
+    def assert_external_disable(self, owner):
+        if owner not in self._external_disable_asserted:
+            self._external_disable_asserted.append(str(owner))
+            logging.critical('External disable asserted: {}'.format(owner))
+            logging.critical('External disable assertion list now: {}'.format(self._external_disable_asserted))
 
-            if current_temperature is None:
-                raise Exception('ASIC temperature read as None')
-
-            logging.info('Current primary temperature: {} (BME?: {}) (Critical: {})'.format(
-                current_temperature, self._override_critical_temp_bme, self._critical_temperature_limit))
-
-            if current_temperature >= self._critical_temperature_limit:
-                self._temperature_iscritical = True
-
-                # If temperature is critical, force disable VREG_EN
-                self.set_vreg_en(False)
-                logging.critical('Temperature too high ({}C), ASIC disabled'.format(current_temperature))
-            else:
-                self._temperature_iscritical = False
-                # Do not automatically re-enable, should cycle VREG_EN instead
-                logging.debug('ASIC temperature ({}C) below critical ({}C)'.format(current_temperature, self._critical_temperature_limit))
-        except Exception as e:
-            # Force regulator low anyway
-            logging.critical('Failed to get ASIC temperature ({}), disabling'.format(e))
-            self.set_vreg_en(False)
-            # raise
+    def deassert_external_disable(self, owner):
+        if owner in self._external_disable_asserted:
+            self._external_disable_asserted.remove(owner)
+            logging.info('External disable de-asserted: {}'.format(owner))
+        else:
+            #logging.error('Could not remove externally asserted disable (not found): {}'.format(owner))
+            pass
 
     def get_critical_temp_status(self):
         return self._temperature_iscritical
@@ -872,7 +870,14 @@ class Carrier():
                 self._gpiod_asic_nrst.set_value(0)  # nRST low
                 self._gpiod_sync.set_value(0)       # sync low
         else:               # Enabled
-            pass
+            # Prevent enable from happening if the system is being disabled externally
+            if len(self._external_disable_asserted) > 0:
+                logging.warning('VREG_EN enable aborted; the system is disabled externally')
+                return
+            else:
+                # This will be the first enable after the external systems are happy. Signal
+                # currently displayed until then to prompt the user to cycle the supplies
+                self._temperature_iscritical = False
 
         pin_state = 0 if (enable) else 1     # Reverse logic
         self._gpiod_vreg_en.set_value(pin_state)

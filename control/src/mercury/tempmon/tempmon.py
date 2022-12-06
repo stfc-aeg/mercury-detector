@@ -8,6 +8,7 @@ Joseph Nobes, STFC Detector Systems Software Group
 """
 import logging
 from enum import Enum
+import requests
 
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from ..detector.proxy import GPIBProxyContext
@@ -38,9 +39,9 @@ class TemperatureMonitor:
         :param options: dictionary of configuration options
         """
         # Extract the required configuration settings from the options dict
-        self._autoready = bool(options.get("tempmon_autoready_noreading", False))
+        self._autoready = options.get("autoready_noreading", False)
         logging.debug('autoready: {}, type: {}'.format(self._autoready, type(self._autoready)))
-        self._critical_temperature = options.get("critical_temperature", 50)
+        self._critical_temperature = float(options.get("critical_temperature", 50))
         gpib_peltier_endpoint = options.get("gpib_peltier_endpoint", "")
         carrier_endpoint = options.get("carrier_endpoint", "")
 
@@ -54,6 +55,8 @@ class TemperatureMonitor:
             "reading_source": (lambda: self._source, None, {"description":"Source of latest temperature reading"}),
             "reading": (lambda: self._reading, None, {"description":"Latest temperature reading"})
             })
+
+        self._disable_name = 'tempmon'
 
         self.STATE = MonState.MONITORING
 
@@ -174,19 +177,35 @@ class TemperatureMonitor:
     def enable_system(self, reason=''):
         self._state = MonState.MONITORING
         self._status = 'OK; ' + reason
-        #TODO enable the system
+
+        try:
+            self.adapters['carrier'].carrier.deassert_external_disable(self._disable_name)
+        except Exception as e:
+            logging.error('Could not enable carrier: {}'.format(e))
 
     def disable_system(self, reason='No reason given'):
         self._state = MonState.TRIGGERED
         self._status = 'Disabled; ' + reason
-        logging.warning('System disabled by temperature monitor: {}'.format(reason))
-        #TODO disable the system
+        logging.critical('System disabled by temperature monitor: {}'.format(reason))
 
-    def loop(self):
-        temp = self.read_system_temperature()
+        # Disable the PCB regulators
+        try:
+            self.adapters['carrier'].carrier.assert_external_disable(self._disable_name)
+        except Exception as e:
+            logging.error('Could not disable carrier: {}'.format(e))
+
+        # Turn off the bias
+        #TODO
+
+        # Turn off the peltier drive
+        #TODO
+
+    async def loop(self):
+        logging.debug('TEMP loop')
+        temp = await self.read_system_temperature()
         if temp is not None:
-            logging.debug('Successfully read temperature from {}: {}C'.format(
-                self._source, self._reading))
+            logging.debug('Successfully read temperature from {}: {}C (limit {}C)'.format(
+                self._source, self._reading, self._critical_temperature))
 
         self.handle_temperature(temp)
 

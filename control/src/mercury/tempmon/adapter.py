@@ -35,6 +35,7 @@ class TemperatureMonitorAdapter(AsyncApiAdapter):
 
         # Create temperature monitor instance, passing in options
         self.tempmon = TemperatureMonitor(self.options)
+        logging.debug('Now calling temperature monitor loop')
         self.monitoring_loop()
 
         logging.debug("TemperatureMonitorAdapter loaded")
@@ -67,7 +68,7 @@ class TemperatureMonitorAdapter(AsyncApiAdapter):
         try:
             response = await self.tempmon.get(path)
             status_code = 200
-        except temperaturemonitorexception as e:
+        except TemperatureMonitorException as e:
             response = {"error": str(e)}
             status_code = 400
 
