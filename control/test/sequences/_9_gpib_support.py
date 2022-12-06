@@ -8,10 +8,6 @@ provides = [
         'get_psu_measurements',
         'set_asic_bias_enable',
         'list_gpib_devices',
-        'sr_read_test',
-        'sr_write_test',
-        'dpdk_register_write_test',
-        'dpdk_register_read_test',
         'enable_hdf5',
         'capture_data',
         ]
@@ -94,48 +90,6 @@ def enable_hdf5(use_hdf5=True):
     munir = get_context('munir')
     munir.enable_hdf5(use_udf5)
     print('HDF5 output {}'.format('enabled' if enable else 'disabled'))
-
-def dpdk_register_read_test():
-    asic = get_context('asic')
-    addr = 0x0
-    response = asic.register_read(addr, 5)
-    print(f"Register read : {_format_response(response)}")
-
-def dpdk_register_write_test():
-    asic = get_context('asic')
-    addr = 0x1
-    response = asic.register_write(addr, 1, 2, 3)
-    #logging.debuf("oof")
-    print(f"Register write : {_format_response(response)}")
-
-def sr_write_test():
-    asic = get_context('asic')
-    addr = asic.SR_CAL
-    response = asic.register_write(addr, 1, 2, 3, 4, 5)
-
-    vals = list(range(30))
-    response = asic.register_write(addr, *vals)
-
-    vals = list(range(20))
-    addr = asic.SER_CONTROL10A
-    response = asic.register_write(addr, *vals)
-
-    asic.register_write(asic.TEST_SR, 4)
-
-def sr_read_test(val: int = 0):
-
-    print("val is {}".format(val))
-
-    asic = get_context('asic')
-    addr = asic.SER_CONTROL10A
-    response = asic.register_read(addr, 20)
-    print(f"SR read test: {_format_response(response)}")
-
-def _format_response(response):
-
-    addr = response[0] & 0x7F
-    response_str = f"{addr:#x} : " + ' '.join([hex(val) for val in response[1:]])
-    return 
 
 def list_gpib_devices():
     gpib = get_context('gpib')
