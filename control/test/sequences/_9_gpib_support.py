@@ -9,7 +9,6 @@ provides = [
         'set_asic_bias_enable',
         'list_gpib_devices',
         'enable_hdf5',
-        'capture_data',
         ]
 
 def report_munir_status(include_stdout=True):
@@ -30,61 +29,6 @@ def report_munir_status(include_stdout=True):
             continue
 
         print('\t', key, ' : ', value)
-
-def capture_data(
-        path: str = "/dev/null",
-        file_name: str = "capture",
-        num_frames: int = 100000,
-        num_batches: int = 1,
-        timeout: int = 10,
-        include_stdout=True
-        ):
-    if path == '/dev/null':
-        raise Exception('Sensible destination path not set')
-
-    # Due to bug(?) cannot create a boolean with default value of True. It will just use false in UI.
-    munir = get_context('munir')
-
-    # Trigger munir data capture
-    print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
-    response = munir.execute_capture(path, file_name, num_frames, timeout, num_batches)
-
-    if response:
-        #print('response: {} (type {})'.format(response, type(response)))
-        print('Capture has started, waiting for completion...')
-    else:
-        raise Exception('No response from munir')
-
-    # Wait for success, and reassure the user that execution is still occurring
-    reassure_s = 5
-    reassured = 0
-    timestart = time.time()
-    while munir.is_executing():
-        duration_s = int((time.time() - timestart))
-        if duration_s % reassure_s == 0 and reassured != duration_s:
-            print('\tExecuting for {}s...'.format(duration_s))
-            reassured = duration_s
-
-        time.sleep(0.1)
-
-        if abort_sequence():
-            print('SEQUENCE ABORT...')
-            break
-
-    status = munir.get_status()
-    return_code = status['return_code']
-    stdout = status['stdout']
-    stderr = status['stderr']
-    exception = status['exception']
-
-    if include_stdout:
-        print(stdout)
-    print(f"Command execution completed with rc:{return_code}")
-    if return_code != 0:
-        print(f"Stderr: {stderr}")
-        print(f"Exception: {exception}")
-
-    return return_code
 
 def enable_hdf5(use_hdf5=True):
     munir = get_context('munir')

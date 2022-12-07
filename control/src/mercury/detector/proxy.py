@@ -46,6 +46,13 @@ class ProxyContext(SyncContext):
         try:
             elem = path.split('/')[-1]
             response = self.proxy.param_tree.get(path)[elem]
+
+            status = self.proxy.param_tree.get('status/'+self.target)
+            error = status[self.target]['error']
+            status_code = status[self.target]['status_code']
+            if status[self.target]['error'] != 'OK':
+                raise Exception('{} proxy context connection error {}: {}'.format(
+                    self.target, status_code, error))
         except ParameterTreeError as e:
             logging.error("Proxy get failed with error: %s", str(e))
             response = None

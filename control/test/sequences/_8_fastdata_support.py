@@ -3,7 +3,8 @@ import os
 
 provides = [
         'example_extended_capture',
-        'fastdata_quickstart'
+        'fastdata_quickstart',
+        'capture_data',
 ]
 
 requires = [
@@ -82,7 +83,7 @@ def fastdata_quickstart(bypass_asic_reset=False):
 
     print("Device is now outputting fast data")
 
-def log_instrument_values(output_fullpath, output_filename, log_localtime=None):
+def log_instrument_values(output_fullpath, output_filename,associated_data_file="", log_localtime=None):
     # should have .csv extension
     if '.csv' not in output_filename:
         output_filename = output_filename + '.csv'
@@ -118,13 +119,13 @@ def log_instrument_values(output_fullpath, output_filename, log_localtime=None):
             pass
 
         with open(output_fullpath + '/' + output_filename, 'a') as file:
-            file.write(','.join(['date','time','peltier temperature','bias current','bias voltage']))
+            file.write(','.join(['date','time','peltier temperature','bias current','bias voltage', 'file']))
             file.write('\n')
             print('Instrument data will be stored in {}'.format(output_fullpath + '/' + output_filename))
 
     # Write data to the file
     with open(output_fullpath + '/' + output_filename, 'a') as file:
-        file.write(','.join([str(x) for x in [datefmt, timefmt, temp, cur, vol]]))
+        file.write(','.join([str(x) for x in [datefmt, timefmt, temp, cur, vol, associated_data_file]]))
         file.write('\n')
 
 
@@ -164,20 +165,25 @@ def example_extended_capture(output_folder="default", filename="capture", store_
         print('\n')
         print('Starting new capture {}/{}'.format(capture_count, total_period_s / interval_s))
 
-        # Log PSU measurements, file shares folder and filename with experimental fast data
-        if store_instrument_info:
-            log_instrument_values(loki_output_root, filename)
-
-        return_code = capture_data(
-            path=fastdata_output_root,
-            file_name="{}_{:04d}{:02d}{:02d}-{:02d}{:02d}{:02d}_{}".format(filename,
+        # Generate the file name to store data in for this capture with appended date & count
+        data_filename = "{}_{:04d}{:02d}{:02d}-{:02d}{:02d}{:02d}_{}".format(
+                filename,
                 localtime_teststart.tm_year,
                 localtime_teststart.tm_mon,
                 localtime_teststart.tm_mday,
                 localtime_teststart.tm_hour,
                 localtime_teststart.tm_min,
                 localtime_teststart.tm_sec,
-                capture_count),
+                capture_count)
+
+        # Log PSU measurements, file shares folder and filename with experimental fast data
+        # Output filename will match the data capture filename
+        if store_instrument_info:
+            log_instrument_values(loki_output_root, filename, data_filename)
+
+        return_code = capture_data(
+            path=fastdata_output_root,
+            file_name=data_filename,
             num_frames=100000,
             num_batches=1,
             include_stdout=True
@@ -191,3 +197,58 @@ def example_extended_capture(output_folder="default", filename="capture", store_
 
         print('Delaying for {}s until next capture...'.format(interval_s))
         if _sleep_abortable(interval_s): return
+
+def capture_data(
+        path: str = "/dev/null",
+        file_name: str = "capture",
+        num_frames: int = 100000,
+        num_batches: int = 1,
+        timeout: int = 10,
+        include_stdout=True
+        ):
+    if path == '/dev/null':
+        raise Exception('Sensible destination path not set')
+
+    # Due to bug(?) cannot create a boolean with default value of True. It will just use false in UI.
+    munir = get_context('munir')
+
+    # Trigger munir data capture
+    print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
+    response = munir.execute_capture(path, file_name, num_frames, timeout, num_batches)
+
+    if response:
+        #print('response: {} (type {})'.format(response, type(response)))
+        print('Capture has started, waiting for completion...')
+    else:
+        raise Exception('No response from munir')
+
+    # Wait for success, and reassure the user that execution is still occurring
+    reassure_s = 5
+    reassured = 0
+    timestart = time.time()
+    while munir.is_executing():
+        duration_s = int((time.time() - timestart))
+        if duration_s % reassure_s == 0 and reassured != duration_s:
+            print('\tExecuting for {}s...'.format(duration_s))
+            reassured = duration_s
+
+        time.sleep(0.1)
+
+        if abort_sequence():
+            print('SEQUENCE ABORT...')
+            break
+
+    status = munir.get_status()
+    return_code = status['return_code']
+    stdout = status['stdout']
+    stderr = status['stderr']
+    exception = status['exception']
+
+    if include_stdout:
+        print(stdout)
+    print(f"Command execution completed with rc:{return_code}")
+    if return_code != 0:
+        print(f"Stderr: {stderr}")
+        print(f"Exception: {exception}")
+
+    return return_code
