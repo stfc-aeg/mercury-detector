@@ -88,18 +88,23 @@ def log_instrument_values(output_fullpath, output_filename, log_localtime=None):
         output_filename = output_filename + '.csv'
 
     # Get latest readings
-    vol, cur = get_psu_measurements()
-    temp = get_peltier_status()
+    try:
+        vol, cur = get_psu_measurements()
+        temp = get_peltier_status()
+    except Exception as e:
+        print('Failed to retrieve instrument readings; {}'.format(e))
+        return
 
     # Get latest time if one is not supplied
     if log_localtime is None:
         log_localtime = time.localtime()
 
     # Format the time code
-    timefmt = '{}/{}/{} {}:{}:{}'.format(
+    datefmt = '{:02d}/{:02d}/{:04d}'.format(
             log_localtime.tm_mday,
             log_localtime.tm_mon,
-            log_localtime.tm_year,
+            log_localtime.tm_year)
+    timefmt = '{:02d}:{:02d}:{:02d}'.format(
             log_localtime.tm_hour,
             log_localtime.tm_min,
             log_localtime.tm_sec)
@@ -113,13 +118,13 @@ def log_instrument_values(output_fullpath, output_filename, log_localtime=None):
             pass
 
         with open(output_fullpath + '/' + output_filename, 'a') as file:
-            file.write(','.join(['time','peltier temperature','bias current','bias voltage']))
+            file.write(','.join(['date','time','peltier temperature','bias current','bias voltage']))
             file.write('\n')
             print('Instrument data will be stored in {}'.format(output_fullpath + '/' + output_filename))
 
     # Write data to the file
     with open(output_fullpath + '/' + output_filename, 'a') as file:
-        file.write(','.join([str(x) for x in [timefmt, temp, cur, vol]]))
+        file.write(','.join([str(x) for x in [datefmt, timefmt, temp, cur, vol]]))
         file.write('\n')
 
 
@@ -135,9 +140,9 @@ def example_extended_capture(output_folder="default", filename="capture", store_
     fastdata_output_root = "/mnt/raid/loki/" + output_folder + '/'
     loki_output_root = "/opt/loki-detector/exports/instrumentdata/" + output_folder + "/"
 
-    # Run the combined bring-up script to automate entering global mode and activating fast data
-    #fastdata_quickstart()
-    # Don't run; this will knock out the link to FPGA
+    # Check that the ASIC has been brought into data mode
+    if carrier.get_asic_serialiser_mode() != 'data':
+        raise Exception('ASIC is not in data mode. Has fastdata_quickstart() been executed?')
 
     # Ensure that the loki path has been created (cannot do the fast data path as not this machine)
     try:
@@ -165,7 +170,14 @@ def example_extended_capture(output_folder="default", filename="capture", store_
 
         return_code = capture_data(
             path=fastdata_output_root,
-            file_name="{}_{}{}{}_{}".format(filename, localtime_teststart.tm_hour, localtime_teststart.tm_min, localtime_teststart.tm_sec, capture_count),
+            file_name="{}_{:04d}{:02d}{:02d}-{:02d}{:02d}{:02d}_{}".format(filename,
+                localtime_teststart.tm_year,
+                localtime_teststart.tm_mon,
+                localtime_teststart.tm_mday,
+                localtime_teststart.tm_hour,
+                localtime_teststart.tm_min,
+                localtime_teststart.tm_sec,
+                capture_count),
             num_frames=100000,
             num_batches=1,
             include_stdout=True
