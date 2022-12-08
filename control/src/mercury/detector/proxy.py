@@ -46,6 +46,13 @@ class ProxyContext(SyncContext):
         try:
             elem = path.split('/')[-1]
             response = self.proxy.param_tree.get(path)[elem]
+
+            status = self.proxy.param_tree.get('status/'+self.target)
+            error = status[self.target]['error']
+            status_code = status[self.target]['status_code']
+            if status[self.target]['error'] != 'OK':
+                raise Exception('{} proxy context connection error {}: {}'.format(
+                    self.target, status_code, error))
         except ParameterTreeError as e:
             logging.error("Proxy get failed with error: %s", str(e))
             response = None
@@ -59,6 +66,9 @@ class MunirProxyContext(ProxyContext):
         super().__init__(proxy, 'munir')
 
     def execute_capture(self, file_path, file_name, num_frames, timeout, num_batches=1):
+
+        if not file_path.endswith('/'):
+            file_path = file_path + '/'
 
         response = self.set('', {
             'args': {
