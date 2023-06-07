@@ -496,7 +496,7 @@ timesleep: (optional)
     set to keep the UI responsive is 1ms, which incurs ~20% time penalty. If it is
     set to 0, will run flat-out but freeze the UI.
 '''
-def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 0.5, 1.0], test_name='', test_index=0, suppress_progress_update=False, timesleep=0.001):
+def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 0.5, 1.0], test_name='', test_suffix='', test_index=0, suppress_progress_update=False, timesleep=0.001):
     mercury_carrier = get_context('carrier')
 
     # Create a new destination directory for this batch of tests, using the current session
@@ -509,7 +509,7 @@ def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 
     # Determine filename to store results in, based on test name and timestamp
     time_now = time.localtime()
     time_str = "{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec, int((time.time() % 1) * 1000))
-    filename = "{}/{}_{}_{}.csv".format(export_subdir, test_name, test_index, time_str)
+    filename = "{}/{}_{}_{}_{}.csv".format(export_subdir, test_name, test_suffix, test_index, time_str)
     print("\tWill write to {}".format(filename))
 
     for vcal_setting in vcal_values:

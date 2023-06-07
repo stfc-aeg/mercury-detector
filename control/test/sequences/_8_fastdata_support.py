@@ -2,21 +2,25 @@ import time
 import os
 
 provides = [
-        'example_extended_capture',
         'fastdata_quickstart',
-        'capture_data',
+        'single_capture',
+        'example_extended_capture',
 ]
 
 requires = [
         'serialiser_tests',
         '_9_gpib_support',
         'utility',
+        'diamond202212_support',
         ]
 
-def fastdata_quickstart(bypass_asic_reset=False):
+def fastdata_quickstart(bypass_asic_reset=False, bypass_diamond_default_registers=False):
     asic = get_context('asic')
     carrier = get_context('carrier')
     print("Preparing to enable fast data:")
+
+    progress_steps = 7
+    progress_count = 0
 
     # Power Cycle The Regulators
     # carrier.vreg_power_cycle_init(None)
@@ -24,7 +28,7 @@ def fastdata_quickstart(bypass_asic_reset=False):
     #     pass
     if not carrier.get_vreg_en():
         raise Exception('Regulators are not enabled')
-    set_progress(1, 6)
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
 
     # Ensure FireFlies are Turned on, all channels
     print("\tChecking FireFlies are enabled")
@@ -48,7 +52,7 @@ def fastdata_quickstart(bypass_asic_reset=False):
             else:
                 print("\tAll channels on FireFly {} are enabled".format(FF_ID))
                 break
-    set_progress(2, 6)
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
 
     # Enter Global Mode
     if bypass_asic_reset:
@@ -59,7 +63,15 @@ def fastdata_quickstart(bypass_asic_reset=False):
     else:
         print("\tEntering global mode...")
         asic.enter_global_mode()
-    set_progress(3, 6)
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
+
+    # Setting Diamond Default Registers
+    if not bypass_diamond_default_registers:
+        Set_DiamondDefault_Registers()
+        print("\tDIAMOND default registers set")
+    else:
+        print("\tDIAMOND default register settings skipped")
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
 
     # Enter and Exit Serialiser Reset
     print("\tResetting Serialisers...")
@@ -67,23 +79,25 @@ def fastdata_quickstart(bypass_asic_reset=False):
     ser_enter_reset()
     time.sleep(0.5)
     ser_exit_reset()
-    set_progress(4, 6)
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
 
     # Enter Bonding Mode
     print("\tEntering Bonding Mode...")
     time.sleep(0.5)
     enter_bonding_mode()
-    set_progress(5, 6)
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
 
     # Enter Data Mode
     print("\tEntering Data Mode...")
     time.sleep(0.5)
     enter_data_mode()
-    set_progress(6, 6)
+    progress_count = progress_count + 1; set_progress(progress_count, progress_steps);
 
     print("Device is now outputting fast data")
 
-def log_instrument_values(output_fullpath, output_filename,associated_data_file="", log_localtime=None):
+def log_instrument_values(output_fullpath, output_filename, associated_data_file="", log_localtime=None):
+    carrier = get_context('carrier')
+
     # should have .csv extension
     if '.csv' not in output_filename:
         output_filename = output_filename + '.csv'
@@ -95,6 +109,9 @@ def log_instrument_values(output_fullpath, output_filename,associated_data_file=
     except Exception as e:
         print('Failed to retrieve instrument readings; {}'.format(e))
         return
+
+    # Get ASIC Temperature Reading from carrier
+    asic_temp = carrier.get_cached_asic_temperature()
 
     # Get latest time if one is not supplied
     if log_localtime is None:
@@ -119,23 +136,29 @@ def log_instrument_values(output_fullpath, output_filename,associated_data_file=
             pass
 
         with open(output_fullpath + '/' + output_filename, 'a') as file:
-            file.write(','.join(['date','time','peltier temperature','bias current','bias voltage', 'file']))
+            file.write(','.join(['date','time','asic temperature', 'peltier temperature','bias current','bias voltage', 'file']))
             file.write('\n')
             print('Instrument data will be stored in {}'.format(output_fullpath + '/' + output_filename))
 
     # Write data to the file
     with open(output_fullpath + '/' + output_filename, 'a') as file:
-        file.write(','.join([str(x) for x in [datefmt, timefmt, temp, cur, vol, associated_data_file]]))
+        file.write(','.join([str(x) for x in [datefmt, timefmt, asic_temp, temp, cur, vol, associated_data_file]]))
         file.write('\n')
 
-
-def example_extended_capture(output_folder="default", filename="capture", store_instrument_info=False, period_s=600, interval_s=60):
+def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000, num_batches=1, timeout=20):
     # This will demonstrate what it might be like to log ASIC bias measurements as well
     # as capturing data spaced out over a long period of time.
+    # Suffix is used to record parameter values along with the data. This will be split 
+    # per file for fast data, but grouped for instrument readings.
+
     carrier = get_context('carrier')
     asic = get_context('asic')
     gpib = get_context('gpib')
     munir = get_context('munir')
+
+    # Check filename is not too large. 32 is max, and 4 to be conservative in case names are auto generated
+    if len(filename) >= (100-4):
+        raise Exception('Filename was too long ({} vs 32)'.format(len(filename)))
 
     # Fast data is stored on seneca, and instrument data on loki
     fastdata_output_root = "/mnt/raid/loki/" + output_folder + '/'
@@ -161,13 +184,13 @@ def example_extended_capture(output_folder="default", filename="capture", store_
     time_end = time_start + total_period_s
     capture_count = 0
     while (time.time() < time_end):
-        set_progress(capture_count, total_period_s / interval_s)
+        #set_progress(capture_count, total_period_s / interval_s)
         print('\n')
         print('Starting new capture {}/{}'.format(capture_count, total_period_s / interval_s))
 
         # Generate the file name to store data in for this capture with appended date & count
         data_filename = "{}_{:04d}{:02d}{:02d}-{:02d}{:02d}{:02d}_{}".format(
-                filename,
+                filename + '_' + suffix,
                 localtime_teststart.tm_year,
                 localtime_teststart.tm_mon,
                 localtime_teststart.tm_mday,
@@ -178,77 +201,44 @@ def example_extended_capture(output_folder="default", filename="capture", store_
 
         # Log PSU measurements, file shares folder and filename with experimental fast data
         # Output filename will match the data capture filename
-        if store_instrument_info:
-            log_instrument_values(loki_output_root, filename, data_filename)
+        if not ignore_instrument_info:
+            log_instrument_values(
+                output_fullpath=loki_output_root,
+                output_filename=filename, 
+                associated_data_file=data_filename)
 
         return_code = capture_data(
             path=fastdata_output_root,
             file_name=data_filename,
-            num_frames=100000,
-            num_batches=1,
-            include_stdout=True
+            num_frames=num_frames,
+            num_batches=num_batches,
+            include_stdout=True,
+            timeout=timeout
         )
 
         if return_code != 0:
             raise Exception('Capture failed, aborting run')
 
         capture_count += 1
-        set_progress(capture_count, total_period_s / interval_s)
+        #set_progress(capture_count, total_period_s / interval_s)
+
+        # If this was the last capture, end early
+        if (time.time() + interval_s) > time_end:
+            return
 
         print('Delaying for {}s until next capture...'.format(interval_s))
         if _sleep_abortable(interval_s): return
 
-def capture_data(
-        path: str = "/dev/null",
-        file_name: str = "capture",
-        num_frames: int = 100000,
-        num_batches: int = 1,
-        timeout: int = 10,
-        include_stdout=True
-        ):
-    if path == '/dev/null':
-        raise Exception('Sensible destination path not set')
+def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000, num_batches = 1, timeout=20):
+    output_folder = 'dssg/' + output_folder
+    example_extended_capture(
+        output_folder=output_folder,
+        filename=filename,
+        suffix=suffix,
+        ignore_instrument_info=False,
+        period_s=10,
+        interval_s=100,
+        num_frames=num_frames,
+        num_batches=num_batches,
+        timeout=timeout)
 
-    # Due to bug(?) cannot create a boolean with default value of True. It will just use false in UI.
-    munir = get_context('munir')
-
-    # Trigger munir data capture
-    print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
-    response = munir.execute_capture(path, file_name, num_frames, timeout, num_batches)
-
-    if response:
-        #print('response: {} (type {})'.format(response, type(response)))
-        print('Capture has started, waiting for completion...')
-    else:
-        raise Exception('No response from munir')
-
-    # Wait for success, and reassure the user that execution is still occurring
-    reassure_s = 5
-    reassured = 0
-    timestart = time.time()
-    while munir.is_executing():
-        duration_s = int((time.time() - timestart))
-        if duration_s % reassure_s == 0 and reassured != duration_s:
-            print('\tExecuting for {}s...'.format(duration_s))
-            reassured = duration_s
-
-        time.sleep(0.1)
-
-        if abort_sequence():
-            print('SEQUENCE ABORT...')
-            break
-
-    status = munir.get_status()
-    return_code = status['return_code']
-    stdout = status['stdout']
-    stderr = status['stderr']
-    exception = status['exception']
-
-    if include_stdout:
-        print(stdout)
-    print(f"Command execution completed with rc:{return_code}")
-    if return_code != 0:
-        print(f"Stderr: {stderr}")
-        print(f"Exception: {exception}")
-
-    return return_code
