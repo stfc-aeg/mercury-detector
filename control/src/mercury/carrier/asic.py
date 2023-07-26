@@ -495,8 +495,8 @@ class Asic():
         # location, which will be high. The exact output of this is defined by the ASIC
         # calibration pattern cycle. 1/4 frames will be the highest contrast.
 
-        row_bits = [0] * row + [1] + [0] * (80-row)
-        column_bits = [0] * column + [1] + [0] * (80-column)
+        row_bits = [0] * row + [1] + [0] * (79-row)
+        column_bits = [0] * column + [1] + [0] * (79-column)
 
         self._logger.info("Generated calibration test pattern to highlight pixel row {}, column {}".format(row, column))
         self._logger.debug("In bit form:\n\trows: {}\n\tcolumns:{}".format(row_bits, column_bits))

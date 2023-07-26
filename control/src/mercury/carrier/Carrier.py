@@ -1157,7 +1157,7 @@ class Carrier():
                 "HIGHLIGHT_DIVISION":(lambda: self._asic_cal_highlight_div, lambda division: self.cfg_asic_highlight(division=division), {"description":"Division chosen for 4x4 grid highlighting via calibration pattern"}),
                 "HIGHLIGHT_SECTOR":(lambda: self._asic_cal_highlight_sec, lambda sector: self.cfg_asic_highlight(sector=sector), {"description":"Sector chosen for 4x4 grid highlighting via calibration pattern"}),
                 "HIGHLIGHT_ROW":(lambda: self._asic_cal_highlight_row, lambda row: self.cfg_asic_highlight(row=row), {"description":"Row chosen for 1x1 pixel highlighting via calibration pattern"}),
-                "HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(colunm=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),
+                "HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(column=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),
             },
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
