@@ -17,12 +17,17 @@
         <link href="css/carrier.css" rel="stylesheet">
         <link href="css/command-sequencer.css" rel="stylesheet">
 
+        <!-- Load plotly.js into the DOM -->
+	    <script src='https://cdn.plot.ly/plotly-2.24.1.min.js'></script>
+
         <div id="global-nav"></div>
+
+        
 
     </head>
     <body>
 
-        <h1 class="text-center">MERCURY Carrier Control</h1>
+        <h1 class="text-center">Marlon's MERCURY Carrier Control</h1>
         <p class="lead text-center">
             Zynq Connection Status: 
             <span id="zynq-connection-state">&nbsp;</span>
@@ -399,8 +404,14 @@
                                         </div>
                                     </div>
                                     <img id="segment-img" src="" class="card-img-bottom" alt="...">
+                                    <div id='myDiv'><!-- Plotly chart will be drawn inside this DIV --></div>
+
+
                                 </div>
                             </div>
+
+                            
+
                             <div class="col col-xl-5 col-lg-12 col-md-12 col-sm-12 col-xs-12">
                                 <div class="card w-30 mb-3 text-center">
                                     <div class="card-header">
@@ -659,8 +670,11 @@
 
                 <div class="tab-pane fade" id="contact" role="tabpanel">
                     Contact
+
+                    
                 </div>
             </div>
+
 
             <script src="js/global-nav.js"></script>
             <script>
