@@ -1170,6 +1170,7 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
         document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
         segment_new_capture = true;
         segment_current = segment;
+        readout_output();
     })
     .catch(error => {
         console.log('Error setting up ASIC segment readout: ' + error);
@@ -1237,6 +1238,9 @@ function readout_output() {
             
             z: reversed_data,
             type: 'heatmap',
+            colorbar:{
+                orientation: "h",
+            },
             colorscale: 'Viridis',
 
         }
@@ -1256,11 +1260,10 @@ function readout_output() {
         {
             constrain: "domain",
         },
-        showlegend: true,
-        legend: {"orientation": "h"}
+        
     };
     
-    Plotly.newPlot('myDiv', data, layout);
+    Plotly.newPlot('graph_output', data, layout);
 }
 
 var time_last_connected = null
