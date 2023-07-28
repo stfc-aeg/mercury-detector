@@ -6,7 +6,7 @@ $( document ).ready(function() {
 
     // Init UI
     init();
-    readout_output();
+    // readout_output();
 
 });
 
@@ -1167,7 +1167,6 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
     .then((response) => carrier_endpoint.put(parseInt(segment), 'ASIC_SEGMENT_CAPTURE', timeout=ajax_timeout_ms))
     .then((response) => {
 		console.log("Segment capture started for segment " + segment + " using colour range " + vmin + " to " + vmax);
-        document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
         segment_new_capture = true;
         segment_current = segment;
         readout_output();
@@ -1185,22 +1184,20 @@ function update_loki_asic_segment_readout() {
             // Reload only if the currently valid image is new
             if (segment_new_capture) {
                 timestamp = new Date().getTime();   // Force update in this instance
-                document.getElementById("segment-img").src="imgout/segment.png?t=" + timestamp;
 
-                // Remove blurring
-                document.getElementById("segment-img").style="-webkit-filter: blur(0px)"
+
+                update_loki_asic_segment_data();
+
 
                 segment_new_capture = false;
-                //console.log('segment display updated');
+                console.log('segment display updated');
             } else {
-                //console.log('segment not updated (old)');
+                console.log('segment not updated (old)');
             }
         } else if (response.ASIC_SEGMENT_CAPTURE != 1) {
-            //document.getElementById("segment-img").src="";
-            // Apply a blurring effect to demonstrate that the image is no longer valid
-            document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
+     
             segment_new_capture = true;
-            //console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
+            console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
         }
     })
     .catch(error => {
@@ -1208,30 +1205,21 @@ function update_loki_asic_segment_readout() {
     });
 }
 
-function readout_output() {
 
-    var reversed_data = [[320,  388,  345,  435,    0,  361,    0,  682,    0,  548,    0,  589,    0,  512,
-        0, 661,   0, 663,   0, 631,   0, 875,   0, 744,   0, 691,   0, 853,
-        0, 761,   0, 719,   0, 834,   0, 824,   0, 889,   0, 781,   0, 851,
-        0, 990,   0,1024,   0, 860,   0,1141,   0,1062,   0, 865,   0,1025,
-        0,1164,   0,1041,   0,1098,   0, 836,   0,1115,   0,1073,   0,1159,
-        0, 952,   0,1126,   0,1138,   0,1063,   0,1586],
-        [316, 471, 458, 544, 529, 703, 506, 482, 666, 795, 571, 811, 710 ,657, 775, 806, 684, 776, 647, 964, 622, 646, 568, 621, 781, 640, 812 ,798,
-        603, 678, 963, 768, 762, 736, 874, 875, 843, 796, 811, 686,   0 ,684,733, 834, 699, 843, 939, 779, 983, 866, 861, 979, 913, 725, 818 ,744, 982, 954, 848,1011, 910,1000, 771,1044, 831,1040,1049,1094, 920, 1091,
-        951, 985, 645, 982,1051, 811, 826, 832, 958,1138],
-        [
-        336,  380,  334,  345,    0,  653,    0,  724,    0,  760,    0,  603,    0,  648,
-        0, 496,   0, 695,   0, 622,   0, 776,   0, 502,   0, 726,   0, 898,
-        0, 767,   0, 676,   0, 799,   0, 634,   0, 841,   0, 546,   0, 539,
-        0, 780,   0, 561,   0, 868,   0, 739,   0, 814,   0, 869,   0, 675,
-        0, 865,   0, 795,   0, 805,   0, 895,   0, 781,   0, 978,   0, 967,
-        0, 866,   0, 847,   0, 727,   0, 891,   0, 1249],
-        [420, 410, 430, 436, 543, 676, 618, 567, 641, 630, 493, 640, 572, 595,
-        700, 622, 769, 654, 568, 732, 688, 688, 661, 638, 678, 659, 744, 660,
-        852, 563, 827, 771,1052, 730, 835, 733, 930, 606, 886, 783, 668, 885, 776, 867, 662, 840, 857, 888, 868, 746, 871, 785, 656, 809, 814, 855, 954, 723, 836, 985, 761, 730, 880, 773, 813, 967, 295, 746, 899, 885, 795,  607,  545, 1084,  799,  873,  849,  864,  968,  808,]];
+function update_loki_asic_segment_data() {
+    carrier_endpoint.get('ASIC_SEGMENT_DATA', timeout=ajax_timeout_ms)
+    .then(response => {
+        segment_data = response.ASIC_SEGMENT_DATA;
+        readout_output(segment_data);
 
+    })
     
-        
+}
+
+
+function readout_output(segment_data) {
+
+    var reversed_data = segment_data;
     
     var data = [
         {

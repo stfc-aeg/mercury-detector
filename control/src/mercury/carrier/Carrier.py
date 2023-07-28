@@ -189,6 +189,7 @@ class Carrier():
         self._segment_ready = False             # True when the last capture request is complete
         self._segment_vmax = None
         self._segment_vmin = None
+        self._segment_data = None
 
         self._psu_status = "No Run"
 
@@ -1065,31 +1066,11 @@ class Carrier():
 
             logging.warning('Reshaped array: {}'.format(reshaped))
 
-            # Plot the reshaped array as color mapped mesh
-            #plt.rcParams["figure.figsize"] = (15,2)
-            fig, ax = plt.subplots(1, 1)
-            plt.title('Segment {}'.format(segment))
-            ax.set_xticks(range(0,80, 4))
-            ax.set_yticks(range(0,4,2))
-            #mesh = ax.pcolormesh(reshaped, vmin=None, vmax=None, )
-            mesh = ax.imshow(reshaped, vmin=self._segment_vmin, vmax=self._segment_vmax)
-            fig.colorbar(mesh, orientation='horizontal', fraction=0.1)
+            # Converts numpy array to python array - adds commas
+            reshaped = reshaped.tolist()
 
-            # Write output to file
-            time_now = time.localtime()
-            tstamp = "{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(time_now.tm_year,
-                                                                    time_now.tm_mon,
-                                                                    time_now.tm_mday,
-                                                                    time_now.tm_hour,
-                                                                    time_now.tm_min,
-                                                                    time_now.tm_sec,
-                                                                    int((time.time() % 1) * 1000))
-            #filename = '/opt/loki-detector/exports/{}_seg{}.png'.format(tstamp, segment)
-            filename = 'test/static/imgout/segment.png'.format(tstamp, segment)
-            plt.savefig(filename, dpi=400, transparent=True, bbox_inches='tight')
-
+            self._segment_data = reshaped
             self._segment_ready = True
-
         except ASICDisabledError:
             logging.error('Could not trigger segment readout due to disabled ASIC')
             return None
@@ -1150,7 +1131,20 @@ class Carrier():
             "ASIC_SER_PATTERN":(self.get_asic_all_serialiser_pattern, self.set_asic_all_serialiser_pattern, {"description":"ASIC Serialiser pattern (0 for serial, 7 for PRBS, 1-5 for clock div)"}),
             "ASIC_SEGMENT_CAPTURE":(lambda: {True:1, False:0}[self._segment_ready], self.trigger_asic_segment_capture, {}),
             "ASIC_SEGMENT_VMAX":(lambda: self._segment_vmax, lambda maxval: self.set_segment_color_scale(vmax=maxval), {"description":"Maximum for segment colour scale"}),
-            "ASIC_SEGMENT_VMIN":(lambda: self._segment_vmin, lambda minval: self.set_segment_color_scale(vmin=minval), {"description":"Minimum for segment colour scale"}),
+            "ASIC_SEGMENT_VMIN":(
+                lambda: self._segment_vmin,
+                lambda minval: self.set_segment_color_scale(vmin=minval),
+                {
+                    "description":"Minimum for segment colour scale"
+                },
+            ),
+            "ASIC_SEGMENT_DATA":(
+                lambda: self._segment_data,
+                None,
+                {
+                    "description":"Reshaped array of data"
+                }
+            ),
             "ASIC_CAL_PATTERN":{
                 "ENABLE":(self.get_asic_cal_pattern_en, self.set_asic_cal_pattern_en, {"description":"Enable ASIC calibration pattern injection"}),
                 "PATTERN":(None, self.set_asic_cal_pattern, {"description":"Selection of pattern type: default or highlight"}),
