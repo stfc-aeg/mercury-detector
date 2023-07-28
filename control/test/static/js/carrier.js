@@ -1156,6 +1156,10 @@ function en_dis_segment_vminmax(checked) {
 }
 var segment_new_capture = true
 var segment_current = 0;
+var colour_range_min;
+var colour_range_max;
+var vmax;
+var auto_ticked;
 function trigger_segment_readout(segment, vmin, vmax, auto) {
     if (auto == true) {
         vmin = -1;
@@ -1169,7 +1173,14 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
 		console.log("Segment capture started for segment " + segment + " using colour range " + vmin + " to " + vmax);
         segment_new_capture = true;
         segment_current = segment;
-        readout_output();
+
+        if (auto != true) {
+            colour_range_min = vmin;
+            colour_range_max = vmax;
+        };
+
+        auto_ticked = auto;
+
     })
     .catch(error => {
         console.log('Error setting up ASIC segment readout: ' + error);
@@ -1219,17 +1230,13 @@ function update_loki_asic_segment_data() {
 
 function readout_output(segment_data) {
 
-    var reversed_data = segment_data;
     
     var data = [
         {
             
-            z: reversed_data,
+            z: segment_data,
             type: 'heatmap',
-            colorbar:{
-                orientation: "h",
-            },
-            colorscale: 'Viridis',
+            coloraxis: 'coloraxis',
 
         }
       ];
@@ -1248,7 +1255,20 @@ function readout_output(segment_data) {
         {
             constrain: "domain",
         },
+        coloraxis:
+        {
+            colorscale: 'Viridis',
+            colorbar:{
+                orientation: "h",
+            },
+
+        }
         
+    };
+
+    if (!auto_ticked) {
+        layout.coloraxis["cmin"]= colour_range_min;
+        layout.coloraxis["cmax"]= colour_range_max;
     };
     
     Plotly.newPlot('graph_output', data, layout);
