@@ -1071,11 +1071,12 @@ class Carrier():
 
             self._segment_data = self._segment_data + reshaped
 
+
         try:
 
             self._segment_data =[]
 
-            if segment == 20:
+            if segment == 20:                   # If segment == 20, then all segments will be displayed
                 for segment in range(20):
                     create_reshaped_array()
             else:
@@ -1157,7 +1158,7 @@ class Carrier():
                 lambda: self._segment_data,
                 None,
                 {
-                    "description":"Reshaped array of data"
+                    "description":"Reshaped array of data. If segment==20, then all segments displayed"
                 }
             ),
             "ASIC_CAL_PATTERN":{

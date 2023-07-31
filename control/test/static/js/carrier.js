@@ -1155,7 +1155,8 @@ function en_dis_segment_vminmax(checked) {
     }
 }
 
-var all_segments_displayed = true
+var all_segments_displayed = false
+$('#segment-readout-autosegment').prop('checked', false);
 function en_dis_segment_display_all(checked) {
     if (checked == true) {
         console.log('disabling segment select entry');
@@ -1169,7 +1170,7 @@ function en_dis_segment_display_all(checked) {
 }
 
 var segment_new_capture = true
-var segment_current = 0;
+var segment_current = null;
 var colour_range_min;
 var colour_range_max;
 var vmax;
@@ -1181,7 +1182,7 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
     };
     console.log(segment)
     if (all_segments_displayed){
-        segment = 20;
+        segment = 20;                           // if segment = 20, then all segments will be displayed
         console.log(all_segments_displayed)
 
     };
@@ -1241,7 +1242,10 @@ function update_loki_asic_segment_data() {
     carrier_endpoint.get('ASIC_SEGMENT_DATA', timeout=ajax_timeout_ms)
     .then(response => {
         segment_data = response.ASIC_SEGMENT_DATA;
-        readout_output(segment_data);
+        if (segment_current != null){
+            readout_output(segment_data);
+        }
+        
 
     })
     
@@ -1257,6 +1261,7 @@ function readout_output(segment_data) {
             z: segment_data,
             type: 'heatmap',
             coloraxis: 'coloraxis',
+            
 
         }
       ];
@@ -1280,18 +1285,26 @@ function readout_output(segment_data) {
             colorscale: 'Viridis',
             colorbar:{
                 orientation: "h",
+                y: -.1,
             },
 
         }
         
     };
 
+    var config = {responsive: true}
+
     if (!auto_ticked) {
         layout.coloraxis["cmin"]= colour_range_min;
         layout.coloraxis["cmax"]= colour_range_max;
+      
+    };
+    if (all_segments_displayed) {
+        layout["title"] = 'All Segments';
+        layout.coloraxis["colorbar"] = "v";
     };
     
-    Plotly.newPlot('graph_output', data, layout);
+    Plotly.newPlot('graph_output', data, layout, config);
 }
 
 var time_last_connected = null
