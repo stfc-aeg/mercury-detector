@@ -396,8 +396,12 @@
                                                     <input type="number" min=0 max=4096 value=4096 step=1 class="form-control" id="segment-readout-vmax" disabled/>
                                                 </div>
                                                 <div class="input-group mb-3">
+                                                    <div class="input-group-text">
+                                                        <input class="form-check-input mt-0" type="checkbox" value="" aria-label="Checkbox for following text input" id="segment-readout-autosegment" onclick="en_dis_segment_display_all($('#segment-readout-autosegment').prop('checked'))" checked>
+                                                        <label class="form-check-label" style="margin-left: 5px">Display All Segments</label>
+                                                    </div>
                                                     <span class="input-group-text">Segment Select</span>
-                                                    <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="segment-readout-select"/>
+                                                    <input type="number" min=0 max=20 value=0 step=1 class="form-control" id="segment-readout-select"/>
                                                     <button class="btn btn-outline-secondary" type="button" onclick="trigger_segment_readout($('#segment-readout-select').prop('value'),$('#segment-readout-vmin').prop('value'),$('#segment-readout-vmax').prop('value'),$('#segment-readout-autorange').prop('checked'))">Read Segment</button>
                                                 </div>
                                             </div>

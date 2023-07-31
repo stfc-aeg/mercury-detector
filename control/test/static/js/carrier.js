@@ -1154,6 +1154,20 @@ function en_dis_segment_vminmax(checked) {
         document.getElementById("segment-readout-vmax").removeAttribute('disabled');
     }
 }
+
+var all_segments_displayed = true
+function en_dis_segment_display_all(checked) {
+    if (checked == true) {
+        console.log('disabling segment select entry');
+        document.getElementById("segment-readout-select").setAttribute('disabled', '');
+        all_segments_displayed =true
+    } else {
+        console.log('enabling segment select entry');
+        document.getElementById("segment-readout-select").removeAttribute('disabled');
+        all_segments_displayed = false
+    }
+}
+
 var segment_new_capture = true
 var segment_current = 0;
 var colour_range_min;
@@ -1164,6 +1178,12 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
     if (auto == true) {
         vmin = -1;
         vmax = -1;
+    };
+    console.log(segment)
+    if (all_segments_displayed){
+        segment = 20;
+        console.log(all_segments_displayed)
+
     };
 
     carrier_endpoint.put(parseInt(vmin), 'ASIC_SEGMENT_VMIN', timeout=ajax_timeout_ms)

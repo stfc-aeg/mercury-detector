@@ -1052,38 +1052,43 @@ class Carrier():
     def perform_asic_segment_capture(self, segment):
         logging.info('Capturing image from segment {}'.format(segment))
 
+        def create_reshaped_array():
+            # Get the segment pattern read from the ASIC, 320 pixel values
+            patternout_12bit = self.asic.read_test_pattern(segment)
+            logging.warning('Pattern out: {}'.format(patternout_12bit))
+
+            # Re-order the data with numpy
+            reshaped = np.empty((4,80), dtype=np.uint16)
+            for scol in range(20):
+                idx = scol*16
+                ridx = scol*4
+                reshaped[::, ridx:ridx+4] = np.array(patternout_12bit)[idx:idx+16].reshape(4,4)
+
+            logging.warning('Reshaped array: {}'.format(reshaped))
+
+            # Converts numpy array to python array - adds commas
+            reshaped = reshaped.tolist()
+
+            self._segment_data = self._segment_data + reshaped
+
         try:
 
             self._segment_data =[]
 
-            for segment in range(20):
-                # Get the segment pattern read from the ASIC, 320 pixel values
-                patternout_12bit = self.asic.read_test_pattern(segment)
-                logging.warning('Pattern out: {}'.format(patternout_12bit))
-
-                # Re-order the data with numpy
-                reshaped = np.empty((4,80), dtype=np.uint16)
-                for scol in range(20):
-                    idx = scol*16
-                    ridx = scol*4
-                    reshaped[::, ridx:ridx+4] = np.array(patternout_12bit)[idx:idx+16].reshape(4,4)
-
-                logging.warning('Reshaped array: {}'.format(reshaped))
-
-                # Converts numpy array to python array - adds commas
-                reshaped = reshaped.tolist()
-
-                self._segment_data = self._segment_data + reshaped
-
+            if segment == 20:
+                for segment in range(20):
+                    create_reshaped_array()
+            else:
+                create_reshaped_array()
+                    
 
             self._segment_ready = True
-
-
-
 
         except ASICDisabledError:
             logging.error('Could not trigger segment readout due to disabled ASIC')
             return None
+
+    
 
     def _paramtree_setup(self):
 
