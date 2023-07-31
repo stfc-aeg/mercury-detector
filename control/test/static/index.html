@@ -17,7 +17,12 @@
         <link href="css/carrier.css" rel="stylesheet">
         <link href="css/command-sequencer.css" rel="stylesheet">
 
+        <!-- Load plotly.js into the DOM -->
+	    <script src='https://cdn.plot.ly/plotly-2.24.1.min.js'></script>
+
         <div id="global-nav"></div>
+
+        
 
     </head>
     <body>
@@ -391,6 +396,10 @@
                                                     <input type="number" min=0 max=4096 value=4096 step=1 class="form-control" id="segment-readout-vmax" disabled/>
                                                 </div>
                                                 <div class="input-group mb-3">
+                                                    <div class="input-group-text">
+                                                        <input class="form-check-input mt-0" type="checkbox" value="1" aria-label="Checkbox for following text input" id="segment-readout-autosegment" onclick="en_dis_segment_display_all($('#segment-readout-autosegment').prop('checked'))" checked>
+                                                        <label class="form-check-label" style="margin-left: 5px">Display All Segments</label>
+                                                    </div>
                                                     <span class="input-group-text">Segment Select</span>
                                                     <input type="number" min=0 max=19 value=0 step=1 class="form-control" id="segment-readout-select"/>
                                                     <button class="btn btn-outline-secondary" type="button" onclick="trigger_segment_readout($('#segment-readout-select').prop('value'),$('#segment-readout-vmin').prop('value'),$('#segment-readout-vmax').prop('value'),$('#segment-readout-autorange').prop('checked'))">Read Segment</button>
@@ -398,9 +407,15 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <img id="segment-img" src="" class="card-img-bottom" alt="...">
+                                    
+                                    <div id='graph_output'><!-- Plotly chart will be drawn inside this DIV --></div>
+
+
                                 </div>
                             </div>
+
+                            
+
                             <div class="col col-xl-5 col-lg-12 col-md-12 col-sm-12 col-xs-12">
                                 <div class="card w-30 mb-3 text-center">
                                     <div class="card-header">
@@ -659,8 +674,11 @@
 
                 <div class="tab-pane fade" id="contact" role="tabpanel">
                     Contact
+
+                    
                 </div>
             </div>
+
 
             <script src="js/global-nav.js"></script>
             <script>

@@ -6,6 +6,7 @@ $( document ).ready(function() {
 
     // Init UI
     init();
+    // readout_output();
 
 });
 
@@ -1153,11 +1154,37 @@ function en_dis_segment_vminmax(checked) {
         document.getElementById("segment-readout-vmax").removeAttribute('disabled');
     }
 }
+
+var all_segments_displayed = false
+$('#segment-readout-autosegment').prop('checked', false);
+function en_dis_segment_display_all(checked) {
+    if (checked == true) {
+        console.log('disabling segment select entry');
+        document.getElementById("segment-readout-select").setAttribute('disabled', '');
+        all_segments_displayed =true
+    } else {
+        console.log('enabling segment select entry');
+        document.getElementById("segment-readout-select").removeAttribute('disabled');
+        all_segments_displayed = false
+    }
+}
+
 var segment_new_capture = true
+var segment_current = null;
+var colour_range_min;
+var colour_range_max;
+var vmax;
+var auto_ticked;
 function trigger_segment_readout(segment, vmin, vmax, auto) {
     if (auto == true) {
         vmin = -1;
         vmax = -1;
+    };
+    console.log(segment)
+    if (all_segments_displayed){
+        segment = 20;                           // if segment = 20, then all segments will be displayed
+        console.log(all_segments_displayed)
+
     };
 
     carrier_endpoint.put(parseInt(vmin), 'ASIC_SEGMENT_VMIN', timeout=ajax_timeout_ms)
@@ -1165,8 +1192,16 @@ function trigger_segment_readout(segment, vmin, vmax, auto) {
     .then((response) => carrier_endpoint.put(parseInt(segment), 'ASIC_SEGMENT_CAPTURE', timeout=ajax_timeout_ms))
     .then((response) => {
 		console.log("Segment capture started for segment " + segment + " using colour range " + vmin + " to " + vmax);
-        document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
         segment_new_capture = true;
+        segment_current = segment;
+
+        if (auto != true) {
+            colour_range_min = vmin;
+            colour_range_max = vmax;
+        };
+
+        auto_ticked = auto;
+
     })
     .catch(error => {
         console.log('Error setting up ASIC segment readout: ' + error);
@@ -1181,27 +1216,95 @@ function update_loki_asic_segment_readout() {
             // Reload only if the currently valid image is new
             if (segment_new_capture) {
                 timestamp = new Date().getTime();   // Force update in this instance
-                document.getElementById("segment-img").src="imgout/segment.png?t=" + timestamp;
 
-                // Remove blurring
-                document.getElementById("segment-img").style="-webkit-filter: blur(0px)"
+
+                update_loki_asic_segment_data();
+
 
                 segment_new_capture = false;
-                //console.log('segment display updated');
+                console.log('segment display updated');
             } else {
-                //console.log('segment not updated (old)');
+                console.log('segment not updated (old)');
             }
         } else if (response.ASIC_SEGMENT_CAPTURE != 1) {
-            //document.getElementById("segment-img").src="";
-            // Apply a blurring effect to demonstrate that the image is no longer valid
-            document.getElementById("segment-img").style="-webkit-filter: blur(6px)"
+     
             segment_new_capture = true;
-            //console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
+            console.log('There was no segment image to display, capture ready: ' + response.ASIC_SEGMENT_CAPTURE);
         }
     })
     .catch(error => {
         console.log('failed to get segment image: ' + error);
     });
+}
+
+
+function update_loki_asic_segment_data() {
+    carrier_endpoint.get('ASIC_SEGMENT_DATA', timeout=ajax_timeout_ms)
+    .then(response => {
+        segment_data = response.ASIC_SEGMENT_DATA;
+        if (segment_current != null){
+            readout_output(segment_data);
+        }
+        
+
+    })
+    
+}
+
+
+function readout_output(segment_data) {
+
+    
+    var data = [
+        {
+            
+            z: segment_data,
+            type: 'heatmap',
+            coloraxis: 'coloraxis',
+            
+
+        }
+      ];
+
+    
+    var layout = 
+    {
+        title: `Segment ${segment_current}`,
+        yaxis: 
+        {
+            autorange: 'reversed',
+            scaleanchor: "x",
+            constrain: "domain",
+        },
+        xaxis: 
+        {
+            constrain: "domain",
+        },
+        coloraxis:
+        {
+            colorscale: 'Viridis',
+            colorbar:{
+                orientation: "h",
+                y: -.1,
+            },
+
+        }
+        
+    };
+
+    var config = {responsive: true}
+
+    if (!auto_ticked) {
+        layout.coloraxis["cmin"]= colour_range_min;
+        layout.coloraxis["cmax"]= colour_range_max;
+      
+    };
+    if (all_segments_displayed) {
+        layout["title"] = 'All Segments';
+        layout.coloraxis["colorbar"] = "v";
+    };
+    
+    Plotly.newPlot('graph_output', data, layout, config);
 }
 
 var time_last_connected = null
