@@ -1578,6 +1578,16 @@ function change_asic_mode(modename) {
     });
 }
 
+function run_fast_data_setup() {
+    carrier_endpoint.put(true, 'FAST_DATA_SETUP/EXECUTE_COMMAND', timeout=ajax_timeout_ms)
+    .then(response => {
+		console.log("Executing fast data setup");
+    })
+    .catch(error => {
+        console.log("Error in executing fast data setup: " + error);
+    });
+}
+
 function change_feedback_cap(capacitance) {
     carrier_endpoint.put(capacitance, 'ASIC_FEEDBACK_CAPACITANCE', timeout=ajax_timeout_ms)
     .then(response => {

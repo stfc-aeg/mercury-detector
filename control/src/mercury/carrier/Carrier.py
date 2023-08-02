@@ -28,6 +28,7 @@ import copy
 import psutil
 import datetime
 from enum import Enum as _Enum, auto as _auto
+import concurrent.futures as futures
 
 PLOTTING_SUPPORTED=False
 try:
@@ -190,6 +191,13 @@ class Carrier():
         self._segment_vmax = None
         self._segment_vmin = None
         self._segment_data = None
+
+        self._fast_data_current_stage_text = None
+        self._fast_data_step_num = None
+        self._fast_data_total_steps = None
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+        self._fast_data_is_executing = False
 
         self._psu_status = "No Run"
 
@@ -1089,7 +1097,65 @@ class Carrier():
             logging.error('Could not trigger segment readout due to disabled ASIC')
             return None
 
-    
+    def fast_data_start_thread(self, value):
+        # Create a new thread and execute the steps inside it
+
+        # Create a thread executer that threads can be created on
+        self._thread_executor = futures.ThreadPoolExecutor(max_workers=None)
+
+        # Add a new thread to execute the fast data
+        result = self._thread_executor.submit(self.fast_data_start)
+
+        logging.warning('Created new thread to execute fast data start')
+
+
+    def fast_data_start(self):
+        def step_one():
+            time.sleep(3)
+            logging.warning("Executing function 1")
+        def step_two():
+            time.sleep(3)
+            logging.warning("Executing function 2")
+        def step_three():
+            time.sleep(3)
+            logging.warning("Executing function 3")
+            raise Exception("ERROR in function 3")
+
+        steps = {}
+        steps[step_one] = "This is step 1"
+        steps[step_two] = "This is step 2"
+        steps[step_three] = "This is step 3"
+
+
+        print("Steps dictionary:", steps)
+        number_of_steps = len(steps)
+        self._fast_data_total_steps = number_of_steps
+        current_function = None
+        self._fast_data_is_executing = True
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+
+        try:
+            for i in range(number_of_steps):
+                keys_list = list(steps.keys())
+
+
+                current_function = keys_list[i]
+                self._fast_data_step_num = i+1
+
+                current_function_description = steps[current_function]
+                self._fast_data_current_stage_text = current_function_description
+                logging.warning("Current function: {}".format(current_function))
+                logging.warning("Current function description: {}".format (current_function_description))
+                current_function()
+        except Exception as e:
+            self._fast_data_error_status = True
+            self._fast_data_error_code = "Error in executing functon: {} {}".format(current_function, e)
+            logging.error(self._fast_data_error_code)
+        
+        self._fast_data_is_executing = False
+
+        
 
     def _paramtree_setup(self):
 
@@ -1169,6 +1235,14 @@ class Carrier():
                 "HIGHLIGHT_ROW":(lambda: self._asic_cal_highlight_row, lambda row: self.cfg_asic_highlight(row=row), {"description":"Row chosen for 1x1 pixel highlighting via calibration pattern"}),
                 "HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(colunm=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),
             },
+            "FAST_DATA_SETUP":{
+                "CURRENT_STAGE":(lambda: self._fast_data_current_stage_text, None),
+                "PROGRESS":(lambda: [self._fast_data_step_num, self._fast_data_total_steps], None),
+                "ERROR_STATUS":(lambda: self._fast_data_error_status, None),
+                "ERROR_CODE":(lambda: self._fast_data_error_code, None),
+                "EXECUTE_COMMAND":(lambda: self._fast_data_is_executing, self.fast_data_start_thread),
+
+            },
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
@@ -1181,6 +1255,13 @@ class Carrier():
             },
             "LOKI_PERFORMANCE": loki_performance_tree
         })
+
+        self._fast_data_current_stage_text = None
+        self._fast_data_step_num = None
+        self._fast_data_total_steps = None
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+        self._fast_data_is_executing = False
 
         self._PARAMTREE_FIRSTINIT = False
         logging.info(self._param_tree)
