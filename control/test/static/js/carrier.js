@@ -128,6 +128,8 @@ function poll_loki_vregneeded() {
         new Promise((resolve) => { update_loki_asic_frame_length(); }),
         new Promise((resolve) => { update_loki_asic_serialiser_mode(); }),
         new Promise((resolve) => { update_loki_asic_segment_readout(); }),
+        new Promise((resolve) => { get_fast_data_setup_progress(); }),
+        
     ]);
 
 	setTimeout(poll_loki_vregneeded, 1000);
@@ -1552,6 +1554,38 @@ function update_loki_asic_cal_pattern_en() {
             console.log('Error retrieving calibration pattern enable state: ' + error);
     });
 }
+
+let fast_data_execution_progress_bar_data = $("#fast-data-execution-progress-bar")[0]
+let fast_data_execution_progress_stage_data = $("#fast-data-execution-stage")[0]
+function get_fast_data_setup_progress() {
+    carrier_endpoint.get('FAST_DATA_SETUP/PROGRESS', timeout=ajax_timeout_ms)
+    
+    .then(response => {
+            fast_data_setup_progress = response.PROGRESS;
+            var current_progress = String((fast_data_setup_progress[0] * 100)/fast_data_setup_progress[1]);
+            fast_data_execution_progress_bar_data.style.width = `${current_progress}%`;
+            fast_data_execution_progress_bar_data.setAttribute('aria-valuenow', current_progress);
+
+            carrier_endpoint.get('FAST_DATA_SETUP/CURRENT_STAGE', timeout=ajax_timeout_ms)
+            .then(response => {
+                fast_data_setup_stage = response.CURRENT_STAGE;
+                fast_data_execution_progress_stage_data.innerHTML = "<b>Executing:&nbsp;" + fast_data_setup_stage + "</b>";
+
+                
+
+            })
+            .catch(error => {
+                    console.log('Error retrieving current stage of fast data setup: ' + error);
+            });
+            
+    })
+    .catch(error => {
+            console.log('Error retrieving progress of fast data setup: ' + error);
+    });
+}
+
+
+
 
 function change_sync_sel_aux(aux_en) {
     carrier_endpoint.put(aux_en, 'SYNC_SEL_AUX', timeout=ajax_timeout_ms)
