@@ -1084,6 +1084,7 @@ class Carrier():
 
             self._segment_data = self._segment_data + reshaped
 
+        blank_segment = [[0] * 80]*4
 
         try:
 
@@ -1093,7 +1094,11 @@ class Carrier():
                 for segment in range(20):
                     create_reshaped_array()
             else:
+                for i in range(0, segment):
+                    self._segment_data = self._segment_data + blank_segment
                 create_reshaped_array()
+                for i in range (segment+1, 20):
+                    self._segment_data = self._segment_data + blank_segment
                     
 
             self._segment_ready = True

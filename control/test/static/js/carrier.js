@@ -1258,6 +1258,7 @@ function update_loki_asic_segment_data() {
 
 function readout_output(segment_data) {
 
+    var first_row = segment_current*4;
     
     var data = [
         {
@@ -1306,6 +1307,9 @@ function readout_output(segment_data) {
     if (all_segments_displayed) {
         layout["title"] = 'All Segments';
         layout.coloraxis["colorbar"] = "v";
+    } else {
+        layout.yaxis.autorange=false;
+        layout.yaxis.range=[first_row+3.5,first_row-0.5];
     };
     
     Plotly.newPlot('graph_output', data, layout, config);
