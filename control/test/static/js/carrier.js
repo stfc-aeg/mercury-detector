@@ -1258,6 +1258,7 @@ function update_loki_asic_segment_data() {
 
 function readout_output(segment_data) {
 
+    var first_row = segment_current*4;
     
     var data = [
         {
