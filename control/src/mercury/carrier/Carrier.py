@@ -1116,26 +1116,80 @@ class Carrier():
 
     def fast_data_start(self):
         def step_one():
-            time.sleep(3)
-            logging.warning("Executing function 1")
+            logging.info("Preparing to enable fast data:")
+            # Check the regulators
+            if not self.get_vreg_en():
+                raise Exception('Regulators are not enabled')
+            
         def step_two():
-            time.sleep(3)
-            logging.warning("Executing function 2")
+            # Ensure FireFlies are Turned on, all channels
+            logging.info("\tChecking FireFlies are enabled")
+            for FF_ID in [1, 2]:                        # Both FireFlies
+                while True:                             # Loop until all channels enabled
+
+                    # Search for any disabled channel
+                    disabled_channel_found = False
+                    for channel_no in range(0, 12):
+                        if self.get_firefly_tx_channel_disabled(FF_ID, channel_no):
+                            logging.info("\t\tChannel {} of FireFly {} is disabled".format(channel_no, FF_ID))
+                            disabled_channel_found = True
+                            break
+
+                    # If any disabled channel is found, re-enable all channels on both devices
+                    if disabled_channel_found:
+                        logging.info("\t\tEnabling all FireFly Channels on FireFly {} (at least one found disabled)".format(FF_ID))
+                        time.sleep(1.0)
+                        self.set_firefly_tx_enable_all()   # Set all channels enabled
+                        time.sleep(3.0)
+                    else:
+                        logging.info("\tAll channels on FireFly {} are enabled".format(FF_ID))
+                        break
+        
         def step_three():
-            time.sleep(3)
-            logging.warning("Executing function 3")
-            #raise Exception("ERROR in function 3")
+            # Enter Global Mode
+            logging.info("\tEntering global mode...")
+            self.asic.enter_global_mode()
+
+        def step_four():
+            self.asic.Set_DiamondDefault_Registers()
+            logging.info("\tDIAMOND default registers set")
+
+        def step_five():
+            logging.info("\tResetting Serialisers...")
+            time.sleep(0.5)
+            self.asic.ser_enter_reset()
+            time.sleep(0.5)
+            self.asic.ser_exit_reset()
+
+        def step_six():
+            logging.info("\tEntering Bonding Mode...")
+            time.sleep(0.5)
+            self.asic.enter_bonding_mode()
+
+        def step_seven():
+            logging.info("\tEntering Data Mode...")
+            time.sleep(0.5)
+            self.asic.enter_data_mode()
+            logging.info("Device is now outputting fast data")
+
+        
 
         steps = {}
-        steps[step_one] = "This is step 1"
-        steps[step_two] = "This is step 2"
-        steps[step_three] = "This is step 3"
+        steps[step_one] = "Checking the regulators"
+        steps[step_two] = "Enabling all FireFly Channels on FireFly"
+        steps[step_three] = "Entering Global Mode"
+        steps[step_four] = "Setting DIAMOND default registers"
+        steps[step_five] = "Resetting Serialisers"
+        steps[step_six] = "Entering Bonding Mode"
+        steps[step_seven] = "Entering Data Mode"
+
 
 
         print("Steps dictionary:", steps)
 
         self._fast_data_error_status = False
         self._fast_data_error_code = False
+        self._fast_data_execution_complete = False
         number_of_steps = len(steps)
         self._fast_data_total_steps = number_of_steps
         current_function = None

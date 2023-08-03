@@ -817,6 +817,52 @@ class Asic():
             for name, mode_bits in self._serialiser_mode_names.items():
                 if mode_bits == self._STATE_serialiser_mode:
                     return name
+                
+    
+    def Set_DiamondDefault_Registers(self):
+        #testing the effect of changing the negative range
+
+        #Set default negative range
+        self.set_register_bit(0,0b01000000)
+
+        #14fF, 0000 slew rate
+        self.set_all_ramp_bias(0b0000)
+
+        self.clear_register_bit(0,0b00000100)
+        self.clear_register_bit(0,0b00100000)
+        self.write_register(12,6)
+        self.write_register(14,20)
+        self.write_register(9,0b10001111)
+        self.write_register(17,174)
+        self.write_register(21,190)
+        self.write_register(18,197)
+
+        self._logger.info("Finished setting registers")
+
+    def ser_enter_reset(self):
+        self.clear_register_bit(2, 0b10)    # Ser ana
+        self.clear_register_bit(2, 0b1)     # Ser digi
+        self.clear_register_bit(1, 0b10)    # Ser PLL
+
+        #spi_read_reg("1")
+        #spi_read_reg("2")
+
+    def ser_exit_reset(self):
+        self.set_register_bit(2, 0b10)    # Ser ana
+        self.set_register_bit(2, 0b1)     # Ser digi
+        self.set_register_bit(1, 0b10)    # Ser PLL
+
+        #spi_read_reg("1")
+        #spi_read_reg("2")
+
+    def enter_bonding_mode(self):
+        # set_serialiser_mode(0b01)
+        self.set_global_serialiser_mode("bonding")
+
+    def enter_data_mode(self):
+        # set_serialiser_mode(0b11)
+        self.set_global_serialiser_mode("data")
+
 
 
 class SerialiserBlockConfig():

@@ -1564,92 +1564,94 @@ let fast_data_execution_progress_stage_data = $("#fast-data-execution-stage")[0]
 function get_fast_data_setup_progress() {
 
 
+    carrier_endpoint.get('FAST_DATA_SETUP/PROGRESS', timeout=ajax_timeout_ms)
+    .then(response => {
+        fast_data_setup_progress = response.PROGRESS;
+        var current_progress = String((fast_data_setup_progress[0] * 100)/fast_data_setup_progress[1]);
+        fast_data_execution_progress_bar_data.style.width = `${current_progress}%`;
+        fast_data_execution_progress_bar_data.setAttribute('aria-valuenow', current_progress);
+
+            
+    })
+    .catch(error => {
+            console.log('Error retrieving progress of fast data setup: ' + error);
+    });
+
+
     carrier_endpoint.get('FAST_DATA_SETUP/ERROR_STATUS', timeout=ajax_timeout_ms)
-        .then(response => {
-            fast_data_error_status = response.ERROR_STATUS;
-            if(fast_data_error_status){
+    .then(response => {
+        fast_data_error_status = response.ERROR_STATUS;
+        if(fast_data_error_status){
 
-                // getting error code, if there is an error
+            // getting error code, if there is an error
 
-                carrier_endpoint.get('FAST_DATA_SETUP/ERROR_CODE', timeout=ajax_timeout_ms)
-                .then(response => {
-                    fast_data_error_code = response.ERROR_CODE;
-                    
-                    fast_data_execution_progress_stage_data.innerHTML = `ERROR: ${fast_data_error_code}%`;
+            carrier_endpoint.get('FAST_DATA_SETUP/ERROR_CODE', timeout=ajax_timeout_ms)
+            .then(response => {
+                fast_data_error_code = response.ERROR_CODE;
+                
+                fast_data_execution_progress_stage_data.innerHTML = `ERROR: ${fast_data_error_code}%`;
+                fast_data_execution_progress_bar_data.innerHTML = "<b> </b>";
+                fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar bg-danger");
+                
+
+            })
+            .catch(error => {
+                console.log('Error retrieving error code ' + error);
+            });
+
+        } else {
+
+            // IF no error, check if execution complete
+
+            carrier_endpoint.get('FAST_DATA_SETUP/EXECUTION_COMPLETE', timeout=ajax_timeout_ms)
+            .then(response => {
+                fast_data_execution_complete = response.EXECUTION_COMPLETE;
+
+                // Update UI depending on which stage is executing
+
+                if(fast_data_execution_complete){
+                    fast_data_execution_progress_stage_data.innerHTML = "<b>Execution Complete</b>";
                     fast_data_execution_progress_bar_data.innerHTML = "<b> </b>";
-                    fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar bg-danger");
-                    
+                    fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar bg-success");
+                } else {
 
-                })
-                .catch(error => {
-                    console.log('Error retrieving error code ' + error);
-                });
+                    // - - - - - - -  - - 
 
-            } else {
-
-                // IF no error, check if execution complete
-
-                carrier_endpoint.get('FAST_DATA_SETUP/EXECUTION_COMPLETE', timeout=ajax_timeout_ms)
-                .then(response => {
-                    fast_data_execution_complete = response.EXECUTION_COMPLETE;
-
-                    // Update UI depending on which stage is executing
-
-                    if(fast_data_execution_complete){
-                        fast_data_execution_progress_stage_data.innerHTML = "<b>Execution Complete</b>";
-                        fast_data_execution_progress_bar_data.innerHTML = "<b> </b>";
-                        fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar bg-success");
-                    } else {
-
-                        // - - - - - - -  - - 
-
-                        carrier_endpoint.get('FAST_DATA_SETUP/PROGRESS', timeout=ajax_timeout_ms)
-                        .then(response => {
-                            fast_data_setup_progress = response.PROGRESS;
-                            var current_progress = String((fast_data_setup_progress[0] * 100)/fast_data_setup_progress[1]);
-                            fast_data_execution_progress_bar_data.style.width = `${current_progress}%`;
-                            fast_data_execution_progress_bar_data.setAttribute('aria-valuenow', current_progress);
-
-                            carrier_endpoint.get('FAST_DATA_SETUP/CURRENT_STAGE', timeout=ajax_timeout_ms)
-                            .then(response => {
-                                fast_data_setup_stage = response.CURRENT_STAGE;
-                                if (fast_data_setup_stage==null) {
-                                    fast_data_execution_progress_stage_data.innerHTML = "<b> </b>";
-                                } else {
-                                    fast_data_execution_progress_stage_data.innerHTML = "<b>Executing:&nbsp;" + fast_data_setup_stage + "</b>";
-                                }
-                                
+                    // ---------------------
+                    carrier_endpoint.get('FAST_DATA_SETUP/CURRENT_STAGE', timeout=ajax_timeout_ms)
+                    .then(response => {
+                        fast_data_setup_stage = response.CURRENT_STAGE;
+                        if (fast_data_setup_stage==null) {
+                            fast_data_execution_progress_stage_data.innerHTML = "<b> </b>";
+                        } else {
+                            fast_data_execution_progress_stage_data.innerHTML = "<b>Executing:&nbsp;" + fast_data_setup_stage + "</b>";
+                        }
+                        
 
 
-                            })
-                            .catch(error => {
-                                    console.log('Error retrieving current stage of fast data setup: ' + error);
-                            });
-                                
-                        })
-                        .catch(error => {
-                                console.log('Error retrieving progress of fast data setup: ' + error);
-                        });
+                    })
+                    .catch(error => {
+                            console.log('Error retrieving current stage of fast data setup: ' + error);
+                    });
+                    // -----------------------
 
-                        // ---------------------
+                }
 
-                    }
+            })
+            .catch(error => {
+                console.log('Error checking if execution complete ' + error);
+            });
 
-                })
-                .catch(error => {
-                    console.log('Error checking if execution complete ' + error);
-                });
+            // --------------------------------------
 
-                // --------------------------------------
+            // ----------
 
-                // ----------
+        }
 
-            }
-
-        })
-        .catch(error => {
-            console.log('Error retrieving error status ' + error);
-        });
+    })
+    .catch(error => {
+        console.log('Error retrieving error status ' + error);
+    });
 
     
 }
