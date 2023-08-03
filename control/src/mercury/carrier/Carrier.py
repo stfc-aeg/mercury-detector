@@ -28,6 +28,7 @@ import copy
 import psutil
 import datetime
 from enum import Enum as _Enum, auto as _auto
+import concurrent.futures as futures
 
 PLOTTING_SUPPORTED=False
 try:
@@ -190,6 +191,18 @@ class Carrier():
         self._segment_vmax = None
         self._segment_vmin = None
         self._segment_data = None
+
+        self._fast_data_is_executing = True
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+        self._fast_data_execution_complete = False
+
+        self._fast_data_current_stage_text = None
+        self._fast_data_step_num = None
+        self._fast_data_total_steps = None
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+        self._fast_data_is_executing = False
 
         self._psu_status = "No Run"
 
@@ -1089,7 +1102,123 @@ class Carrier():
             logging.error('Could not trigger segment readout due to disabled ASIC')
             return None
 
-    
+    def fast_data_start_thread(self, value):
+        # Create a new thread and execute the steps inside it
+
+        # Create a thread executer that threads can be created on
+        self._thread_executor = futures.ThreadPoolExecutor(max_workers=None)
+
+        # Add a new thread to execute the fast data
+        result = self._thread_executor.submit(self.fast_data_start)
+
+        logging.warning('Created new thread to execute fast data start')
+
+
+    def fast_data_start(self):
+        def step_one():
+            logging.info("Preparing to enable fast data:")
+            # Check the regulators
+            if not self.get_vreg_en():
+                raise Exception('Regulators are not enabled')
+            
+        def step_two():
+            # Ensure FireFlies are Turned on, all channels
+            logging.info("\tChecking FireFlies are enabled")
+            for FF_ID in [1, 2]:                        # Both FireFlies
+                while True:                             # Loop until all channels enabled
+
+                    # Search for any disabled channel
+                    disabled_channel_found = False
+                    for channel_no in range(0, 12):
+                        if self.get_firefly_tx_channel_disabled(FF_ID, channel_no):
+                            logging.info("\t\tChannel {} of FireFly {} is disabled".format(channel_no, FF_ID))
+                            disabled_channel_found = True
+                            break
+
+                    # If any disabled channel is found, re-enable all channels on both devices
+                    if disabled_channel_found:
+                        logging.info("\t\tEnabling all FireFly Channels on FireFly {} (at least one found disabled)".format(FF_ID))
+                        time.sleep(1.0)
+                        self.set_firefly_tx_enable_all()   # Set all channels enabled
+                        time.sleep(3.0)
+                    else:
+                        logging.info("\tAll channels on FireFly {} are enabled".format(FF_ID))
+                        break
+        
+        def step_three():
+            # Enter Global Mode
+            logging.info("\tEntering global mode...")
+            self.asic.enter_global_mode()
+
+        def step_four():
+            self.asic.Set_DiamondDefault_Registers()
+            logging.info("\tDIAMOND default registers set")
+
+        def step_five():
+            logging.info("\tResetting Serialisers...")
+            time.sleep(0.5)
+            self.asic.ser_enter_reset()
+            time.sleep(0.5)
+            self.asic.ser_exit_reset()
+
+        def step_six():
+            logging.info("\tEntering Bonding Mode...")
+            time.sleep(0.5)
+            self.asic.enter_bonding_mode()
+
+        def step_seven():
+            logging.info("\tEntering Data Mode...")
+            time.sleep(0.5)
+            self.asic.enter_data_mode()
+            logging.info("Device is now outputting fast data")
+
+        
+
+        steps = {}
+        steps[step_one] = "Checking the regulators"
+        steps[step_two] = "Enabling all FireFly Channels on FireFly"
+        steps[step_three] = "Entering Global Mode"
+        steps[step_four] = "Setting DIAMOND default registers"
+        steps[step_five] = "Resetting Serialisers"
+        steps[step_six] = "Entering Bonding Mode"
+        steps[step_seven] = "Entering Data Mode"
+
+
+
+        print("Steps dictionary:", steps)
+
+        self._fast_data_error_status = False
+        self._fast_data_error_code = False
+        self._fast_data_execution_complete = False
+        number_of_steps = len(steps)
+        self._fast_data_total_steps = number_of_steps
+        current_function = None
+
+        try:
+            for i in range(number_of_steps):
+                keys_list = list(steps.keys())
+
+
+                current_function = keys_list[i]
+                self._fast_data_step_num = i+1
+
+                current_function_description = steps[current_function]
+                self._fast_data_current_stage_text = current_function_description
+                logging.warning("Current function: {}".format(current_function))
+                logging.warning("Current function description: {}".format (current_function_description))
+                current_function()
+
+                if(i==number_of_steps-1):
+                    self._fast_data_execution_complete = True
+
+        except Exception as e:
+            self._fast_data_error_status = True
+            self._fast_data_error_code = "Error in executing functon: {} {}".format(current_function, e)
+            logging.error(self._fast_data_error_code)
+        
+        self._fast_data_is_executing = False
+
+        
 
     def _paramtree_setup(self):
 
@@ -1169,6 +1298,15 @@ class Carrier():
                 "HIGHLIGHT_ROW":(lambda: self._asic_cal_highlight_row, lambda row: self.cfg_asic_highlight(row=row), {"description":"Row chosen for 1x1 pixel highlighting via calibration pattern"}),
                 "HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(colunm=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),
             },
+            "FAST_DATA_SETUP":{
+                "CURRENT_STAGE":(lambda: self._fast_data_current_stage_text, None),
+                "PROGRESS":(lambda: [self._fast_data_step_num, self._fast_data_total_steps], None),
+                "ERROR_STATUS":(lambda: self._fast_data_error_status, None),
+                "ERROR_CODE":(lambda: self._fast_data_error_code, None),
+                "EXECUTION_COMPLETE":(lambda: self._fast_data_execution_complete, None),
+                "EXECUTE_COMMAND":(lambda: self._fast_data_is_executing, self.fast_data_start_thread),
+
+            },
             "VREG_EN":(self.get_vreg_en, self.set_vreg_en, {"description":"Set false to disable on-pcb supplies. To power up, use VREG_CYCLE (contains device init)"}),
             "VREG_CYCLE":(self.get_vreg_en, self.vreg_power_cycle_init, {"description":"Set to power cycle the VREG_EN and re-init devices. Read will return VREG enable state"}),
             "CLKGEN":{
@@ -1181,6 +1319,13 @@ class Carrier():
             },
             "LOKI_PERFORMANCE": loki_performance_tree
         })
+
+        self._fast_data_current_stage_text = None
+        self._fast_data_step_num = None
+        self._fast_data_total_steps = None
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+        self._fast_data_is_executing = False
 
         self._PARAMTREE_FIRSTINIT = False
         logging.info(self._param_tree)

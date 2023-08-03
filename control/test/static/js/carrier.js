@@ -106,6 +106,8 @@ async function init_adapter_endpoint() {
             // Generate the Adatper Endpoint for get/put requests
             carrier_endpoint = new AdapterEndpoint(adapter_name, api_version);
             console.log(`AdapterEndpoint created for api ${api_version} on adapter ${adapter_name}`);
+        } else {
+            throw new Error(`Adapter ${adapter_name} could not be found in adapter list`);
         }
     })
     .catch(error => {
@@ -128,6 +130,8 @@ function poll_loki_vregneeded() {
         new Promise((resolve) => { update_loki_asic_frame_length(); }),
         new Promise((resolve) => { update_loki_asic_serialiser_mode(); }),
         new Promise((resolve) => { update_loki_asic_segment_readout(); }),
+        new Promise((resolve) => { get_fast_data_setup_progress(); }),
+        
     ]);
 
 	setTimeout(poll_loki_vregneeded, 1000);
@@ -1553,6 +1557,108 @@ function update_loki_asic_cal_pattern_en() {
     });
 }
 
+// updates UI as fast data button clicked
+
+let fast_data_execution_progress_bar_data = $("#fast-data-execution-progress-bar")[0]
+let fast_data_execution_progress_stage_data = $("#fast-data-execution-stage")[0]
+function get_fast_data_setup_progress() {
+
+
+    carrier_endpoint.get('FAST_DATA_SETUP/PROGRESS', timeout=ajax_timeout_ms)
+    .then(response => {
+        fast_data_setup_progress = response.PROGRESS;
+        var current_progress = String((fast_data_setup_progress[0] * 100)/fast_data_setup_progress[1]);
+        fast_data_execution_progress_bar_data.style.width = `${current_progress}%`;
+        fast_data_execution_progress_bar_data.setAttribute('aria-valuenow', current_progress);
+
+            
+    })
+    .catch(error => {
+            console.log('Error retrieving progress of fast data setup: ' + error);
+    });
+
+
+    carrier_endpoint.get('FAST_DATA_SETUP/ERROR_STATUS', timeout=ajax_timeout_ms)
+    .then(response => {
+        fast_data_error_status = response.ERROR_STATUS;
+        if(fast_data_error_status){
+
+            // getting error code, if there is an error
+
+            carrier_endpoint.get('FAST_DATA_SETUP/ERROR_CODE', timeout=ajax_timeout_ms)
+            .then(response => {
+                fast_data_error_code = response.ERROR_CODE;
+                
+                fast_data_execution_progress_stage_data.innerHTML = `ERROR: ${fast_data_error_code}%`;
+                fast_data_execution_progress_bar_data.innerHTML = "<b> </b>";
+                fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar bg-danger");
+                
+
+            })
+            .catch(error => {
+                console.log('Error retrieving error code ' + error);
+            });
+
+        } else {
+
+            // IF no error, check if execution complete
+
+            carrier_endpoint.get('FAST_DATA_SETUP/EXECUTION_COMPLETE', timeout=ajax_timeout_ms)
+            .then(response => {
+                fast_data_execution_complete = response.EXECUTION_COMPLETE;
+
+                // Update UI depending on which stage is executing
+
+                if(fast_data_execution_complete){
+                    fast_data_execution_progress_stage_data.innerHTML = "<b>Execution Complete</b>";
+                    fast_data_execution_progress_bar_data.innerHTML = "<b> </b>";
+                    fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar bg-success");
+                } else {
+
+                    // - - - - - - -  - - 
+
+                    // ---------------------
+                    carrier_endpoint.get('FAST_DATA_SETUP/CURRENT_STAGE', timeout=ajax_timeout_ms)
+                    .then(response => {
+                        fast_data_setup_stage = response.CURRENT_STAGE;
+                        if (fast_data_setup_stage==null) {
+                            fast_data_execution_progress_stage_data.innerHTML = "<b> </b>";
+                        } else {
+                            fast_data_execution_progress_stage_data.innerHTML = "<b>Executing:&nbsp;" + fast_data_setup_stage + "</b>";
+                        }
+                        
+
+
+                    })
+                    .catch(error => {
+                            console.log('Error retrieving current stage of fast data setup: ' + error);
+                    });
+                    // -----------------------
+
+                }
+
+            })
+            .catch(error => {
+                console.log('Error checking if execution complete ' + error);
+            });
+
+            // --------------------------------------
+
+            // ----------
+
+        }
+
+    })
+    .catch(error => {
+        console.log('Error retrieving error status ' + error);
+    });
+
+    
+}
+
+
+
+
 function change_sync_sel_aux(aux_en) {
     carrier_endpoint.put(aux_en, 'SYNC_SEL_AUX', timeout=ajax_timeout_ms)
     .catch(error => {
@@ -1575,6 +1681,21 @@ function change_asic_mode(modename) {
     })
     .catch(error => {
         console.log("Error setting ASIC mode: " + error);
+    });
+}
+
+function run_fast_data_setup() {
+    carrier_endpoint.put(true, 'FAST_DATA_SETUP/EXECUTE_COMMAND', timeout=ajax_timeout_ms)
+    .then(response => {
+		console.log("Executing fast data setup");
+        fast_data_execution_progress_bar_data.setAttribute('class', "progress-bar progress-bar-striped progress-bar-animated");
+        fast_data_execution_progress_bar_data.setAttribute('aria-valuenow', "0");
+        fast_data_execution_progress_bar_data.style.width = "0%";
+        fast_data_execution_progress_stage_data.innerHTML = "<b> </b>";
+        fast_data_execution_progress_bar_data.innerHTML = "<b>Loading Fast Data</b>";
+    })
+    .catch(error => {
+        console.log("Error in executing fast data setup: " + error);
     });
 }
 

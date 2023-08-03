@@ -5,6 +5,7 @@ provides = [
         'fastdata_quickstart',
         'single_capture',
         'example_extended_capture',
+        'trigger_fastdata_start',
 ]
 
 requires = [
@@ -13,6 +14,11 @@ requires = [
         'utility',
         'diamond202212_support',
         ]
+
+def trigger_fastdata_start():
+    carrier = get_context('carrier')
+
+    carrier.fast_data_start()
 
 def fastdata_quickstart(bypass_asic_reset=False, bypass_diamond_default_registers=False):
     asic = get_context('asic')
