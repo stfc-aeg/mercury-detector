@@ -192,6 +192,11 @@ class Carrier():
         self._segment_vmin = None
         self._segment_data = None
 
+        self._fast_data_is_executing = True
+        self._fast_data_error_status = False
+        self._fast_data_error_code = None
+        self._fast_data_execution_complete = False
+
         self._fast_data_current_stage_text = None
         self._fast_data_step_num = None
         self._fast_data_total_steps = None
@@ -1119,7 +1124,7 @@ class Carrier():
         def step_three():
             time.sleep(3)
             logging.warning("Executing function 3")
-            raise Exception("ERROR in function 3")
+            #raise Exception("ERROR in function 3")
 
         steps = {}
         steps[step_one] = "This is step 1"
@@ -1128,12 +1133,12 @@ class Carrier():
 
 
         print("Steps dictionary:", steps)
+
+        self._fast_data_error_status = False
+        self._fast_data_error_code = False
         number_of_steps = len(steps)
         self._fast_data_total_steps = number_of_steps
         current_function = None
-        self._fast_data_is_executing = True
-        self._fast_data_error_status = False
-        self._fast_data_error_code = None
 
         try:
             for i in range(number_of_steps):
@@ -1148,6 +1153,10 @@ class Carrier():
                 logging.warning("Current function: {}".format(current_function))
                 logging.warning("Current function description: {}".format (current_function_description))
                 current_function()
+
+                if(i==number_of_steps-1):
+                    self._fast_data_execution_complete = True
+
         except Exception as e:
             self._fast_data_error_status = True
             self._fast_data_error_code = "Error in executing functon: {} {}".format(current_function, e)
@@ -1240,6 +1249,7 @@ class Carrier():
                 "PROGRESS":(lambda: [self._fast_data_step_num, self._fast_data_total_steps], None),
                 "ERROR_STATUS":(lambda: self._fast_data_error_status, None),
                 "ERROR_CODE":(lambda: self._fast_data_error_code, None),
+                "EXECUTION_COMPLETE":(lambda: self._fast_data_execution_complete, None),
                 "EXECUTE_COMMAND":(lambda: self._fast_data_is_executing, self.fast_data_start_thread),
 
             },
