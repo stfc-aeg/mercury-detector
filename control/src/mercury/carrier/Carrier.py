@@ -191,6 +191,7 @@ class Carrier():
         self._segment_vmax = None
         self._segment_vmin = None
         self._segment_data = None
+        self._array_of_frames = []
 
         self._fast_data_is_executing = True
         self._fast_data_error_status = False
@@ -1058,9 +1059,13 @@ class Carrier():
         return None
 
     def _segment_capture_loop(self):
+        #if self._segment_capture_due is not None:
+        #    self.perform_asic_segment_capture(self._segment_capture_due)
+        #    self._segment_capture_due = None
         if self._segment_capture_due is not None:
-            self.perform_asic_segment_capture(self._segment_capture_due)
+            self.perform_animation_segment_frames(self._segment_capture_due)
             self._segment_capture_due = None
+            
 
     def perform_asic_segment_capture(self, segment):
         logging.info('Capturing image from segment {}'.format(segment))
@@ -1106,6 +1111,14 @@ class Carrier():
         except ASICDisabledError:
             logging.error('Could not trigger segment readout due to disabled ASIC')
             return None
+
+    
+    def perform_animation_segment_frames(self, segment):
+        self._array_of_frames = []
+        for i in range(4):        
+            self.perform_asic_segment_capture(segment)
+            self._array_of_frames.append(self._segment_data)
+
 
     def fast_data_start_thread(self, value):
         # Create a new thread and execute the steps inside it
@@ -1289,7 +1302,7 @@ class Carrier():
                 },
             ),
             "ASIC_SEGMENT_DATA":(
-                lambda: self._segment_data,
+                lambda: self._array_of_frames, 
                 None,
                 {
                     "description":"Reshaped array of data. If segment==20, then all segments displayed"

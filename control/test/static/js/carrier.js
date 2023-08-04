@@ -1241,13 +1241,13 @@ function update_loki_asic_segment_readout() {
     });
 }
 
-
+var frame_select = 3;
 function update_loki_asic_segment_data() {
     carrier_endpoint.get('ASIC_SEGMENT_DATA', timeout=ajax_timeout_ms)
     .then(response => {
         segment_data = response.ASIC_SEGMENT_DATA;
         if (segment_current != null){
-            readout_output(segment_data);
+            readout_output(segment_data[frame_select]);
         }
         
 
