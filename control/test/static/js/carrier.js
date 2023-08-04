@@ -1241,13 +1241,13 @@ function update_loki_asic_segment_readout() {
     });
 }
 
-var frame_select = 3;
+//var frame_select = 3;
 function update_loki_asic_segment_data() {
     carrier_endpoint.get('ASIC_SEGMENT_DATA', timeout=ajax_timeout_ms)
     .then(response => {
         segment_data = response.ASIC_SEGMENT_DATA;
         if (segment_current != null){
-            readout_output(segment_data[frame_select]);
+            readout_output(segment_data);
         }
         
 
@@ -1261,17 +1261,13 @@ function readout_output(segment_data) {
     var first_row = segment_current*4;
     
     var data = [
-        {
-            
-            z: segment_data,
+       {
+            z: segment_data[0],
             type: 'heatmap',
             coloraxis: 'coloraxis',
-            
+       }
+    ];
 
-        }
-      ];
-
-    
     var layout = 
     {
         title: `Segment ${segment_current}`,
@@ -1313,7 +1309,34 @@ function readout_output(segment_data) {
     };
     
     Plotly.newPlot('graph_output', data, layout, config);
+    
+    segment_data_frames = segment_data;
+    readout_animate();
+
+
 }
+
+var frame_select = 0;
+var segment_data_frames = null;
+function readout_animate(){
+
+    Plotly.animate('graph_output', {    
+        data: [{
+            z: segment_data_frames[frame_select]
+        }]
+    }, {
+        transition: {
+            duration: 100
+        },
+        frame: {
+            duration: 100,
+            redraw: true
+        }
+    })
+    frame_select = (frame_select + 1) % 4 
+    requestAnimationFrame(readout_animate);
+}
+
 
 var time_last_connected = null
 function update_loki_connection() {
