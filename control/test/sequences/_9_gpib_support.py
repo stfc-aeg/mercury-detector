@@ -2,6 +2,7 @@ import time
 
 provides = [
         'report_munir_status',
+        'get_frames_written',
         'set_peltier_wait',
         'set_peltier_enable',
         'get_peltier_status',
@@ -31,6 +32,20 @@ def report_munir_status(include_stdout=True):
             continue
 
         print('\t', key, ' : ', value)
+
+def get_frames_written(hide_printout=False):
+    munir = get_context('munir')
+
+    status = munir.get_status()
+    if not status:
+        raise Exception('Failed to contact munir')
+
+    frames_written = status['frames_written']
+
+    if not hide_printout:
+        print('\tmunir Frames written: ', frames_written)
+
+    return frames_written
 
 def enable_hdf5(use_hdf5=True):
     munir = get_context('munir')
@@ -148,9 +163,6 @@ def capture_data(
         path: str = "/dev/null",
         file_name: str = "capture",
         num_frames: int = 100000,
-        num_batches: int = 1,
-        timeout: int = 20,
-        include_stdout=True
         ):
     if path == '/dev/null':
         raise Exception('Sensible destination path not set')
@@ -160,7 +172,7 @@ def capture_data(
 
     # Trigger munir data capture
     print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
-    response = munir.execute_capture(path, file_name, num_frames, timeout, num_batches)
+    response = munir.execute_capture(path, file_name, num_frames)
 
     if response:
         #print('response: {} (type {})'.format(response, type(response)))
@@ -169,13 +181,16 @@ def capture_data(
         raise Exception('No response from munir')
 
     # Wait for success, and reassure the user that execution is still occurring
+    time.sleep(1)   # Delay so that the capture can actually start
     reassure_s = 5
     reassured = 0
     timestart = time.time()
     while munir.is_executing():
         duration_s = int((time.time() - timestart))
         if duration_s % reassure_s == 0 and reassured != duration_s:
-            print('\tExecuting for {}s...'.format(duration_s))
+            print('\tExecuting for {}s, frames written: {}/{}...'.format(
+                duration_s, get_frames_written(hide_printout=True), num_frames,
+            ))
             reassured = duration_s
 
         time.sleep(0.1)
@@ -184,17 +199,6 @@ def capture_data(
             print('SEQUENCE ABORT...')
             break
 
-    status = munir.get_status()
-    return_code = status['return_code']
-    stdout = status['stdout']
-    stderr = status['stderr']
-    exception = status['exception']
+    #status = munir.get_status()
 
-    if include_stdout:
-        print(stdout)
-    print(f"Command execution completed with rc:{return_code}")
-    if return_code != 0:
-        print(f"Stderr: {stderr}")
-        print(f"Exception: {exception}")
-
-    return return_code
+    report_munir_status()

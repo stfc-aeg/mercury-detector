@@ -151,7 +151,7 @@ def log_instrument_values(output_fullpath, output_filename, associated_data_file
         file.write(','.join([str(x) for x in [datefmt, timefmt, asic_temp, temp, cur, vol, associated_data_file]]))
         file.write('\n')
 
-def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000, num_batches=1, timeout=20):
+def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000):
     # This will demonstrate what it might be like to log ASIC bias measurements as well
     # as capturing data spaced out over a long period of time.
     # Suffix is used to record parameter values along with the data. This will be split 
@@ -213,17 +213,11 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
                 output_filename=filename, 
                 associated_data_file=data_filename)
 
-        return_code = capture_data(
+        capture_data(
             path=fastdata_output_root,
             file_name=data_filename,
             num_frames=num_frames,
-            num_batches=num_batches,
-            include_stdout=True,
-            timeout=timeout
         )
-
-        if return_code != 0:
-            raise Exception('Capture failed, aborting run')
 
         capture_count += 1
         #set_progress(capture_count, total_period_s / interval_s)
@@ -235,8 +229,7 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
         print('Delaying for {}s until next capture...'.format(interval_s))
         if _sleep_abortable(interval_s): return
 
-def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000, num_batches = 1, timeout=20):
-    output_folder = 'dssg/' + output_folder
+def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000):
     example_extended_capture(
         output_folder=output_folder,
         filename=filename,
@@ -245,6 +238,5 @@ def single_capture(output_folder = "default", filename = "capture", suffix="", n
         period_s=10,
         interval_s=100,
         num_frames=num_frames,
-        num_batches=num_batches,
-        timeout=timeout)
+    )
 
