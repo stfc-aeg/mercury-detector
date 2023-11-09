@@ -1301,7 +1301,7 @@ class Carrier():
                 "HIGHLIGHT_DIVISION":(lambda: self._asic_cal_highlight_div, lambda division: self.cfg_asic_highlight(division=division), {"description":"Division chosen for 4x4 grid highlighting via calibration pattern"}),
                 "HIGHLIGHT_SECTOR":(lambda: self._asic_cal_highlight_sec, lambda sector: self.cfg_asic_highlight(sector=sector), {"description":"Sector chosen for 4x4 grid highlighting via calibration pattern"}),
                 "HIGHLIGHT_ROW":(lambda: self._asic_cal_highlight_row, lambda row: self.cfg_asic_highlight(row=row), {"description":"Row chosen for 1x1 pixel highlighting via calibration pattern"}),
-                "HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(colunm=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),
+                "HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(column=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),
             },
             "FAST_DATA_SETUP":{
                 "CURRENT_STAGE":(lambda: self._fast_data_current_stage_text, None),
