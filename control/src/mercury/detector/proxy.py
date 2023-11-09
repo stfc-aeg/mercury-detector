@@ -65,7 +65,7 @@ class MunirProxyContext(ProxyContext):
     def __init__(self, proxy):
         super().__init__(proxy, 'munir')
 
-    def execute_capture(self, file_path, file_name, num_frames, timeout, num_batches=1):
+    def execute_capture(self, file_path, file_name, num_frames, timeout=5000, num_batches=1):
 
         if not file_path.endswith('/'):
             file_path = file_path + '/'
