@@ -53,7 +53,8 @@ class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
                  pin_firefly_1, pin_firefly_2, pin_nRead_int, pin_sync,
-                 pin_sync_sel, pin_asic_nrst, pin_vreg_en, pin_temp_nrst):
+                 pin_sync_sel, pin_asic_nrst, pin_vreg_en, pin_temp_nrst,
+                 options):
         self.i2c_device_bus = i2c_device_bus
         self.spidev_id_mercury = spidev_id_mercury
         self.spidev_id_ltc = spidev_id_ltc
@@ -66,6 +67,8 @@ class Carrier_Interface():
         self.pin_asic_nrst = pin_asic_nrst
         self.pin_vreg_en = pin_vreg_en
         self.pin_temp_nrst = pin_temp_nrst
+
+        self.options = options
 
 
 _interface_definition_default = Carrier_Interface(
@@ -405,9 +408,9 @@ class Carrier():
                                                name=vddaasic_rail_name,
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
-            self._pac1921_u3.config_gain(di_gain=1, dv_gain=8)
-            self._pac1921_u2.config_gain(di_gain=1, dv_gain=8)
-            self._pac1921_u1.config_gain(di_gain=1, dv_gain=8)
+            self._pac1921_u3.config_gain(di_gain=self.options.get('vdddcntrl_digain', 1), dv_gain=self.options.get('vdddcntrl_dvgain', 8))
+            self._pac1921_u2.config_gain(di_gain=self.options.get('vddd_digain', 1), dv_gain=self.options.get('vddd_dvgain', 8))
+            self._pac1921_u1.config_gain(di_gain=self.options.get('vdda_digain', 1), dv_gain=self.options.get('vdda_dvgain', 8))
 
             # PAC1921 Rail monitor mode settings
             if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
