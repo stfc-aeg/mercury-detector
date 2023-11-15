@@ -53,8 +53,7 @@ class Carrier_Interface():
     def __init__(self, i2c_device_bus,
                  spidev_id_mercury, spidev_id_ltc, spidev_id_max,
                  pin_firefly_1, pin_firefly_2, pin_nRead_int, pin_sync,
-                 pin_sync_sel, pin_asic_nrst, pin_vreg_en, pin_temp_nrst,
-                 options):
+                 pin_sync_sel, pin_asic_nrst, pin_vreg_en, pin_temp_nrst):
         self.i2c_device_bus = i2c_device_bus
         self.spidev_id_mercury = spidev_id_mercury
         self.spidev_id_ltc = spidev_id_ltc
@@ -67,8 +66,6 @@ class Carrier_Interface():
         self.pin_asic_nrst = pin_asic_nrst
         self.pin_vreg_en = pin_vreg_en
         self.pin_temp_nrst = pin_temp_nrst
-
-        self.options = options
 
 
 _interface_definition_default = Carrier_Interface(
@@ -101,13 +98,19 @@ class Carrier():
         POWER_ONLY = _auto()
         POWER_AND_IV = _auto()
 
-    def __init__(self, si5344_config_directory, si5344_config_filename,
-                 power_monitor_IV,
-                 critical_temp_limit,
-                 override_critical_temp_bme,
-                 interface_definition=_interface_definition_default,
-                 vcal=_vcal_default,
-                 asic_spi_speed_hz=2000000):
+    def __init__(self,
+            si5344_config_directory,
+            si5344_config_filename,
+            power_monitor_IV,
+            critical_temp_limit,
+            override_critical_temp_bme,
+            interface_definition=_interface_definition_default,
+            vcal=_vcal_default,
+            asic_spi_speed_hz=2000000,
+            options,
+        ):
+
+        self.options = options
 
         self._POWER_CYCLING = True
         self._PARAMTREE_FIRSTINIT = True
