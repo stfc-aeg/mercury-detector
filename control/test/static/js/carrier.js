@@ -1106,7 +1106,7 @@ function update_loki_asic_preamp() {
     .then(response => {
         asic_feedback_capacitance_state = response.ASIC_FEEDBACK_CAPACITANCE;
 
-        asic_feedback_allowed_values = ["0", "7", "14", "21"];
+        asic_feedback_allowed_values = [0, 7, 14, 21];
         if (asic_feedback_allowed_values.includes(asic_feedback_capacitance_state)) {
             // Update the badge
             $('#asic-feedback-capacitance-state').html((asic_feedback_capacitance_state + " fF"));
