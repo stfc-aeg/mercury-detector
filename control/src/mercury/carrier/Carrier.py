@@ -98,13 +98,19 @@ class Carrier():
         POWER_ONLY = _auto()
         POWER_AND_IV = _auto()
 
-    def __init__(self, si5344_config_directory, si5344_config_filename,
-                 power_monitor_IV,
-                 critical_temp_limit,
-                 override_critical_temp_bme,
-                 interface_definition=_interface_definition_default,
-                 vcal=_vcal_default,
-                 asic_spi_speed_hz=2000000):
+    def __init__(self,
+            si5344_config_directory,
+            si5344_config_filename,
+            power_monitor_IV,
+            critical_temp_limit,
+            override_critical_temp_bme,
+            interface_definition=_interface_definition_default,
+            vcal=_vcal_default,
+            asic_spi_speed_hz=2000000,
+            options,
+        ):
+
+        self.options = options
 
         self._POWER_CYCLING = True
         self._PARAMTREE_FIRSTINIT = True
@@ -405,9 +411,9 @@ class Carrier():
                                                name=vddaasic_rail_name,
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
-            self._pac1921_u3.config_gain(di_gain=1, dv_gain=8)
-            self._pac1921_u2.config_gain(di_gain=1, dv_gain=8)
-            self._pac1921_u1.config_gain(di_gain=1, dv_gain=8)
+            self._pac1921_u3.config_gain(di_gain=self.options.get('vdddcntrl_digain', 1), dv_gain=self.options.get('vdddcntrl_dvgain', 8))
+            self._pac1921_u2.config_gain(di_gain=self.options.get('vddd_digain', 1), dv_gain=self.options.get('vddd_dvgain', 8))
+            self._pac1921_u1.config_gain(di_gain=self.options.get('vdda_digain', 1), dv_gain=self.options.get('vdda_dvgain', 8))
 
             # PAC1921 Rail monitor mode settings
             if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
