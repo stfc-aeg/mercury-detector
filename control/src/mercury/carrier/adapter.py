@@ -111,7 +111,7 @@ class CarrierAdapter(ApiAdapter):
                                override_critical_temp_bme=override_critical_temp_bme,
                                interface_definition=_interface_definition_ribbon,
                                asic_spi_speed_hz=asic_spi_hz,
-                               kwargs)
+                               options=kwargs)
 
         # Call self-repeating loops for first time
         self.power_update_interval = float(1.0)

@@ -107,7 +107,7 @@ class Carrier():
             interface_definition=_interface_definition_default,
             vcal=_vcal_default,
             asic_spi_speed_hz=2000000,
-            options,
+            options=None,
         ):
 
         self.options = options
@@ -411,9 +411,15 @@ class Carrier():
                                                name=vddaasic_rail_name,
                                                r_sense=0.02,
                                                measurement_type=pac1921.Measurement_Type.POWER)
-            self._pac1921_u3.config_gain(di_gain=self.options.get('vdddcntrl_digain', 1), dv_gain=self.options.get('vdddcntrl_dvgain', 8))
-            self._pac1921_u2.config_gain(di_gain=self.options.get('vddd_digain', 1), dv_gain=self.options.get('vddd_dvgain', 8))
-            self._pac1921_u1.config_gain(di_gain=self.options.get('vdda_digain', 1), dv_gain=self.options.get('vdda_dvgain', 8))
+            self._pac1921_u3.config_gain(
+                di_gain=int(self.options.get('vdddcntrl_digain', 1)),
+                dv_gain=int(self.options.get('vdddcntrl_dvgain', 4)))
+            self._pac1921_u2.config_gain(
+                di_gain=int(self.options.get('vddd_digain', 1)),
+                dv_gain=int(self.options.get('vddd_dvgain', 4)))
+            self._pac1921_u1.config_gain(
+                di_gain=int(self.options.get('vdda_digain', 1)),
+                dv_gain=int(self.options.get('vdda_dvgain', 4)))
 
             # PAC1921 Rail monitor mode settings
             if self._rail_monitor_mode == self._Rail_Monitor_Mode.POWER_AND_IV:
