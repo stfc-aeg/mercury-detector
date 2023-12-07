@@ -203,7 +203,7 @@ class GPIBProxyContext(ProxyContext):
         if not self.get_peltier_controlled():
             raise Exception("Peltier not under control")
 
-        response = self.set('{}/temp'.format(self._peltier_path), {
+        response = self.set('{}/set'.format(self._peltier_path), {
             'temp_set': float(temp)
         })
 
