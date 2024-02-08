@@ -255,6 +255,311 @@ class HEXITEC_MHz(object):
         con.add_field('GL_TDC_EN', 'Global / Local TDC Oscillator enable', 3, 2, 1, is_volatile=False)
         con.add_field('GL_SerPLL_EN', 'Global / Local Serialiser PLL enable', 3, 1, 1, is_volatile=False)
         con.add_field('GL_TDC_EN', 'Global / Local TDC PLL enable', 3, 0, 1, is_volatile=False)
+
+        self._REGISTER_NAMES[4] = 'GL_EN2'
+        con.add_field('GL_VCALsel_EN', 'Global / Local VCAL enable', 4, 6, 1, is_volatile=False)
+        con.add_field('GL_SerMode21_EN', 'Global / Local Serialiser 2 Mode bit 1', 4, 5, 1, is_volatile=False)
+        con.add_field('GL_SerMode20_EN', 'Global / Local Serialiser 2 Mode bit 0', 4, 4, 1, is_volatile=False)
+        con.add_field('GL_SerMode11_EN', 'Global / Local Serialiser 1 Mode bit 1', 4, 3, 1, is_volatile=False)
+        con.add_field('GL_SerMode10_EN', 'Global / Local Serialiser 1 Mode bit 0', 4, 2, 1, is_volatile=False)
+        con.add_field('GL_SerAnaRstB_EN', 'Global / Local Serialiser Analogue Reset Control', 4, 1, 1, is_volatile=False)
+        con.add_field('GL_SerDigRstB_EN', 'Global / Local Serialiser Digital Reset Control', 4, 0, 1, is_volatile=False)
+
+        self._REGISTER_NAMES[5] = 'FrmLength'
+        con.add_field('FrmLength', 'Frame Length', 5, 7, 8, is_volatile=False)
+
+        self._REGISTER_NAMES[6] = 'IntTime'
+        con.add_field('IntTime', 'Integration Time', 6, 7, 8, is_volatile=False)
+
+        self._REGISTER_NAMES[7] = 'TESTSR'
+        con.add_field('TS_TRIG', 'Test Shift Register Trigger', 7, 7, 1, is_volatile=False)
+        con.add_field('TS_SECT', 'Test Shift Register Image Sector Number 0-19', 7, 6, 5, is_volatile=False)
+        con.add_field('TS_MODE', 'Test Shift Register Mode: 00 IDLE, 01 Shift, 10 Read, 11 Write', 7, 1, 2, is_volatile=False)
+
+        self._REGISTER_NAMES[8] = 'SER_PLL_BIAS'
+        con.add_field('SerPLLBias_ChargePump', 'Serialiser PLL Charge Pump Bias', 8, 7, 4, is_volatile=False)
+        con.add_field('SerPLLBias_Regulator', 'Serialiser PLL Regulator Bias', 8, 3, 4, is_volatile=False)
+
+        self._REGISTER_NAMES[9] = 'TDC_PLL_BIAS'
+        con.add_field('TDCPLLBias_ChargePump', 'TDC PLL Charge Pump Bias', 9, 7, 4, is_volatile=False)
+        con.add_field('TDCPLLBias_Regulator', 'TDC PLL Regulator Bias', 9, 3, 4, is_volatile=False)
+
+        # The timing registers are all non-volatile, single byte registers
+        for (addr, name, desc) in [
+            (10,    'DATA_SHIFT',       'Load Read Out Data'),
+            (11,    'PRE_RST_ON',       'Reset preamplifier on'),
+            (12,    'PRE_RST_OFF',      'Reset preamplifier off'),
+            (13,    'CDS_RST_ON',       'Reset CDS on'),
+            (14,    'CDS_RST_OFF',      'Reset CDS off'),
+            (15,    'CDS_COUNTER_ON',   'CDS Sample on'),
+            (16,    'CDS_COUNTER_OFF',  'CDS Sample off'),
+            (17,    'SAMPLE_H_ON',      'Sample & Hold on'),
+            (18,    'SAMPLE_H_OFF',     'Sample & Hold off'),
+            (19,    'RAMP_EN_ON',       'Ramp Enable on'),
+            (20,    'RAMP_EN_OFF',      'Ramp Enable off'),
+            (21,    'TDC_OUT_ENB_ON',   'TDC Output Enable on'),
+            (22,    'TDC_OUT_ENB_OFF',  'TDC Output Enable off'),
+            (23,    'TDC_CND_RST_ON',   'TDC Counter Reset on'),
+            (24,    'TDC_CND_RST_OFF',  'TDC Counter Reset off'),
+            (25,    'CAL_TOGGLE',       'Calibration Pulse Toggle'),
+        ]:
+            self._REGISTER_NAMES[addr] = name
+            con.add_field(name, desc, addr, 7, 8, is_volatile=False)
+
+        self._REGISTER_NAMES[11] = 'PRE_RST_ON'
+        con.add_field(self.register_address_to_name(11), 'Reset preamplifier on', 11, 7, 8, is_volatile=False)
+
+        # Segment Serialiser Select is a collection of 6 fields over 1 register, but there
+        # is one for each of the 10 segments. These will just be created as differently named
+        # fields. Segments are named 1-10.
+        for segment in range(1, 11):
+            addr = (26 + segment) - 1   # -1 for first segment being 1
+            self._REGISTER_NAMES[addr] = 'GL_SER_SEL{}'.format(segment)
+
+            # For each register, add the local serialiser mode / reset signals as combined
+            # bit pairs.
+            con.add_field(
+                'GL_SerMode2_SEL{}'.format(segment),
+                'Local Serialiser 2 mode (segment {})'.format(segment),
+                addr, 5, 2, is_volatile=False
+            )
+            con.add_field(
+                'GL_SerMode1_SEL{}'.format(segment),
+                'Local Serialiser 1 mode (segment {})'.format(segment),
+                addr, 3, 2, is_volatile=False
+            )
+            con.add_field(
+                'GL_SerAnaRstB_SEL{}'.format(segment),
+                'Local Serialiser Analogue Reset (segment {})'.format(segment),
+                addr, 1, 1, is_volatile=False
+            )
+            con.add_field(
+                'GL_SerDigRstB_SEL{}'.format(segment),
+                'Local Serialiser Digital Reset (segment {})'.format(segment),
+                addr, 0, 1, is_volatile=False
+            )
+
+        # Similar to above, Segment Signal Select is a collection of fields over 1 register,
+        # one for each of the 10 segments. They are then separated into serialiser 1 and 2,
+        # for left and right.
+        for segment in range(1, 11):
+            addr = (36 + segment) -1    # -1 for first segment being 1
+            self._REGISTER_NAMES[addr] = 'GL_SEL{}'.format(segment)
+
+            # For each resister, add the local serialiser signal select signals
+            con.add_field(
+                'GL_DigSigEn_SEL{}'format(segment),
+                'Local Digital Signal Enable (segment {})'.format(segment),
+                addr, 7, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_AnaSigEn_SEL{}'format(segment),
+                'Local Analogue Signal Enable (segment {})'.format(segment),
+                addr, 6, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_TDCOscEn_SEL{}'format(segment),
+                'Local Serialiser TDC Oscillator Enable (segment {})'.format(segment),
+                addr, 5, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_SerPLLEn_SEL{}'format(segment),
+                'Local Serialiser PLL Enable (segment {})'.format(segment),
+                addr, 4, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_TDCPLLEn_SEL{}'format(segment),
+                'Local TDC PLL Enable (segment {})'.format(segment),
+                addr, 3, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_AnaEn_SEL{}'format(segment),
+                'Local Pixel Bias Enable (segment {})'.format(segment),
+                addr, 2, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_ROE_SEL{}'format(segment),
+                'Local Readout Enable (segment {})'.format(segment),
+                addr, 1, 1, is_volatile=False)
+            )
+            con.add_field(
+                'GL_SerDigRstB_SEL{}'format(segment),
+                'Local VCAL Select (segment {})'.format(segment),
+                addr, 0, 1, is_volatile=False)
+            )
+
+        # Add a Ramp control register for each of 20 columns.
+        # There are 10 segments, each of which has 8 pixels. Each segment has two control
+        # registers for ramp controllers, each of which is responsible for two ramp generators.
+        # Each ramp generator is responsible for two pixels.
+        for ramp_generator_number in range(1, 21):
+            addr = (46 + ramp_generator_number) -1
+            self._REGISTER_NAMES[addr] = 'RAMPControl{}'.format(ramp_generator_number)
+
+            # Each 8-bit register represents a pair of two ramp generators, each of which
+            # operates on two pixels. There are two control registers (4 generators) per
+            # segment.
+
+            segment_num = int((ramp_generator_number + 1) / 2)
+
+            con.add_field(
+                'RAMPControl{}'.format(ramp_generator_number),
+                'RAMP Bias Control {} (Segment {}, generators {})'.format(ramp_generator_number, segment_num, '1 and 2' if (ramp_generator_number % 2) else '3 and 4'),
+                7, 8, is_volatile=False
+            )
+
+        # Add a serialiser control registers. These are in groups 10 of 6 registers, one for
+        # each serialiser. Each of these segments is actually made up of 10 fields spread over
+        # the registers, in reverse.
+
+        for serialiser_number  in range(1, 11):
+            base_addr = (66 + serialiser_number) -1
+
+            # The register names match the manual, but do not relate to field organisation
+            self._REGISTER_NAMES.update({
+                base_addr: 'SerControl{}A'.format(serialiser_number),
+                base_addr+1: 'SerControl{}B'.format(serialiser_number),
+                base_addr+2: 'SerControl{}C'.format(serialiser_number),
+                base_addr+3: 'SerControl{}D'.format(serialiser_number),
+                base_addr+4: 'SerControl{}E'.format(serialiser_number),
+                base_addr+5: 'SerControl{}F'.format(serialiser_number),
+            })
+
+            # The fields are organised spanning the 6 bytes, but some fields start in the LSBs
+            # of register n, and finish in the MSBs of register n-1, meaning they will have to
+            # be implemented as subfields joined together to form one logical field. For example.
+            # the `PatternControl` 3-bit field has its first bit in register F:0, and then its
+            # final 2 bits in register E:7-6.
+
+            con.add_field(
+                'Ser{}_EnableCCP'.format(serialiser_number),
+                'Enable CCP'.format(serialiser_number),
+                base_addr+5, 6, 1, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_EnableCCPInitial'.format(serialiser_number),
+                'Enable CCP Initial for Serialiser {}'.format(serialiser_number),
+                base_addr+5, 5, 1, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_LowPriorityCCP'.format(serialiser_number),
+                'Low Priority CCP for Serialiser {}'.format(serialiser_number),
+                base_addr+5, 4, 1, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_EnableEndframe'.format(serialiser_number),
+                'Enable Endframe for Serialiser {}'.format(serialiser_number),
+                base_addr+5, 3, 1, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_BypassScramble'.format(serialiser_number),
+                'Bypass Scramble for Serialiser {}'.format(serialiser_number),
+                base_addr+5, 2, 1, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_StrictAlignmentFlagEn'.format(serialiser_number),
+                'Strict Alignment Flag Enable for Serialiser {}'.format(serialiser_number),
+                base_addr+5, 1, 1, is_volatile=False
+            )
+
+            # PatternControl spans two registers
+            patterncon_high = Field(con, 'PatternControl_ms', '', base_addr+5, 0, 1, is_volatile=False)
+            patterncon_low = Field(con, 'PatternControl_ls', '', base_addr+4, 7, 2, is_volatile=False)
+            con.add_multifield(
+                'Ser{}_PatternControl'.format(serialiser_number),
+                'Pattern Control for Serialiser {}'.format(serialiser_number),
+                [patterncon_high, patterncon_low]
+            )
+
+            con.add_field(
+                'Ser{}_CCPCount'.format(serialiser_number),
+                'CCP Count for Serialiser {}'.format(serialiser_number),
+                base_addr+4, 5, 2, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_DLLPhaseConfig'.format(serialiser_number),
+                'DLL Phase Config for Serialiser {}'.format(serialiser_number),
+                base_addr+4, 1, 1, is_volatile=False
+            )
+
+            # DLLConfig spans two registers
+            dllconfig_high = con.add_field(
+                'Ser{}_DLLConfig_ms'.format(serialiser_number), '', base_addr+4, 0, 1, is_volatile=False
+            )
+            dllconfig_low = con.add_field(
+                'Ser{}_DLLConfig_ls'.format(serialiser_number), '', base_addr+3, 7, 2, is_volatile=False
+            )
+            con.add_multifield(
+                'Ser{}_DLLConfig'.format(serialiser_number),
+                'DLL Config for Serialiser {}'.format(serialiser_number),
+                [dllconfig_high, dllconfig_low]
+            )
+
+            con.add_field(
+                'Ser{}_CMLEn'.format(serialiser_number),
+                'CML En for Serialiser {}'.format(serialiser_number),
+                base_addr+3, 5, 2, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_Pre2Tweak'.format(serialiser_number),
+                'Pre2 Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+3, 3, 4, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_Pre1Tweak'.format(serialiser_number),
+                'Pre1 Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+2, 7, 4, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_CMLBuffTweak'.format(serialiser_number),
+                'CML Buffer Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+2, 3, 4, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_CMLTweak'.format(serialiser_number),
+                'CML Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+1, 7, 4, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_DLLTweak'.format(serialiser_number),
+                'DLL Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+1, 3, 4, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_SerClkTweak'.format(serialiser_number),
+                'Serialiser Clock Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+0, 7, 4, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_SerTweak'.format(serialiser_number),
+                'Serialiser Tweak for Serialiser {}'.format(serialiser_number),
+                base_addr+0, 3, 4, is_volatile=False
+            )
+
+        # Calibration shift register is actually 20-byte depth, at one address
+        con.add_field('SRCal', 'Test Pattern shift register, 20 bytes', 126, 7, 20*8, is_volatile=True)
+
+        # Test pattern shift register is actually 20-byte depth, at one address
+        con.add_field('SRTest', 'Test Pattern shift register, 20 bytes', 127, 7, 20*8, is_volatile=True)
+
+        # Page 2 registers, paging handled automatically
+        ################################################
+
+        self._REGISTER_NAMES[131] = 'ChipBias'
+        con.add_field('ChipBias', 'Global Chip Bias', 130, 7, 8, is_volatile=False)
+
+        for segment in range(1, 11):
+            addr = (131 + segment) -1    # -1 for first segment being 1
+            self._REGISTER_NAMES[addr] = 'SerBias{}'.format(segment)
+
+            con.add_field(
+                'SerBias{}'.format(segment),
+                'Serialiser Bias Setting, Segment {}'.format(segment),
+                addr, 7, 8, is_volatile=False
+            )
+
+        # Read-only registers
+        #####################
         #TODO Add the rest of the ASIC fields
 
     def read_field(self, fieldname):
