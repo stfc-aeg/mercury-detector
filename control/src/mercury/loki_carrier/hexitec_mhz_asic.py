@@ -5,6 +5,9 @@ import logging
 logging.basicConfig()
 logging.root.setLevel(logging.INFO)
 
+REGISTER_WRITE_TRANSACTION = 0X00
+REGISTER_READ_TRANSACTION = 0X80
+REGISTER_ADDRESS_MASK = 0b01111111
 
 def convert_16b_8b(array_16b):
     array_out = []
@@ -57,7 +60,32 @@ class HEXITEC_MHz(object):
         self._interface_enabled = False
 
         # The register map is paged. Second page for higher addresses.
-        self._current_page = 1
+        self._current_page = None
+
+    def self._set_page(self, page):
+        # Set the page pit in the control register (0), which is the same no matter which
+        # page you are on. Don't bother to change the page if it is already correct, as
+        # this will add pointless transactions. Note that pages are 0 and 1, not 1 and 2
+        # as sometimes indicated in documentation.
+
+        if self._current_page != page:
+            # Because this function is called by the register controller below the caching
+            # layer, it must perform the read-modify-write itself.
+
+            # Read
+            command = 0x00 | REGISTER_READ_TRANSACTION
+            transfer_buffer = [command, 0x00]
+            config_value = self._device.spi.transfer(transfer_buffer)[1]
+
+            # Modify
+            page_set_value = (config_value & 0b11111110) | (page_bit & 0b1)
+
+            # Write
+            command = 0x00 | REGISTER_WRITE_TRANSACTION
+            transfer_buffer = [command, page_set_value]
+            self.spi._device.transfer(transfer_buffer)
+
+            self.page = page
 
     def _read_register(self, address, length=1):
         # Direct ASIC function for reading from a register address, without caching (which
@@ -67,9 +95,38 @@ class HEXITEC_MHz(object):
         if not self._interface_enabled:
             raise ASICInterfaceDisabledError('Cannot read from ASIC')
 
-        # TODO read value(s), or throw an ASICIOError if there is some failure
+        # Set the register page
+        if (address == 0):      # CONFIG appears on both pages
+            pass
+        elif (address > 127):   # Second page
+            self._set_page(1)
+        else:                   # First page
+            self._set_page(0)
+        address = address & REGISTER_ADDRESS_MASK
+
+        command = address | REGISTER_READ_TRANSACTION
+
+        transfer_buffer = [command]
+        transfer_buffer.append(0x00)
+
+        readback = self.spi.transfer(transfer_buffer)
+
+        if readback is None:
+            raise ASICIOError('Failed to read {} bytes, SPI error'.format(length))
+        elif len(readback) != length:
+            raise ASICIOError('Got incorrect number of bytes back. Expected {}, got {}'.format(length, len(readback)))
+
+        self._logger.debug("Register {} read as {}".format(address, readback))
 
     def read_register(self, address, length=1):
+        # Read a register through the register controller, therefore cache already handled
+        # internally. Address can be either a number (typical) or a string name, since this
+        # ASIC has a register name table.
+
+        # If the address was supplied as a name, get the actual address of it
+        if type(address) == str:
+            address = self.register_name_to_address(address)
+
         try:
             return self._register_controller.read_register(address, length)
         except ASICInterfaceDisabledError as e:
@@ -83,7 +140,24 @@ class HEXITEC_MHz(object):
         # Write a value / series of values directly to the ASIC, ignoring caching (this is handled
         # by the register controller). Should handle burst writes.
 
-        # TODO write to the ASIC, throw ASICIOError if failure
+        # Set the register page
+        if (address == 0):      # CONFIG appears on both pages
+            pass
+        elif (address > 127):   # Second page
+            self._set_page(1)
+        else:                   # First page
+            self._set_page(0)
+
+        address = address & REGISTER_ADDRESS_MASK
+
+        command = address | REGISTER_WRITE_TRANSACTION
+
+        transfer_buffer = [command]
+        transfer_buffer.append(value)
+
+        self._device.spi.transfer(transfer_buffer)
+
+        self._logger.debug("Register {} written with {}".format(address, value))
 
         # If verification has been requested, read back the same address range and compare
         if verify:
@@ -99,6 +173,10 @@ class HEXITEC_MHz(object):
     def write_register(self, address, data, verify=False):
         # Write data through the register controller
         # Data can either be a single word, or list of words to burst write
+
+        # If the address was supplied as a name, get the actual address of it
+        if type(address) == str:
+            address = self.register_name_to_address(address)
 
         # Convert single byte to list format
         if type(data) is int:
@@ -124,6 +202,12 @@ class HEXITEC_MHz(object):
                         [hex(x) for x in verification_readback]))
             self._logger.debug('Data write verified')
 
+    def register_name_to_address(self, name):
+        return list(self._REGISTER_NAMES.values()).index(name)
+
+    def register_address_to_name(self, address):
+        return self._REGISTER_NAMES.get(address, None)
+
     def setup_fields(self, regmap_file_list: list, register_cache_enabled):
         # Create the register controller to handle field and register access
         self._register_controller = RegisterController(
@@ -133,8 +217,12 @@ class HEXITEC_MHz(object):
             cache_enabled=register_cache_enabled,
         )
 
+        self._REGISTER_NAMES = {}
+
         # Create default field mappings
         con = self._register_controller
+
+        self._REGISTER_NAMES[0] = 'CONFIG'
         con.add_field('ExtBiasSel', 'Select External Bias Current, 0 = use bandgap', 0, 7, 1, is_volatile=False)
         con.add_field('Range', 'Negative Range, 0 = -20keV, 1 = -10keV', 0, 6, 1, is_volatile=False)
         con.add_field('Ipre', 'Preamp current, 0 = normal, 1 = high', 0, 5, 1, is_volatile=False)
@@ -142,8 +230,32 @@ class HEXITEC_MHz(object):
         con.add_field('7fF', 'Select 7fF feedback capacitor', 0, 3, 1, is_volatile=False)
         con.add_field('CalEn', 'Enable the test pulse', 0, 2, 1, is_volatile=False)
         # unused bit
-        con.add_field('Page', 'Select the current register page', 0, 0, 1, is_volatile=False)
-        # Add the rest of the ASIC fields
+        con.add_field('Page', 'Select the current register page', 0, 0, 1, is_volatile=True)        # Considered volatile because the page is changed at a lower level than the caching layer to access different registers.
+
+        self._REGISTER_NAMES[1] = 'GL_CONT1'
+        con.add_field('GL_ROE_CONT', 'Global / Local readout control', 1, 6, 1, is_volatile=False)
+        con.add_field('GL_DigSig_CONT', 'Global / Local digital signals control', 1, 5, 1, is_volatile=False)
+        con.add_field('GL_AnaSig_CONT', 'Global / Local analog signals control', 1, 4, 1, is_volatile=False)
+        con.add_field('GL_AnaBias_CONT', 'Global / Local analog bias control', 1, 3, 1, is_volatile=False)
+        con.add_field('GL_TDCOsc_CONT', 'Global / Local TDC Oscillator control', 1, 2, 1, is_volatile=False)
+        con.add_field('GL_SerPLL_CONT', 'Global / Local Serialiser PLL control', 1, 1, 1, is_volatile=False)
+        con.add_field('GL_TDCPLL_CONT', 'Global / Local TDC PLL control', 1, 0, 1, is_volatile=False)
+
+        self._REGISTER_NAMES[2] = 'GL_CONT2'
+        con.add_field('GL_VCALsel_CONT', 'Global / Local VCAL Control', 2, 6, 1, is_volatile=False)
+        con.add_field('GL_SerMode_CONT', 'Global / Local serialiser mode Control', 2, 5, 1, is_volatile=False)
+        con.add_field('GL_SerAnaRstB_CONT', 'Global / Local serialiser analogue reset Control', 2, 1, 1, is_volatile=False)
+        con.add_field('GL_SerDigRstB_CONT', 'Global / Local serialiser digital reset Control', 2, 0, 1, is_volatile=False)
+
+        self._REGISTER_NAMES[3] = 'GL_EN1'
+        con.add_field('GL_ROE_EN', 'Global / Local readout enable', 3, 6, 1, is_volatile=False)
+        con.add_field('GL_DigSig_EN', 'Global / Local digital signals enable', 3, 5, 1, is_volatile=False)
+        con.add_field('GL_AnaSig_EN', 'Global / Local analog signals enable', 3, 4, 1, is_volatile=False)
+        con.add_field('GL_AnaBias_EN', 'Global / Local analog bias enable', 3, 3, 1, is_volatile=False)
+        con.add_field('GL_TDC_EN', 'Global / Local TDC Oscillator enable', 3, 2, 1, is_volatile=False)
+        con.add_field('GL_SerPLL_EN', 'Global / Local Serialiser PLL enable', 3, 1, 1, is_volatile=False)
+        con.add_field('GL_TDC_EN', 'Global / Local TDC PLL enable', 3, 0, 1, is_volatile=False)
+        #TODO Add the rest of the ASIC fields
 
     def read_field(self, fieldname):
         try:
