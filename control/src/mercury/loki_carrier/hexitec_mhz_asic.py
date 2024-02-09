@@ -49,12 +49,13 @@ class HEXITEC_MHz(object):
         "init":0b00, "bonding":0b01, "data":0b11
     }
 
-    def __init__(self, bus, device, regmap_override_filenames: list, register_cache_enabled):
+    def __init__(self, bus, device, hz=2000000, regmap_override_filenames: list, register_cache_enabled):
         self._logger = logging.getLogger('ASIC')
 
         # Setup up SPI Device
-        self._device = SPIDevice(bus=bus, device=device, hz=20000)
+        self._device = SPIDevice(bus=bus, device=device, hz=hz)
         self._device.spi.mode = 0   # HEXITEC-MHz uses mode 0
+        self.spi.set_cs_active_high(False)
 
         # Set up register controller to interact over SPI with defined fields
         if register_cache_enabled:
@@ -66,7 +67,9 @@ class HEXITEC_MHz(object):
         # The register map is paged. Second page for higher addresses.
         self._current_page = None
 
-    def self._set_page(self, page):
+        self._logger.info('HEXITEC-MHz ASIC init complete')
+
+    def _set_page(self, page):
         # Set the page pit in the control register (0), which is the same no matter which
         # page you are on. Don't bother to change the page if it is already correct, as
         # this will add pointless transactions. Note that pages are 0 and 1, not 1 and 2
