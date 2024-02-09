@@ -45,6 +45,10 @@ class ASICIOError(Exception):
 
 
 class HEXITEC_MHz(object):
+    _serialiser_mode_names = {
+        "init":0b00, "bonding":0b01, "data":0b11
+    }
+
     def __init__(self, bus, device, regmap_override_filenames: list, register_cache_enabled):
         self._logger = logging.getLogger('ASIC')
 
@@ -231,6 +235,7 @@ class HEXITEC_MHz(object):
         con.add_field('CalEn', 'Enable the test pulse', 0, 2, 1, is_volatile=False)
         # unused bit
         con.add_field('Page', 'Select the current register page', 0, 0, 1, is_volatile=True)        # Considered volatile because the page is changed at a lower level than the caching layer to access different registers.
+        #TODO make this non-volatile once the mutexes are properly sorted for the register handler
 
         self._REGISTER_NAMES[1] = 'GL_CONT1'
         con.add_field('GL_ROE_CONT', 'Global / Local readout control', 1, 6, 1, is_volatile=False)
@@ -258,10 +263,8 @@ class HEXITEC_MHz(object):
 
         self._REGISTER_NAMES[4] = 'GL_EN2'
         con.add_field('GL_VCALsel_EN', 'Global / Local VCAL enable', 4, 6, 1, is_volatile=False)
-        con.add_field('GL_SerMode21_EN', 'Global / Local Serialiser 2 Mode bit 1', 4, 5, 1, is_volatile=False)
-        con.add_field('GL_SerMode20_EN', 'Global / Local Serialiser 2 Mode bit 0', 4, 4, 1, is_volatile=False)
-        con.add_field('GL_SerMode11_EN', 'Global / Local Serialiser 1 Mode bit 1', 4, 3, 1, is_volatile=False)
-        con.add_field('GL_SerMode10_EN', 'Global / Local Serialiser 1 Mode bit 0', 4, 2, 1, is_volatile=False)
+        con.add_field('GL_SerMode2_EN', 'Global / Local Serialiser 2 Mode bits', 4, 5, 2, is_volatile=False)
+        con.add_field('GL_SerMode1_EN', 'Global / Local Serialiser 1 Mode bits', 4, 3, 2, is_volatile=False)
         con.add_field('GL_SerAnaRstB_EN', 'Global / Local Serialiser Analogue Reset Control', 4, 1, 1, is_volatile=False)
         con.add_field('GL_SerDigRstB_EN', 'Global / Local Serialiser Digital Reset Control', 4, 0, 1, is_volatile=False)
 
@@ -496,9 +499,14 @@ class HEXITEC_MHz(object):
             )
 
             con.add_field(
-                'Ser{}_CMLEn'.format(serialiser_number),
-                'CML En for Serialiser {}'.format(serialiser_number),
-                base_addr+3, 5, 2, is_volatile=False
+                'Ser{}_CMLEn1'.format(serialiser_number),
+                'CML En Driver 1 for Serialiser {}'.format(serialiser_number),
+                base_addr+3, 5, 1, is_volatile=False
+            )
+            con.add_field(
+                'Ser{}_CMLEn2'.format(serialiser_number),
+                'CML En Driver 2 for Serialiser {}'.format(serialiser_number),
+                base_addr+3, 4, 1, is_volatile=False
             )
             con.add_field(
                 'Ser{}_Pre2Tweak'.format(serialiser_number),
@@ -620,144 +628,422 @@ class HEXITEC_MHz(object):
         )
 
     def read_test_pattern(self, sector):
-        #TODO
-        pass
+        # Read out a test pattern from a specificed sector using the 480
+        # byte test shift register (320 12-bit pixels). The result is
+        # returned as an array of 320 12-bit pixel values.
+
+        # Set the sector
+        self.write_field('TS_SECT', sector)
+
+        # Set test register read mode with trigger 0
+        self.write_field('TS_TRIG', 0)
+        self.write_field('TS_MODE', 0b10)
+
+        # Keep test register read mode with trigger 1
+        self.write_field('TS_TRIG', 1)
+
+        # Put test shift register into shift mode
+        self.write_field('TS_MODE', 0b01)
+
+        # Read the test shift register
+        #readout = self.burst_read(127, 480)
+        readout = self.read_field('SRTest')
+
+        # Convert to 12-bit data and remove first byte (not part of read)        
+        readout_12bit = Asic.convert_8bit_12bit(readout[1:])
+
+        return readout_12bit
 
     def write_test_pattern(self, pattern_data_12bit, sector):
-        #TODO
-        pass
+        # Write a test pattern to the test shift register for a single sector.
+        # The input is taken as an array of 360 12-bit pixel values, written in 4x4
+        # grids from left to right. Each grid is supplied with values starting at
+        # the bottom left pixel, moving horizontally then up one row (see the ASIC
+        # manual Test Shfit Reigster Data Order (v1.3 section 5.7.2).
+
+        # Prepare the 8-bit data
+        pattern_data_8bit = Asic.convert_12bit_8bit(pattern_data_12bit)
+
+        # Set the test register to shift mode with no trigger
+        self.write_field('TS_SECT', sector)
+        self.write_field('TS_TRIG', 0)
+        self.write_field('TS_MODE', 0b01)
+
+        # Burst write register 127 with the 8-bit data
+        #self.burst_write(pattern_data_8bit, 480)
+        self.write_field('SRTest', pattern_data_8bit)
+
+        # Set the test register to write mode
+        self.write_field('TS_MODE', 0b11)
 
     def test_pattern_identify_sector_division(self, sector):
-        #TODO
-        pass
+        # Send data to a given sector that will identify individual 4x4 grids with
+        # set pattern. Each pixel in the 4x4 grid will have the same value, which is
+        # incremented counting the grids from left to right and then top to bottom.
+        # Grid numbering will start at 1 to ensure there is something to receive.
+        # (i.e. the second grid in the third sector will contain pixel values 43)
+
+        sector_offset = (sector * 20) + 1 # Sector numbering starts at 0, first value 1
+
+        # Generate the 4x4 grid 12-bit values
+        pattern_12bit = []
+        for grid_id in range(sector_offset, sector_offset+20):
+            grid_values = [grid_id] * 20
+            pattern_12bit.extend(grid_values)
+
+        # Submit the test pattern
+        self.write_test_pattern(pattern_12bit, sector)
 
     def enable_calibration_test_pattern(self, enable=True):
-        #TODO
-        pass
+        self.write_field('CalEn', 1 if enable else 0)
+        self._logger.info(("Enabled" if enable else "Disabled") + " calibration pattern mode")
 
     def get_calibration_test_pattern_enabled(self, direct=True):
-        #TODO
-        pass
+        return self.read_field('CalEn')
 
     def set_calibration_test_pattern(self, row_bytes, column_bytes):
-        #TODO
-        pass
+        # Submit a calibration test pattern, which consists of two arrays (one for
+        # row and the other for columns). Each array contains binary pixel values.
+        # The row and column patterns are ANDed toghether, so only pixels that have
+        # a high value in both row and column will be high. The ASIC cycles through
+        # 4 patterns (rising, falling, and 2 blanks) using this base pattern.
+        #
+        # Bytes are MSB-first, but the rows are loaded in reverse from 79 to 0 (i.e.
+        # to set only the first pixel, the last row byte would be 0b00000001 and the
+        # first column byte would be 0b10000000.
+
+        self._logger.debug('Writing calibration test pattern {}'.format(
+            [hex(x) for x in (row_bytes + column_bytes)]))
+
+        #self.burst_write(126, row_bytes + column_bytes)
+        self.write_field('SRCal', row_bytes + column_bytes)
 
     def set_calibration_test_pattern_bits(self, row_bits, column_bits):
-        #TODO
-        pass
+        # Constructs a calibration pattern using arrays of bits for rows and columns.
+        # Ordering is from pixel count 0 to 79 for each.
+
+        # Reverse the row array, since it is loaded from pixel 79 to 0.
+        row_bits_reversed = reversed(row_bits)
+
+        # Convert bits to byte array, MSB First
+        row_bytes = [sum([byte[b] << (7- b) for b in range(7,-1,-1)])
+                for byte in zip(*(iter(row_bits_reversed),) * 8)]
+        column_bytes = [sum([byte[b] << (7- b) for b in range(7,-1,-1)])
+                for byte in zip(*(iter(column_bits),) * 8)]
+
+        self.set_calibration_test_pattern(row_bytes=row_bytes, column_bytes=column_bytes)
 
     def cal_pattern_highlight_sector_division(self, sector, division):
-        #TODO
-        pass
+        # Use the calibration test pattern to (within a single sector) zero all pixels
+        # except those in a certain division and sector, which will be filled with all
+        # high bits. There is one bit per pixel in the calibration pattern.
+
+        row_bits = []
+        column_bits = []
+
+        sector = int(sector)
+        division = int(division)
+
+        # Only rows with pixels in the correct sector will be highlighted
+        for row_id in range(0, 80):
+            sector_id = int(row_id / 4)
+            if sector_id == sector:
+                row_bits.append(1)
+            else:
+                self._logger.debug('{}: did not accept sector id {} from row {} to match sector {}'.format(
+                    sector_id == sector, sector_id, row_id, sector))
+                row_bits.append(0)
+
+        # Only columns with pixels in the correct division will be highlighted
+        for column_id in range(0, 80):
+            division_id = int(column_id / 4)
+            if division_id == division:
+                column_bits.append(1)
+            else:
+                column_bits.append(0)
+
+        self._logger.info("Generated calibration test pattern to highlight sector {}, division {}".format(sector, division))
+        self._logger.debug("In bit form:\n\trows: {}\n\tcolumns:{}".format(row_bits, column_bits))
+
+        # Submit the test pattern and enable it
+        self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
+        self.enable_calibration_test_pattern(True)
 
     def cal_pattern_highlight_pixel(self, column, row):
-        #TODO
-        pass
+        # Use the calibration tesst pattern to zero all pixels except one defined pixel
+        # location, which will be high. The exact output of this is defined by the ASIC
+        # calibration pattern cycle. 1/4 frames will be the highest contrast.
+
+        row_bits = [0] * row + [1] + [0] * (79-row)
+        column_bits = [0] * column + [1] + [0] * (79-column)
+
+        self._logger.info("Generated calibration test pattern to highlight pixel row {}, column {}".format(row, column))
+        self._logger.debug("In bit form:\n\trows: {}\n\tcolumns:{}".format(row_bits, column_bits))
+
+        # Submit the test pattern and enable it
+        self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
+        self.enable_calibration_test_pattern(True)
 
     def cal_pattern_set_default(self):
-        #TODO
-        pass
+        self.set_calibration_test_pattern(CAL_PATTERN_DEFAULT_BYTES['rows'],
+                CAL_PATTERN_DEFAULT_BYTES['cols'])
+
+        self._logger.info("Set calibration test pattern to default value")
 
     def set_tdc_local_vcal(self, local_vcal_en=True):
-        #TODO
-        pass
+        self.write_field('GL_VCALsel_EN', 1 if local_vcal_en else 0)
 
     def set_all_ramp_bias(self, bias):
-        #TODO
-        pass
+        # Set the ramp bias value for all 40 ramps in the ASIC
+        if not bias in range(0,16):
+            raise ValueError("Bias must be in range 0-15")
 
-    def set_integration_tion(self, integration_time_frames):
-        #TODO
-        pass
+        for fieldname in ['RAMPControl{}'.format(x) for x in range(1,21)]:
+            self.write_field(bias)
+
+        self._logger.info("Set ramp bias for all 40 ASIC ramps to {}".format(bias))
+
+    def set_integration_time(self, integration_time_frames):
+        self.write_field('IntTime', integration_time_frames)
 
     def get_integration_time(self):
-        #TODO
-        pass
+        self.read_field('IntTime')
 
     def set_frame_length(self, frame_length_clocks):
-        #TODO
-        pass
+        self.write_field('FrmLength', integration_time_frames)
 
     def get_frame_length(self, direct=False):
-        #TODO
-        pass
+        self.read_field('FrmLength')
 
     def set_feedback_capacitance(self, feedback_capacitance_fF):
-        #TODO
-        pass
+        if not feedback_capacitance_fF in [0, 7, 14, 21]:
+            raise ValueError("Capacitance must be 0, 7, 14 or 21 (fF)")
+
+        self.write_field('7fF', 1 if feedback_capacitance_fF in [7, 21] else 0)
+        self.write_field('14fF', 1 if feedback_capacitance_fF in [14, 21] else 0)
 
     def get_feedback_capacitance(self):
-        #TODO
-        pass
+        total_ff = 0
+        total_ff += 7 if self.read_field('7fF') else 0
+        total_ff += 14 if self.read_field('14fF') else 0
+
+    ##############################################################################
+    # Serialiser Control                                                         #
+    ##############################################################################
+    # There are 20 serialisers in the ASIC, however, these are organised into 10 #
+    # distinct control blocks, each of which has two associated serialisers. For #
+    # most settings, these are shared between the pair. However, some settings,  #
+    # such as CMLEn1/2 and Pre1/2_Tweak are differentiated by driver number.     #
+    #                                                                            #
+    # The access functions using 'channel' as an input are using this to mean an #
+    # ASIC channel number. Many functions simply write to all serialisers, which #
+    # means no channel is required. Some use 'serialiser_number', which is the   #
+    # number of the control block, 1-10. Related registers have been named with  #
+    # fields that start 'SerN_' where 'N' is the control block number.           #
+    ##############################################################################
+
+    # This map relates ASIC output channel numbers to a tuple of serialiser number
+    # (aka control block number) 1-10, and the driver number 1 or 2.
+    _block_drv_channel_map = {
+        0   :   (1, 2),
+        1   :   (1, 1),
+        2   :   (2, 1),
+        3   :   (2, 2),
+        4   :   (3, 2),
+        5   :   (3, 1),
+        6   :   (4, 1),
+        7   :   (4, 2),
+        8   :   (5, 2),
+        9   :   (5, 1),
+        10  :   (6, 1),
+        11  :   (6, 2),
+        12  :   (7, 2),
+        13  :   (7, 1),
+        14  :   (8, 1),
+        15  :   (8, 2),
+        16  :   (9, 2),
+        17  :   (9, 1),
+        18  :   (10, 1),
+        19  :   (10, 2),
+    }
+
+    def get_serialiserblk_from_channel(self, channel):
+        # Get the serialiser control block number and driver number associated with
+        # a given ASIC output channel.
+        block_num, driver_num = self._block_drv_channel_map[channel]
+
+        self._logger.debug('Channel {} decoded to serialiser control block {} driver {}'.format(
+            channel, block_num, driver_num))
+
+        return (block_num, driver_num)
 
     def _init_serialisers(self):
-        #TODO
-        pass
+        # Configure serialiser control blocks so that they have settings that
+        # have been determined during the tuning process. Ideally this should
+        # be called after an ASIC reset.
 
-    def set_ser_enable_CML_drivers(self, enable, holdoff=False):
-        #TODO
-        pass
+        # Set optimal settings
+        for serialiser_number in range(1,11):
+            serialiser = self._serialiser_block_configs[serialiser_number-1]
+
+            self.write_field('Ser{}_EnableCCP'.format(serialiser_number), 0b1)
+            self.write_field('Ser{}_EnableCCPInitial'.format(serialiser_number), 0b1)
+            self.write_field('Ser{}_LowPriorityCCP'.format(serialiser_number), 0b1)
+            self.write_field('Ser{}_StrictAlignmentFlagEn'.format(serialiser_number), 0b1)
+            self.write_field('Ser{}_PatternControl'.format(serialiser_number), 0b000)
+            self.write_field('Ser{}_CCPCount'.format(serialiser_number), 0b000)
+            self.write_field('Ser{}_BypassScramble'.format(serialiser_number), 0b0)
+            self.write_field('Ser{}_CMLEn1'.format(serialiser_number), 0b0)
+            self.write_field('Ser{}_CMLEn2'.format(serialiser_number), 0b0)
+            self.write_field('Ser{}_DLLConfig'.format(serialiser_number), 0b000)
+            self.write_field('Ser{}_DLLPhaseConfig'.format(serialiser_number), 0b0)
+
+    def set_ser_enable_CML_drivers(self, enable):
+        # Set the CML driver enable for all channels
+        for serialiser_number in range(1,11):
+            self._set_serialiser_driver_cml_en(serialiser_number, 1, enable)    # Driver 1
+            self._set_serialiser_driver_cml_en(serialiser_number, 2, enable)    # Driver 2
 
     def set_all_serialiser_pattern(self, pattern):
-        #TODO
-        pass
+        # Set the pattern control field for all serialisers
+        for serialiser_number in range(1,11):
+            self.write_field('Ser{}_PatternControl'.format(serialiser_number), pattern)
 
     def get_all_serialiser_pattern(self, direct=False):
-        #TODO
-        pass
+        # Get the pattern control field for the first serialiser control block, assuming that
+        # this will be the same for all blocks.
+        return get_channel_serialiser_pattern(0)
 
     def set_all_serialiser_bit_scramble(self, scrable_en):
-        #TODO
-        pass
+        # Set the bit scramble enable (Aurora) for all seriailisers. Note that the bit
+        # disables the scrambler, hence logic inversion.
+        scramble_bit = 0 if scramble_en else 1
+        for serialiser_number in range(1,11):
+            self.write_field('Ser{}_BypassScramble'.format(serialiser_number), scramble_bit)
 
-    def set_channel_serialiser_pattern(self, channel, pattern, holdoff=False):
-        #TODO
-        pass
+    def set_channel_serialiser_pattern(self, channel, pattern):
+        # Selectively set the output pattern for the serialiser associated with an ASIC
+        # output channel. Note that this will affect the other channel on the same control
+        # block.
+
+        serialiser_number, driver_number = self.get_serialiserblk_from_channel(channel)
+        self.write_field('Ser{}_PatternControl'.format(serialiser_number), pattern)
+
+    def get_channel_serialiser_pattern(self, channel):
+        # Selectively get the output pattern for the serialiser associated with an ASIC
+        # output channel.
+
+        serialiser_number, driver_number = self.get_serialiserblk_from_channel(channel)
+        self.read_field('Ser{}_PatternControl'.format(serialiser_number))
 
     def set_channel_serialiser_cml_en(self, channel, enable):
-        #TODO
-        pass
+        # Set the serialiser CML enable state for the driver associated with an ASIC channel
+
+        serialiser_number, driver_number = self.get_serialiserblk_from_channel(channel)
+        self._set_serialiser_driver_cml_en(serialiser_number, driver_number, enable)
+
+        self._logger.info('Serialiser for channel {} CML logic enabled: {}'.format(channel, enable))
 
     def get_channel_serialiser_cml_en(self, channel):
-        #TODO
-        pass
+        # Get the serialiser CML enable state for the driver associated with an ASIC channel
+
+        serialiser_number, driver_number = self.get_serialiserblk_from_channel(channel)
+        return self._get_serialiser_driver_cml_en(serialiser_number, driver_number)
+
+    def _set_serialiser_driver_cml_en(self, serialiser_number, driver, enable):
+        # Set the CML enable for a given driver number (1 or 2) of a seriliser (1-10).
+        self.write_field('Ser{}_CmlEn{}'.format(serialiser_number, driver), 1 if enable else 0)
+
+    def _get_serialiser_driver_cml_en(self, serialiser_number, driver, enable):
+        # Get the CML enable for a given driver number (1 or 2) of a seriliser (1-10).
+        self.read_field('Ser{}_CmlEn{}'.format(serialiser_number, driver))
 
     def set_all_serialiser_DLL_Config(self, DLL_Config):
-        #TODO
-        pass
+        if not DLL_Config in range(0, 8):
+            raise ValueError('DLL Config value must be in range 0-7')
+
+        self._logger.info("Setting dll config to {}".format(DLL_Config))
+
+        for serialiser_number in range(1, 11):
+            self.write_field('Ser{}_DLLConfig'.format(serialiser_number), DLL_Config)
 
     def set_all_serialiser_DLL_phase_invert(self, DLL_Phase_Config=True):
-        #TODO
-        pass
+        # True means inverted phase from nominal
+        bit_value = {True: 0b0, False: 0b1}[DLL_Phase_Config]
+
+        self._logger.info("Setting dll phase config to {}".format(bit_value))
+
+        for serialiser_number in range(1, 11):
+            self.write_field('Ser{}_DLLPhaseConfig'.format(serialiser_number), bit_value)
 
     def set_global_serialiser_mode(self, mode):
-        #TODO
-        pass
+        if isinstance(mode, int):       # Using bits
+            mode_bits = mode & 0b11
+        elif isinstance(mode, str):     # Using mode name
+            mode_bits = self._serialiser_mode_names[mode]
+
+        # Set serialiser global mode for both serialiser 1 and 2
+        self.write_field('GL_SerMode2_EN', mode_bits)
+        self.write_field('GL_SerMode1_EN', mode_bits)
 
     def get_global_serialiser_mode(self, bits_only=False, direct=False):
-        #TODO
-        pass
+        # Return the currently set mode. If bits_only is True, will send
+        # the bit encoding rather than the name.
+
+        # Assume that modes are the same, and only read SERMode1xG
+        mode = self.read_field('GL_SerMode1_EN')
+
+        if bits_only:
+            return mode
+        else:
+            for name, mode_bits in self._serialiser_mode_names.items():
+                if mode_bits == mode:
+                    return name
 
     def Set_DiamondDefault_Registers(self):
-        #TODO
-        pass
+        #Set default negative range
+        #self.set_register_bit(0,0b01000000)
+        self.write_field('Range', 1)
+
+        #14fF, 0000 slew rate
+        self.set_all_ramp_bias(0b0000)
+
+        #self.clear_register_bit(0,0b00000100)
+        self.write_field('7Ff', 0)
+        #self.clear_register_bit(0,0b00100000)
+        self.write_field('Ipre', 0)
+
+        #self.write_register(12,6)
+        self.write_field('PRE_RST_OFF', 6)
+        #self.write_register(14,20)
+        self.write_field('CDS_RST_OFF', 20)
+        #self.write_register(9,0b10001111)
+        self.write_field('TDCPLLBias_ChargePump', 0b1000)
+        self.write_field('TDCPLLBias_Regulator', 0b1111)
+        #self.write_register(17,174)
+        self.write_field('SAMPLE_H_ON', 174)
+        #self.write_register(21,190)
+        self.write_field('TDC_OUT_ENB_ON', 190)
+        #self.write_register(18,197)
+        self.write_field('SAMPLE_H_OFF', 197)
+
+        self._logger.info("Finished setting registers")
 
     def ser_enter_reset(self):
-        #TODO
-        pass
+        self.write_field('GL_SerAnaRstB_CONT', 0)
+        self.write_field('GL_SerDigRstB_CONT', 0)
+        self.write_field('GL_SerPLL_CONT', 0)
 
     def ser_exit_reset(self):
-        #TODO
-        pass
+        self.write_field('GL_SerAnaRstB_CONT', 1)
+        self.write_field('GL_SerDigRstB_CONT', 1)
+        self.write_field('GL_SerPLL_CONT', 1)
 
     def enter_bonding_mode(self):
-        #TODO
-        pass
+        self.set_global_serialiser_mode("bonding")
 
     def enter_data_mode(self):
-        #TODO
-        pass
+        self.set_global_serialiser_mode("data")
 
 # TODO also work out how to add serialiser stuff....
 
