@@ -1,11 +1,13 @@
 from loki.adapter import LokiCarrier_1v0, DeviceHandler
 from mercury.loki_carrier.hexitec_mhz_asic import HEXITEC_MHz
 from odin_devices.ad5593r import AD5593R
+from odin_devices.ad7998 import AD7998
 from odin_devices.mic284 import MIC284
 from odin_devices.i2c_device import I2CDevice
 from odin_devices.firefly import FireFly
 import logging
 import time
+from enum import IntEnum, unique
 
 
 # Holds information mapping ASIC channels onto different devices, for example, fireflies, retimers etc.
@@ -18,6 +20,20 @@ class ChannelInfo(object):
 
 
 class LokiCarrier_HMHz (LokiCarrier_1v0):
+
+    # States the enable state machine will step through, in 'normal' order.
+    @unique
+    class ENABLE_STATE (IntEnum):
+        PRE_INIT = 0
+        LOKI_INIT = 1
+        LOKI_DONE = 2
+        PWR_INIT = 3
+        PWR_DONE = 4
+        COB_INIT = 5
+        COB_DONE = 6
+        ASIC_INIT = 7
+        ASIC_DONE = 8
+
     def __init__(self, **kwargs):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
@@ -52,10 +68,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         kwargs.setdefault('clkgen_base_dir', './clkgen/')
 
         # Get config for MIC284
-        #TODO update this for HMHZ
         self._mic284 = DeviceHandler(device_type_name='MIC284')
         self._mic284.i2c_address = 0x48
         self._mic284.i2c_bus = self._application_interfaces_i2c['APP_PWR']
+
+        # Get config for AD7998 ADC
+        self._ad7998= DeviceHandler(device_type_name='AD7998')
+        self._ad7998.i2c_address = 0x20
+        self._ad7998.i2c_bus = self._application_interfaces_i2c['APP_PWR']
 
         # Add more sensors to environment system for MIC
         self._env_sensor_info.extend([
@@ -221,6 +241,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         self._logger.info('ASIC instance creation complete')
 
+        # Init state machine
+        self._ENABLE_STATE_CURRENT = self.ENABLE_STATE.PRE_INIT # The state the system is currently in
+        self._ENABLE_STATE_NEXT = self.ENABLE_STATE.PRE_INIT    # The state the system will move to next
+        self._ENABLE_STATE_TARGET = self.ENABLE_STATE.PRE_INIT # The state the system is aiming to get to
+        self._ENABLE_STATE_LAST_IDLE = None                     # The last state passed through considered 'idle' (safe to return to)
+        self._ENABLE_STATE_INERR = False                        # True if the system encountered an error at last state change
+        self._ENABLE_STATE_ERRMSG = None                        # Message if an error was encountered
+
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
 
         # Register a callback for when the application enable state changes, since the API for this is
@@ -228,6 +256,18 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.register_change_callback('application_enable', self._onChange_app_en)
 
         self._logger.info('LOKI super init complete')
+
+        # Set the default state target based on what boards we think are present
+        if self.get_pin_value('app_present'):
+            # If application is present (COB), the power board must be too
+            self._logger.info('Backplane and COB detected, will init all devices')
+            self._ENABLE_STATE_TARGET = self.ENABLE_STATE.COB_DONE          # Init everything short of the ASIC
+        if self.get_pin_value('bkpln_present'):
+            self._logger.info('Backplane only detected, will not attempt to init COB')
+            self._ENABLE_STATE_TARGET = self.ENABLE_STATE.PWR_DONE          # Init just the power board
+        else:
+            self._logger.info('Neither backplane nor COB detected, will only init LOKI devices')
+            self._ENABLE_STATE_TARGET = self.ENABLE_STATE.LOKI_DONE         # Init just the devces on the LOKI carrier
 
     def cleanup(self):
         # The cleanup function is called by odin-control on exit, for example if reloaded in debug mode
@@ -240,7 +280,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _start_io_loops(self, options):
         # override IO loop start to add loops for this adapter
         super(LokiCarrier_HMHz, self)._start_io_loops(options)
-        #TODO add HMHz threads here
+
+        self._threads['enable_state_machine'] = self._thread_executor.submit(self._mhz_enable_state_machine_loop)
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -272,8 +313,281 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         #TODO disable HV?
         #TODO disable the ASIC
 
+    def _mhz_enable_state_machine_loop(self):
+        # Controls the main state progression of the system. Enables for individual devices are handled
+        # by mutexes (locks). To effectively 'disable' a device, its mutex is grabbed to prevent any other
+        # thread from attempting to use it. Once re-enabled, devices will be assumed to be in unknown state
+        # and will be re-configured (since this could represent a new board being swapped in).
+
+        # Generally, all devices handled have a 'config' and 'setup' stage. The former refers to instantiating
+        # the device and performing everything that can be done once contact with it is established. This also
+        # allows for early detection of device errors before attempting to move on. The latter 'setup' is
+        # generally for configuring the device for the needs of the application.
+
+        # This is structured as a traditional automatic state machine, except with a 'target' state that will
+        # stop progression if reached.
+
+        # These states do not preform any processes, and are safe to return to and 'sit' in while waiting
+        # for further input. The last of these progressed through will be returned to in event of error.
+        IDLE_STATES = [
+            self.ENABLE_STATE.PRE_INIT,
+            self.ENABLE_STATE.LOKI_DONE,
+            self.ENABLE_STATE.PWR_DONE,
+            self.ENABLE_STATE.COB_DONE,
+            self.ENABLE_STATE.ASIC_DONE,
+        ]
+
+        def handle_state_error(msg):
+            # Report the error
+            full_message = 'error processing enable state {}: {}'.format(self._ENABLE_STATE_CURRENT.name, msg)
+            self._logger.error(full_message)
+            self._ENABLE_STATE_INERR = True
+            self._ENABLE_STATE_ERRMSG = full_message
+
+            # Set the current target to latest 'idle' state to prevent further advancement until
+            # the user requests it.
+            self._ENABLE_STATE_TARGET = self._ENABLE_STATE_LAST_IDLE
+
+            # Force the current state to the latest 'idle' state to prevent further advancement until
+            # the user requests it.
+            self._ENABLE_STATE_CURRENT = self._ENABLE_STATE_LAST_IDLE
+
+        def clear_error():
+            self._ENABLE_STATE_INERR = False
+            self._ENABLE_STATE_ERRMSG = None
+
+        def lock_devices(device_list):
+            # Lock a set of devices from other tasks using it by grabbing the mutex.
+            self._logger.info('State machine locking devices: {}'.format(device_list))
+            for dev in device_list:
+                result = dev.lock.acquire(blocking=True, timeout=5)
+                if not result:
+                    self._logger.error('Enable Control State Machine failed to get lock for device {}, there is something critically wrong.'.format(dev))
+                    raise Exception('Enable Control State Machine failed to get lock for device {}, there is something critically wrong.'.format(dev))
+                dev.initialised = False     # Force device re-init on ENABLE
+                self._logger.debug('Acquired {} (result {})'.format(dev, result))
+            self._logger.info('State machine locking complete')
+
+        while not self.TERMINATE_THREADS:
+
+            # Handle current state
+            if self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.PRE_INIT:
+                # This is just the state that the system starts up in
+                try:
+                    # Note: this state is entered immediately after the IO loops are started, and devices
+                    # have note necessarily been created, so do nothing until advance is forced by setting
+                    # the target at the end of __init__.
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.LOKI_INIT:
+                # Set up devices on the LOKI carrier for the application
+                try:
+                    #TODO Set the IO lines so that all resets are active. Ultimate safe state. Grab all mutexes.
+
+                    # Grab all of the devices
+                    lock_devices([
+                        self._zl30266,
+                        self._mic284,
+                        self._ad7998,
+                        self._firefly_00to09,
+                        self._firefly_10to19
+                    ])
+
+                    # Perform init of devices on LOKI board
+                    self._setup_clocks()
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.LOKI_DONE:
+                try:
+                    #TODO Set control lines, mutexes to disable anything on COB and power board
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.PWR_INIT:
+                # Check power board is present, and initialise devices on it and release mutexes.
+                try:
+                    # Check the power board has been detected
+                    if not self.get_pin_value('bkpln_present'):
+                        #TODO re-enable this once the pins are fixed in latest build
+                        #raise Exception('Backplane not present')
+                        pass
+
+                    # Init the MIC temperature sensor and release its mutex if successful
+                    self._config_mic284()
+                    if self._mic284.initialised:
+                        self._mic284.lock.release()
+
+                    # Init the AD7998 ADC
+                    self._config_ad7998()
+                    if self._ad7998.initialised:
+                        self._ad7998.lock.release()
+
+                    #TODO Init the Digial Potentiometers (see below)
+
+                    #TODO Init the HV system
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.PWR_DONE:
+                try:
+                    #TODO Set control lines, mutexes to disable anything on COB
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.COB_INIT:
+                try:
+                    #TODO Init devices on the COB and release mutexes, except the ASIC
+
+                    # Check the COB has been detected
+                    if not self.get_pin_value('app_present'):
+                        #TODO re-enable this once the pins are fixed in latest build
+                        #raise Exception('COB not present')
+                        pass
+
+                    # Config fireflies, disable all output channels by default to prevent overheat
+                    self._config_fireflies()
+                    if self._firefly_00to09.initialised:
+                        self._firefly_00to09.lock.release()
+                    if self._firefly_10to19.initialised:
+                        self._firefly_00to09.lock.release()
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.COB_DONE:
+                try:
+                    #TODO Set the ASIC into reset, grab its mutex.
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_INIT:
+                try:
+                    #TODO Initialise ASIC, final setup of devices etc. Do not release mutex yet.
+
+                    # Set the next step, will be advanced depending on target
+                    self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_DONE:
+                try:
+                    # System is ready! Release the ASIC mutex.
+                    raise Exception('test exception')
+                    self._ENABLE_STATE_NEXT = self._ENABLE_STATE_CURRENT
+                except Exception as e:
+                    handle_state_error(e)
+                    continue
+
+            # If the last current state processed was considered 'idle' (safe to return to),
+            # store it.
+            if self._ENABLE_STATE_CURRENT in IDLE_STATES:
+                self._ENABLE_STATE_LAST_IDLE = self._ENABLE_STATE_CURRENT
+
+            # Set the next loop current state
+            if self._ENABLE_STATE_CURRENT < self._ENABLE_STATE_TARGET:
+                # The state requires progressing normally, set current state to next state for next loop
+                self._logger.info('STATE CHANGE {} -> {}'.format(self._ENABLE_STATE_CURRENT.name, self._ENABLE_STATE_NEXT.name))
+                self._ENABLE_STATE_CURRENT = self._ENABLE_STATE_NEXT
+                clear_error()
+            elif self._ENABLE_STATE_CURRENT > self._ENABLE_STATE_TARGET:
+                # The requested state is before the current one, move to it directly assuming that the
+                # user knows what they are doing.
+                self._logger.info('STATE CHANGE {} -> {}'.format(self._ENABLE_STATE_CURRENT.name, self._ENABLE_STATE_TARGET.name))
+                self._ENABLE_STATE_CURRENT = self._ENABLE_STATE_TARGET
+                clear_error()
+            else:
+                # The state is as required, do not progress (ignore next state for now)
+                self._logger.info('STATE AT TARGET({}), not progressing state machine'.format(self._ENABLE_STATE_TARGET.name))
+                time.sleep(1)
+
+    def get_enable_state_error(self):
+        if self._ENABLE_STATE_INERR:
+            return self._ENABLE_STATE_ERRMSG
+        else:
+            return None
+
+    def get_enable_state(self):
+        return self._ENABLE_STATE_CURRENT.name
+
+    def _set_enable_state_target(self, target_state):
+        # State machine will move to this target state directly if it is an earlier state,
+        # or will proceed as normal until this state if it is a later state.
+        self._ENABLE_STATE_TARGET = self.ENABLE_STATE(target_state)
+
+    def _set_enable_state_target_via(self, target_state, via_state):
+        # State machine will proceed to a first target state, and once reached, will move
+        # to a second target state. Often used to jump back through the state machine to a
+        # different target while wanting to repeat previous init steps.
+        self._ENABLE_STATE_TARGET = self.ENABLE_STATE(via_state)
+        while (self._ENABLE_STATE_CURRENT != self.ENABLE_STATE(via_state)):
+            #TODO time this out
+            pass
+        self._ENABLE_STATE_TARGET = self.ENABLE_STATE(target_state)
+
+    def set_enable_state(self, state_name):
+        # Request a state is moved to by name. This is meant to be used externally in sequences or from
+        # the parameter tree, and as such has fewer valid states. The done states will be moved to via
+        # initialisation states as required.
+
+        if state_name == self.ENABLE_STATE.LOKI_DONE.name:
+            # Init LOKI devices, or re-init
+            self._set_enable_state_target_via(
+                self.ENABLE_STATE.LOKI_DONE,
+                self.ENABLE_STATE.LOKI_INIT
+            )
+        elif state_name == self.ENABLE_STATE.PWR_DONE.name:
+            # Init power board devices, or re-init.
+            self._set_enable_state_target_via(
+                self.ENABLE_STATE.PWR_DONE,
+                self.ENABLE_STATE.PWR_INIT
+            )
+        elif state_name == self.ENABLE_STATE.COB_DONE.name:
+            # Init COB devices, or re-init.
+            self._set_enable_state_target_via(
+                self.ENABLE_STATE.COB_DONE,
+                self.ENABLE_STATE.COB_INIT
+            )
+        elif state_name == self.ENABLE_STATE.ASIC_DONE.name:
+            # Init ASIC, or re-init.
+            self._set_enable_state_target_via(
+                self.ENABLE_STATE.ASIC_DONE,
+                self.ENABLE_STATE.ASIC_INIT
+            )
+        else:
+            self._logger.error('Invalid state requested: {}'.format(state_name))
+
     def _config_ltc2986(self):
-        # todo define any sensor readings required here
+        # HEXITEC-MHz is not using this device.
         pass
 
     def _onChange_app_en(self, state):
@@ -310,7 +624,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._asic.disable_cache()
 
     def _setup_clocks(self):
-        self.clkgen_set_config(self._default_clock_config)
+        #TODO create a real clock config
+        pass
+        #self.clkgen_set_config(self._default_clock_config)
 
     def _config_mic284(self):
         try:
@@ -324,13 +640,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             )
 
             time.sleep(0.5)
-            self._logger.debug('Test read of MIC284 internal temperature: {}'.format(
+            self._logger.info('Test read of MIC284 internal temperature: {}'.format(
                 self._mic284.device.read_temperature_internal()
+            ))
+            self._logger.info('Test read of MIC284 external temperature: {}'.format(
+                self._mic284.device.read_temperature_external()
             ))
 
             self._mic284.initialised = True
 
-            self._logger.debug('MIC284 {} initialised successfuly'.format(self._mic284))
+            self._logger.info('MIC284 {} initialised successfuly'.format(self._mic284))
 
         except Exception as e:
             self._mic284.critical_error('Failed to init MIC284 {}: {}'.format(self._mic284, e))
@@ -385,6 +704,31 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             else:
                 raise
 
+    def _config_ad7998(self):
+        try:
+            self._ad7998.initialised = False
+            self._ad7998.error = False
+            self._ad7998.error_message = False
+
+            self._ad7998.device = AD7998(
+                address=self._ad7998.i2c_address,
+                busnum=self._ad7998.i2c_bus,
+            )
+
+            time.sleep(0.5)
+            self._logger.info('Test read AD7998 ADC inputs:')
+            for i in range (1, 8):
+                self._logger.info('\tchannel {}: \traw: {}\tscaled: {}'.format(
+                    i, self._ad7998.device.read_input_raw(i) & 0xFFF, self._ad7998.device.read_input_scaled(i)*2.5
+                ))
+
+            self._ad7998.initialised = True
+
+            self._logger.info('AD7998 {} initialised successfuly'.format(self._ad7998))
+
+        except Exception as e:
+            self._ad7998.critical_error('Failed to init MIC284 {}: {}'.format(self._ad7998, e))
+
     def _config_fireflies(self):
 
         # Enable the devices (reset line)
@@ -432,7 +776,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 self._logger.critical('Will disable firefly via reset line')
                 self.set_pin_value('firefly_en', 0)
 
-    def _setup_firefly(self):
+    def _setup_fireflies(self):
         #TODO update for HMHZ? Yes, definitely...
         # Set up firefly for normal babyD usage, where all channels required are enabled
 
@@ -577,12 +921,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'SYNC': (self.get_sync, self.set_sync),
                 'ASIC_EN': (self.get_app_enabled, self.set_app_enabled),
                 #'MAIN_EN': (self.get_main_enable, self.set_main_enable),
+                'ENABLE_STATE': (self.get_enable_state, self.set_enable_state),
+                'ENABLE_STATE_ERROR': (self.get_enable_state_error, None),
                 'DEVICES': {
                     'FIREFLY': {
                         '00to09': (lambda: 'error' if self._firefly_00to09.error else ('initialised' if self._firefly_00to09.initialised else 'unconfigured'), None),
                         '10to19': (lambda: 'error' if self._firefly_10to19.error else ('initialised' if self._firefly_10to19.initialised else 'unconfigured'), None),
                     },
                     'MIC284': (lambda: 'error' if self._mic284.error else ('initialised' if self._mic284.initialised else 'unconfigured'), None),
+                    'AD7998': (lambda: 'error' if self._ad7998.error else ('initialised' if self._ad7998.initialised else 'unconfigured'), None),
                 },
             },
             'firefly': {
