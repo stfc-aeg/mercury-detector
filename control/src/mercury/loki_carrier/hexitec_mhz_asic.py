@@ -46,16 +46,18 @@ class ASICIOError(Exception):
 
 class HEXITEC_MHz(object):
     _serialiser_mode_names = {
-        "init":0b00, "bonding":0b01, "data":0b11
+        "init": 0b00,
+        "bonding": 0b01,
+        "data": 0b11
     }
 
-    def __init__(self, bus, device, hz=2000000, regmap_override_filenames: list, register_cache_enabled):
+    def __init__(self, bus, device, hz, regmap_override_filenames: list, register_cache_enabled):
         self._logger = logging.getLogger('ASIC')
 
         # Setup up SPI Device
         self._device = SPIDevice(bus=bus, device=device, hz=hz)
         self._device.spi.mode = 0   # HEXITEC-MHz uses mode 0
-        self.spi.set_cs_active_high(False)
+        self._device.set_cs_active_high(False)
 
         # Set up register controller to interact over SPI with defined fields
         if register_cache_enabled:
@@ -90,7 +92,7 @@ class HEXITEC_MHz(object):
             # Write
             command = 0x00 | REGISTER_WRITE_TRANSACTION
             transfer_buffer = [command, page_set_value]
-            self.spi._device.transfer(transfer_buffer)
+            self._device.spi.transfer(transfer_buffer)
 
             self.page = page
 
@@ -116,7 +118,7 @@ class HEXITEC_MHz(object):
         transfer_buffer = [command]
         transfer_buffer.append(0x00)
 
-        readback = self.spi.transfer(transfer_buffer)
+        readback = self._device.spi.transfer(transfer_buffer)
 
         if readback is None:
             raise ASICIOError('Failed to read {} bytes, SPI error'.format(length))
@@ -160,11 +162,11 @@ class HEXITEC_MHz(object):
         command = address | REGISTER_WRITE_TRANSACTION
 
         transfer_buffer = [command]
-        transfer_buffer.append(value)
+        transfer_buffer.append(data)
 
         self._device.spi.transfer(transfer_buffer)
 
-        self._logger.debug("Register {} written with {}".format(address, value))
+        self._logger.debug("Register {} written with {}".format(address, data))
 
         # If verification has been requested, read back the same address range and compare
         if verify:
@@ -354,44 +356,44 @@ class HEXITEC_MHz(object):
 
             # For each resister, add the local serialiser signal select signals
             con.add_field(
-                'GL_DigSigEn_SEL{}'format(segment),
+                'GL_DigSigEn_SEL{}'.format(segment),
                 'Local Digital Signal Enable (segment {})'.format(segment),
-                addr, 7, 1, is_volatile=False)
+                addr, 7, 1, is_volatile=False
             )
             con.add_field(
-                'GL_AnaSigEn_SEL{}'format(segment),
+                'GL_AnaSigEn_SEL{}'.format(segment),
                 'Local Analogue Signal Enable (segment {})'.format(segment),
-                addr, 6, 1, is_volatile=False)
+                addr, 6, 1, is_volatile=False
             )
             con.add_field(
-                'GL_TDCOscEn_SEL{}'format(segment),
+                'GL_TDCOscEn_SEL{}'.format(segment),
                 'Local Serialiser TDC Oscillator Enable (segment {})'.format(segment),
-                addr, 5, 1, is_volatile=False)
+                addr, 5, 1, is_volatile=False
             )
             con.add_field(
-                'GL_SerPLLEn_SEL{}'format(segment),
+                'GL_SerPLLEn_SEL{}'.format(segment),
                 'Local Serialiser PLL Enable (segment {})'.format(segment),
-                addr, 4, 1, is_volatile=False)
+                addr, 4, 1, is_volatile=False
             )
             con.add_field(
-                'GL_TDCPLLEn_SEL{}'format(segment),
+                'GL_TDCPLLEn_SEL{}'.format(segment),
                 'Local TDC PLL Enable (segment {})'.format(segment),
-                addr, 3, 1, is_volatile=False)
+                addr, 3, 1, is_volatile=False
             )
             con.add_field(
-                'GL_AnaEn_SEL{}'format(segment),
+                'GL_AnaEn_SEL{}'.format(segment),
                 'Local Pixel Bias Enable (segment {})'.format(segment),
-                addr, 2, 1, is_volatile=False)
+                addr, 2, 1, is_volatile=False
             )
             con.add_field(
-                'GL_ROE_SEL{}'format(segment),
+                'GL_ROE_SEL{}'.format(segment),
                 'Local Readout Enable (segment {})'.format(segment),
-                addr, 1, 1, is_volatile=False)
+                addr, 1, 1, is_volatile=False
             )
             con.add_field(
-                'GL_SerDigRstB_SEL{}'format(segment),
+                'GL_SerDigRstB_SEL{}'.format(segment),
                 'Local VCAL Select (segment {})'.format(segment),
-                addr, 0, 1, is_volatile=False)
+                addr, 0, 1, is_volatile=False
             )
 
         # Add a Ramp control register for each of 20 columns.
@@ -411,7 +413,7 @@ class HEXITEC_MHz(object):
             con.add_field(
                 'RAMPControl{}'.format(ramp_generator_number),
                 'RAMP Bias Control {} (Segment {}, generators {})'.format(ramp_generator_number, segment_num, '1 and 2' if (ramp_generator_number % 2) else '3 and 4'),
-                7, 8, is_volatile=False
+                addr, 7, 8, is_volatile=False
             )
 
         # Add a serialiser control registers. These are in groups 10 of 6 registers, one for
@@ -469,8 +471,12 @@ class HEXITEC_MHz(object):
             )
 
             # PatternControl spans two registers
-            patterncon_high = Field(con, 'PatternControl_ms', '', base_addr+5, 0, 1, is_volatile=False)
-            patterncon_low = Field(con, 'PatternControl_ls', '', base_addr+4, 7, 2, is_volatile=False)
+            patterncon_high = con.add_field(
+                'PatternControl_ms', '', base_addr+5, 0, 1, is_volatile=False
+            )
+            patterncon_low = con.add_field(
+                'PatternControl_ls', '', base_addr+4, 7, 2, is_volatile=False
+            )
             con.add_multifield(
                 'Ser{}_PatternControl'.format(serialiser_number),
                 'Pattern Control for Serialiser {}'.format(serialiser_number),
