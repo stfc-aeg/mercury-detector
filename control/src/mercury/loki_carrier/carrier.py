@@ -21,6 +21,8 @@ class ChannelInfo(object):
 
 class LokiCarrier_HMHz (LokiCarrier_1v0):
 
+    _variant = 'LOKI 1v0 HEXITEC-MHz'
+
     # States the enable state machine will step through, in 'normal' order.
     @unique
     class ENABLE_STATE (IntEnum):
@@ -44,7 +46,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Override parent pin settings
         #TODO update this for HMHZ
 
-        # Add babyd-specific pins (Application/ASIC enable are already default LOKI
+        # Add mhz-specific pins (Application/ASIC enable are already default LOKI
         # control pins, so these are additional IO only. Settings may be overridden
         # in the config file.
         kwargs.setdefault('pin_config_id_sync', 'EMIO18 LVDS')
@@ -56,11 +58,65 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # the last frame before the firefly and ASIC are disabled.
         time.sleep(0.1)
 
-        #TODO This is actually the FF_RESET# pin, but check polarity
-        kwargs.setdefault('pin_config_id_firefly_en', 'EMIO29')
+        kwargs.setdefault('pin_config_id_diff01', 'EMIO19 LVDS')
+        kwargs.setdefault('pin_config_active_low_diff01', False)
+        kwargs.setdefault('pin_config_is_input_diff01', False)
+        kwargs.setdefault('pin_config_default_value_diff01', 0)     # Active high so low by default
+
+        kwargs.setdefault('pin_config_id_diff02', 'EMIO20 LVDS')
+        kwargs.setdefault('pin_config_active_low_diff02', False)
+        kwargs.setdefault('pin_config_is_input_diff02', False)
+        kwargs.setdefault('pin_config_default_value_diff02', 0)     # Active high so low by default
+
+        # This is actually the FF_RESET# pin
+        kwargs.setdefault('pin_config_id_firefly_en', 'EMIO22')
         kwargs.setdefault('pin_config_active_low_firefly_en', False)
         kwargs.setdefault('pin_config_is_input_firefly_en', False)
         kwargs.setdefault('pin_config_default_value_firefly_en', 0)     # Active high so disabled by default
+
+        kwargs.setdefault('pin_config_id_firefly_sel1', 'EMIO29')
+        kwargs.setdefault('pin_config_active_low_firefly_sel1', False)
+        kwargs.setdefault('pin_config_is_input_firefly_sel1', False)
+        kwargs.setdefault('pin_config_default_value_firefly_sel1', 0)     # Active high so disabled by default
+
+        kwargs.setdefault('pin_config_id_firefly_sel2', 'EMIO30')
+        kwargs.setdefault('pin_config_active_low_firefly_sel2', False)
+        kwargs.setdefault('pin_config_is_input_firefly_sel2', False)
+        kwargs.setdefault('pin_config_default_value_firefly_sel2', 0)     # Active high so disabled by default
+
+        kwargs.setdefault('pin_config_id_firefly_int1', 'EMIO24')
+        kwargs.setdefault('pin_config_active_low_firefly_int1', False)
+        kwargs.setdefault('pin_config_is_input_firefly_int1', True)
+
+        kwargs.setdefault('pin_config_id_firefly_int2', 'EMIO23')
+        kwargs.setdefault('pin_config_active_low_firefly_int2', False)
+        kwargs.setdefault('pin_config_is_input_firefly_int2', True)
+
+        kwargs.setdefault('pin_config_id_hven', 'CTRL1')
+        kwargs.setdefault('pin_config_active_low_hven', False)
+        kwargs.setdefault('pin_config_is_input_hven', False)
+        kwargs.setdefault('pin_config_default_value_hven', 0)     # Active high so disabled by default
+
+        kwargs.setdefault('pin_config_id_peltier_shdn', 'EMIO21')
+        kwargs.setdefault('pin_config_active_low_peltier_shdn', False)
+        kwargs.setdefault('pin_config_is_input_peltier_shdn', False)
+        kwargs.setdefault('pin_config_default_value_peltier_shdn', 0)     # Active high so disabled by default
+
+        kwargs.setdefault('pin_config_id_firefly_pgood', 'EMIO25')
+        kwargs.setdefault('pin_config_active_low_firefly_pgood', False)
+        kwargs.setdefault('pin_config_is_input_firefly_pgood', True)
+
+        kwargs.setdefault('pin_config_id_firefly_tcrit', 'EMIO26')
+        kwargs.setdefault('pin_config_active_low_firefly_tcrit', False)
+        kwargs.setdefault('pin_config_is_input_firefly_tcrit', True)
+
+        kwargs.setdefault('pin_config_id_firefly_tint', 'EMIO27')
+        kwargs.setdefault('pin_config_active_low_firefly_tint', False)
+        kwargs.setdefault('pin_config_is_input_firefly_tint', True)
+
+        #TODO add TRIP_CLK and TRIP_BUF, but I'm not sure of their direction yet
+
+        kwargs.update({'pin_config_active_low_per_en': True})      # Used for ASIC_EN, which is active low
 
         kwargs.update({'pin_config_active_low_app_en': False})      # This will force the ASIC into reset
 
@@ -270,12 +326,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         self._logger.info('LOKI super init complete')
 
-        # Set the default state target based on what boards we think are present
-        if self.get_pin_value('app_present'):
+        # Set the default state target based on what boards we think are present (unless it is overridden)
+        if kwargs.get('enable_state_target_override', False):
+            target_state = self.ENABLE_STATE[kwargs.get('enable_state_target_override', None)]
+            self._logger.info('Enable state target has been overridden to {}'.format(target_state.name))
+            self._ENABLE_STATE_TARGET = target_state
+        elif self.get_pin_value('app_present'):
             # If application is present (COB), the power board must be too
             self._logger.info('Backplane and COB detected, will init all devices')
             self._ENABLE_STATE_TARGET = self.ENABLE_STATE.COB_DONE          # Init everything short of the ASIC
-        if self.get_pin_value('bkpln_present'):
+        elif self.get_pin_value('bkpln_present'):
             self._logger.info('Backplane only detected, will not attempt to init COB')
             self._ENABLE_STATE_TARGET = self.ENABLE_STATE.PWR_DONE          # Init just the power board
         else:
@@ -412,6 +472,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         self._firefly_10to19
                     ])
 
+                    # Disable FireFlies
+                    self.set_pin_value('firefly_en', False)
+
                     # Perform init of devices on LOKI board
                     self._setup_clocks()
 
@@ -439,6 +502,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         #TODO re-enable this once the pins are fixed in latest build
                         #raise Exception('Backplane not present')
                         pass
+
+                    # Ensure that devices on the COB are locked
+                    lock_devices([
+                        self._firefly_00to09,
+                        self._firefly_10to19
+                    ])
+
+                    # Disable FireFlies
+                    self.set_pin_value('firefly_en', False)
 
                     # Init the MIC temperature sensor and release its mutex if successful
                     self._config_mic284()
@@ -541,7 +613,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 clear_error()
             else:
                 # The state is as required, do not progress (ignore next state for now)
-                self._logger.info('STATE AT TARGET({}), not progressing state machine'.format(self._ENABLE_STATE_TARGET.name))
+                self._logger.debug('STATE AT TARGET({}), not progressing state machine'.format(self._ENABLE_STATE_TARGET.name))
                 time.sleep(1)
 
     def get_enable_state_error(self):
@@ -671,14 +743,18 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _get_mic284_internal_direct(self):
         with self._mic284.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
-                raise Exception('Could not acquire lock for mic284, timed out')
+                if self._ad7998.initialised:
+                    raise Exception('Could not acquire lock for mic284, timed out')
+                return None
 
             return self._mic284.device.read_temperature_internal()
 
     def _get_mic284_external_direct(self):
         with self._mic284.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
-                raise Exception('Could not acquire lock for mic284, timed out')
+                if self._ad7998.initialised:
+                    raise Exception('Could not acquire lock for mic284, timed out')
+                return None
 
             return self._mic284.device.read_temperature_external()
 
