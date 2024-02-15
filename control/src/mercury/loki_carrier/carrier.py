@@ -77,6 +77,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._ad7998.i2c_address = 0x20
         self._ad7998.i2c_bus = self._application_interfaces_i2c['APP_PWR']
 
+        # Store information about the ADC channels
+        # <multiple> will multiply the calculated pin input voltage in case a divider has been used.
+        # <name>: (<dac channel>, <multiple>)
+        self._ad7998._channel_mapping = {
+            'VDDA':     (1, 1),
+            'VDDD':     (2, 1),
+            'HV_MON':   (3, 1),
+            'TRIP_1':   (4, 1),
+            'TRIP_2':   (5, 1),
+            'TRIP_3':   (6, 1),
+            'TRIP_4':   (7, 1),
+        }
+
         # Add more sensors to environment system for MIC
         self._env_sensor_info.extend([
             ('POWER_BOARD', 'temperature', {"description": "Power Board MIC284 internal temperature", "units": "C"}),
@@ -282,6 +295,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         super(LokiCarrier_HMHz, self)._start_io_loops(options)
 
         self._threads['enable_state_machine'] = self._thread_executor.submit(self._mhz_enable_state_machine_loop)
+        self._threads['adc_update'] = self._thread_executor.submit(self._mhz_adc_update_loop, update_period_s=5)
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -692,23 +706,26 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             elif name == 'FIREFLY00to09':
                 if sensor_type == 'temperature':
                     # This is actually a cached value already, but no matter
-                    return self._bd_firefly_get_temperature_direct('00to09')
+                    return self._mhz_firefly_get_temperature_direct('00to09')
                 else:
                     raise
             elif name == 'FIREFLY10to19':
                 if sensor_type == 'temperature':
                     # This is actually a cached value already, but no matter
-                    return self._bd_firefly_get_temperature_direct('10to19')
+                    return self._mhz_firefly_get_temperature_direct('10to19')
                 else:
                     raise
             else:
                 raise
 
     def _config_ad7998(self):
+        # Initialise the ADC device if possible
         try:
             self._ad7998.initialised = False
             self._ad7998.error = False
             self._ad7998.error_message = False
+
+            self._ad7998.reference_voltage = 2.5
 
             self._ad7998.device = AD7998(
                 address=self._ad7998.i2c_address,
@@ -717,17 +734,87 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             time.sleep(0.5)
             self._logger.info('Test read AD7998 ADC inputs:')
-            for i in range (1, 8):
+            for i in range(1, 8):
                 self._logger.info('\tchannel {}: \traw: {}\tscaled: {}'.format(
-                    i, self._ad7998.device.read_input_raw(i) & 0xFFF, self._ad7998.device.read_input_scaled(i)*2.5
+                    i, self._ad7998.device.read_input_raw(i) & 0xFFF, self._ad7998.device.read_input_scaled(i) * self._ad7998.reference_voltage
                 ))
 
-            self._ad7998.initialised = True
+            self._ad7998._reading_cache = {}
 
             self._logger.info('AD7998 {} initialised successfuly'.format(self._ad7998))
+            self._ad7998.initialised = True
 
         except Exception as e:
             self._ad7998.critical_error('Failed to init MIC284 {}: {}'.format(self._ad7998, e))
+
+    def _mhz_adc_read_chan_num_direct(self, channel_number):
+        with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+            if not rslt:
+                if self._ad7998.initialised:
+                    raise Exception('Failed to get ADC input {} from AD7998, mutex timed out'.format(channel_number))
+                return None
+
+            # Proportional input is float between 0-1.
+            input_proportional = self._ad7998.device.read_input_scaled(channel_number)
+
+            # To convert to voltage, use known reference
+            input_volts = input_proportional * self._ad7998.reference_voltage
+
+            return input_volts
+
+    def _mhz_adc_read_chan_direct(self, channel_name):
+        if not self._ad7998.initialised:
+            return None
+
+        (dac_chan, input_multiplier) = self._ad7998._channel_mapping.get(channel_name, (None, None))
+        if dac_chan is None:
+            raise Exception('DAC channel {} does not exist'.format(channel_name))
+
+        return (self._mhz_adc_read_chan_num_direct(dac_chan) * input_multiplier)
+
+    def mhz_adc_get_channel_names(self):
+        return list(self._ad7998._channel_mapping.keys())
+
+    def _mhz_adc_update_loop(self, update_period_s=5):
+        while not self.TERMINATE_THREADS:
+            # Don't bother doing anything until / if the ADC is init.
+            if not self._ad7998.initialised:
+                time.sleep(1)
+                continue
+
+            for channel_name in self.mhz_adc_get_channel_names():
+                # Protect the cache and device with mutex while reading
+                with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+                    if not rslt:
+                        if self._ad7998.initialised:
+                            raise Exception('Failed to get ADC mutex while syncing cache for input {}, mutex timed out'.format(channel_name))
+                        return None
+
+                    # Read channel, this is mutex protected already, but RLock can have more than one entry
+                    direct_reading = self._mhz_adc_read_chan_direct(channel_name)
+
+                    # Update the cache
+                    self._ad7998._reading_cache.update({channel_name: direct_reading})
+
+            time.sleep(update_period_s)
+
+    def _mhz_adc_clear_reading_cache(self):
+        with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+            if not rslt:
+                if self._ad7998.initialised:
+                    raise Exception('Failed to get access AD7998 reading cache while clearing it, mutex timed out')
+                return None
+
+            self._ad7998._reading_cache = {}
+
+    def mhz_adc_read_chan(self, channel_name):
+        with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+            if not rslt:
+                if self._ad7998.initialised:
+                    raise Exception('Failed to get access AD7998 reading cache while reading {}, mutex timed out'.format(channel_name))
+                return None
+
+            return self._ad7998._reading_cache.get(channel_name, None)
 
     def _config_fireflies(self):
 
@@ -787,10 +874,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         self._logger.error('Failed to get FireFly lock while setting up base channel states, timed out')
                     return None
 
-                self.bd_firefly_set_channel_enabled('Z1', True)
-                self.bd_firefly_set_channel_enabled('Z2', True)
+                self.mhz_firefly_set_channel_enabled('Z1', True)
+                self.mhz_firefly_set_channel_enabled('Z2', True)
 
-    def _bd_firefly_channel_loop(self):
+    def _mhz_firefly_channel_loop(self):
         while not self.TERMINATE_THREADS:
             time.sleep(0.2)
             for current_ff in self._fireflies:
@@ -805,18 +892,18 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 except Exception as e:
                     logging.error('Error in FireFly channel sync loop: {}'.format(e))
 
-    def bd_firefly_get_device_names(self):
+    def mhz_firefly_get_device_names(self):
         return [dev.name for dev in  self._fireflies]
 
-    def _bd_firefly_get_device_from_name(self, name):
+    def _mhz_firefly_get_device_from_name(self, name):
         for device in self._fireflies:
             if device.name == name:
                 return device
-        raise Exception('No such firefly device name {}. Available names: {}'.format(name, self.bd_firefly_get_device_names()))
+        raise Exception('No such firefly device name {}. Available names: {}'.format(name, self.mhz_firefly_get_device_names()))
 
-    def _bd_firefly_get_temperature_direct(self, ff_dev_name):
+    def _mhz_firefly_get_temperature_direct(self, ff_dev_name):
         # Protect cache access and interaction with the I2C device with mutex
-        current_ff = self._bd_firefly_get_device_from_name(ff_dev_name)
+        current_ff = self._mhz_firefly_get_device_from_name(ff_dev_name)
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
@@ -825,9 +912,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             return current_ff.device.get_temperature()
 
-    def bd_firefly_get_partnumber(self, ff_dev_name):
+    def mhz_firefly_get_partnumber(self, ff_dev_name):
         # Protect cache access and interaction with the I2C device with mutex
-        current_ff = self._bd_firefly_get_device_from_name(ff_dev_name)
+        current_ff = self._mhz_firefly_get_device_from_name(ff_dev_name)
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
@@ -836,9 +923,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             return current_ff.info_pn
 
-    def bd_firefly_get_vendornumber(self, ff_dev_name):
+    def mhz_firefly_get_vendornumber(self, ff_dev_name):
         # Protect cache access and interaction with the I2C device with mutex
-        current_ff = self._bd_firefly_get_device_from_name(ff_dev_name)
+        current_ff = self._mhz_firefly_get_device_from_name(ff_dev_name)
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
@@ -847,9 +934,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             return current_ff.info_vn
 
-    def bd_firefly_get_oui(self, ff_dev_name):
+    def mhz_firefly_get_oui(self, ff_dev_name):
         # Protect cache access and interaction with the I2C device with mutex
-        current_ff = self._bd_firefly_get_device_from_name(ff_dev_name)
+        current_ff = self._mhz_firefly_get_device_from_name(ff_dev_name)
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
@@ -858,12 +945,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             return current_ff.info_oui
 
-    def bd_get_channel_names(self):
+    def mhz_get_channel_names(self):
         # Returns a list of BabyD channel names used logically within the control system for various
         # settings across devices (firefly, retimer etc...)
         return list(self._merc_channels.keys())
 
-    def bd_firefly_set_channel_enabled(self, channel_name, en=True):
+    def mhz_firefly_set_channel_enabled(self, channel_name, en=True):
         # Set enable state for a specific channel name, as defined by the application.
         # If channel_name is supplied as 'All', will operate on all channels (used for BabyD)
         channel = self._merc_channels.get(channel_name, None)
@@ -881,7 +968,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             channel.firefly_dev.device.enable_tx_channels(channel_bitfield)
             self._logger.info('Firefly: {}abled channel {}'.format('en' if en else 'dis', channel_name))
 
-    def bd_firefly_get_channel_enabled(self, channel_name):
+    def mhz_firefly_get_channel_enabled(self, channel_name):
         # Get the current enable state for a channel name, where name is application-specific.
         # Get the current enable state for a channel name, as defined by the application.
         # If the channel_name is supplied as 'All', will return true if all used channels are enabled, false otherwise.
@@ -947,9 +1034,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         treedict = {
             # Temperature is now cached by the LOKI sensor manager, and is already in the parameter tree. This is a clone entry.
             "TEMPERATURE": (lambda: self.env_get_sensor_cached('FIREFLY{}'.format(ff_dev_name), 'temperature'), None, {"description": "FireFly Temperature", "units": "C"}),
-            "PARTNUMBER": (lambda: self.bd_firefly_get_partnumber(ff_dev_name), None, {"description": "FireFly Part Number"}),
-            "VENDORID": (lambda: self.bd_firefly_get_vendornumber(ff_dev_name), None, {"description": "FireFly Vendor ID"}),
-            "OUI": (lambda: self.bd_firefly_get_oui(ff_dev_name), None, {"description": "FireFly OUI"}),
+            "PARTNUMBER": (lambda: self.mhz_firefly_get_partnumber(ff_dev_name), None, {"description": "FireFly Part Number"}),
+            "VENDORID": (lambda: self.mhz_firefly_get_vendornumber(ff_dev_name), None, {"description": "FireFly Vendor ID"}),
+            "OUI": (lambda: self.mhz_firefly_get_oui(ff_dev_name), None, {"description": "FireFly OUI"}),
         }
 
         return treedict
@@ -968,8 +1055,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             treedict[channel_name] = {
                 "Enabled": (
-                    (lambda ch_name_internal: lambda: self.bd_firefly_get_channel_enabled(ch_name_internal))(channel_name),
-                    (lambda ch_name_internal: lambda en: self.bd_firefly_set_channel_enabled(ch_name_internal, en))(channel_name),
+                    (lambda ch_name_internal: lambda: self.mhz_firefly_get_channel_enabled(ch_name_internal))(channel_name),
+                    (lambda ch_name_internal: lambda en: self.mhz_firefly_set_channel_enabled(ch_name_internal, en))(channel_name),
                     {"description": desc}
                 )
             }
