@@ -3,6 +3,7 @@ from mercury.loki_carrier.hexitec_mhz_asic import HEXITEC_MHz
 from odin_devices.ad5593r import AD5593R
 from odin_devices.ad7998 import AD7998
 from odin_devices.mic284 import MIC284
+from odin_devices.ltc2986 import LTC2986
 from odin_devices.i2c_device import I2CDevice
 from odin_devices.firefly import FireFly
 import logging
@@ -92,30 +93,34 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         kwargs.setdefault('pin_config_active_low_firefly_int2', False)
         kwargs.setdefault('pin_config_is_input_firefly_int2', True)
 
+        # LOKI control pin CTRL1 being used for High Voltage Enable
         kwargs.setdefault('pin_config_id_hven', 'CTRL1')
         kwargs.setdefault('pin_config_active_low_hven', False)
         kwargs.setdefault('pin_config_is_input_hven', False)
         kwargs.setdefault('pin_config_default_value_hven', 0)     # Active high so disabled by default
 
-        kwargs.setdefault('pin_config_id_peltier_shdn', 'EMIO21')
-        kwargs.setdefault('pin_config_active_low_peltier_shdn', False)
-        kwargs.setdefault('pin_config_is_input_peltier_shdn', False)
-        kwargs.setdefault('pin_config_default_value_peltier_shdn', 0)     # Active high so disabled by default
+        kwargs.setdefault('pin_config_id_peltier_en', 'EMIO21')
+        kwargs.setdefault('pin_config_active_low_peltier_en', False)    # Active low SHDN, so active high en
+        kwargs.setdefault('pin_config_is_input_peltier_en', False)
+        kwargs.setdefault('pin_config_default_value_peltier_en', 0)     # Active high so disabled by default
 
-        kwargs.setdefault('pin_config_id_firefly_pgood', 'EMIO25')
-        kwargs.setdefault('pin_config_active_low_firefly_pgood', False)
-        kwargs.setdefault('pin_config_is_input_firefly_pgood', True)
+        kwargs.setdefault('pin_config_id_pgood', 'EMIO25')
+        kwargs.setdefault('pin_config_active_low_pgood', False)
+        kwargs.setdefault('pin_config_is_input_pgood', True)
 
-        kwargs.setdefault('pin_config_id_firefly_tcrit', 'EMIO26')
-        kwargs.setdefault('pin_config_active_low_firefly_tcrit', False)
-        kwargs.setdefault('pin_config_is_input_firefly_tcrit', True)
+        # MIC284 critical pin
+        kwargs.setdefault('pin_config_id_tcrit', 'EMIO26')
+        kwargs.setdefault('pin_config_active_low_tcrit', True)
+        kwargs.setdefault('pin_config_is_input_tcrit', True)
 
-        kwargs.setdefault('pin_config_id_firefly_tint', 'EMIO27')
-        kwargs.setdefault('pin_config_active_low_firefly_tint', False)
-        kwargs.setdefault('pin_config_is_input_firefly_tint', True)
+        # MIC284 interrupt pin
+        kwargs.setdefault('pin_config_id_tint', 'EMIO27')
+        kwargs.setdefault('pin_config_active_low_tint', True)
+        kwargs.setdefault('pin_config_is_input_tint', True)
 
         #TODO add TRIP_CLK and TRIP_BUF, but I'm not sure of their direction yet
 
+        # per_en (Periphernal Enable) being used for regulator enable signal REG_EN, aka ASIC_EN. Do not confuse with ASIC reset.
         kwargs.update({'pin_config_active_low_per_en': False})      # Is active low reset, therefore active high enable for ASIC_EN
         kwargs.update({'pin_config_default_value_per_en': False})      # Disabled by default
 
@@ -138,19 +143,27 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # <multiple> will multiply the calculated pin input voltage in case a divider has been used.
         # <name>: (<dac channel>, <multiple>)
         self._ad7998._channel_mapping = {
-            'VDDA':     (1, 1),
-            'VDDD':     (2, 1),
-            'HV_MON':   (3, 1),
-            'TRIP_1':   (4, 1),
-            'TRIP_2':   (5, 1),
-            'TRIP_3':   (6, 1),
-            'TRIP_4':   (7, 1),
+            'VDDA':         (1, 1),
+            'VDDD':         (2, 1),
+            'HV_MON':       (3, 1),
+            'TRIP_REG_T':   (4, 1),
+            'TRIP_REG_AI':  (5, 1),
+            'TRIP_REG_DI':  (6, 1),
+            'T_CRIT':       (7, 1),
+        }
+
+        self._ad7998._trip_nice_names = {
+            'TRIP_REG_T':   'Regulator Temperature',
+            'TRIP_REG_AI':  'Analog Regulator Current',
+            'TRIP_REG_DI':  'Digital Regulator Current',
+            'T_CRIT':       'ASIC Temperature',
         }
 
         # Add more sensors to environment system for MIC
         self._env_sensor_info.extend([
             ('POWER_BOARD', 'temperature', {"description": "Power Board MIC284 internal temperature", "units": "C"}),
             ('ASIC', 'temperature', {"description": "ASIC via MIC84 external reading", "units": "C"}),
+            ('DIODE', 'temperature', {"description": "ASIC internal temperature diode via LTC2986", "units": "C"}),
             ('FIREFLY00to09', 'temperature', {"description": "FireFly channels 0-9 temperature", "units": "C"}),
             ('FIREFLY10to19', 'temperature', {"description": "FireFly channels 10-19 temperature", "units": "C"}),
         ])
@@ -321,6 +334,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
 
+        # Get config for LTC2986 (mostly done in base class), done after superclass init for this reason
+        self._ltc2986.hmhz_diode_channel = 6
+
         # Register a callback for when the application enable state changes, since the API for this is
         # provided by the base class and we need to set state variables related to it.
         self.register_change_callback('application_enable', self._onChange_app_en)
@@ -362,9 +378,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
         # Therefore there is the chance to terminate 'nicely' before the threads are forced down.
 
-        # Set the main enable low, which should in an ideal world grab all of the mutexes once ready.
+        # Enter the LOKI_DONE state, which will disconnect external devices
         self._logger.critical('Trying to nicely grab HMHz mutexes')
-        #self.set_main_enable(False)
+        self.set_enable_state('LOKI_DONE')
 
         # Wait for up to 20s for the main enable to work properly
         timeout = 20
@@ -382,11 +398,17 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # If main enable has succeeded of we've given up waiting, perform critical exit operations
         self._logger.critical('Performing final cleanup operations for HEXITEC-MHz')
+
+        # Disable both fireflies
+        self.set_pin_value('firefly_en', False)
+
+        # Disable regulators
+        self.set_pin_value('per_en', False)
+
+        # Disable HV
+        self.set_pin_value('hven', False)
+
         #TODO add HMHz specifics here
-        #TODO disable both fireflies
-        #TODO disable power supplies
-        #TODO disable HV?
-        #TODO disable the ASIC
 
     def _mhz_enable_state_machine_loop(self):
         # Controls the main state progression of the system. Enables for individual devices are handled
@@ -439,9 +461,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 if not result:
                     self._logger.error('Enable Control State Machine failed to get lock for device {}, there is something critically wrong.'.format(dev))
                     raise Exception('Enable Control State Machine failed to get lock for device {}, there is something critically wrong.'.format(dev))
-                dev.initialised = False     # Force device re-init on ENABLE
+                dev.initialised = False     # Force device re-init on ENABLE, and make sure things don't use it.
                 self._logger.debug('Acquired {} (result {})'.format(dev, result))
             self._logger.info('State machine locking complete')
+
+        def full_unlock(device):
+            # With this structure and when using recursive (counting) locks, the devices can become
+            # over-locked. Calling this on a device will remove all recursive locks this thread has
+            # on it.
+            lockcount = 0
+            while True:
+                try:
+                    device.lock.release()
+                    lockcount += 1
+                except RuntimeError:
+                    self._logger.debug('Released {} locks for device {}'.format(lockcount, device))
+                    return
 
         while not self.TERMINATE_THREADS:
 
@@ -476,8 +511,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Disable FireFlies
                     self.set_pin_value('firefly_en', False)
 
+                    # Disable the LTC diode sensor
+                    self._ltc2986.diode_setup_done = False
+
                     # Perform init of devices on LOKI board
                     self._setup_clocks()
+
+                    # Although the LTC is present on the LOKI carrier, it is not set up until it is known that an
+                    # ASIC is present, since it measures temperature through the on-die diode.
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -500,28 +541,31 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 try:
                     # Check the power board has been detected
                     if not self.get_pin_value('bkpln_present'):
-                        #TODO re-enable this once the pins are fixed in latest build
-                        #raise Exception('Backplane not present')
-                        pass
+                        raise Exception('Backplane not present')
 
                     # Ensure that devices on the COB are locked
                     lock_devices([
                         self._firefly_00to09,
-                        self._firefly_10to19
+                        self._firefly_10to19,
+                        self._mic284,           # Lock prior to release in this stage
+                        self._ad7998,           # Lock prior to release in this stage
                     ])
 
                     # Disable FireFlies
                     self.set_pin_value('firefly_en', False)
 
+                    # Disable the LTC diode sensor
+                    self._ltc2986.diode_setup_done = False
+
                     # Init the MIC temperature sensor and release its mutex if successful
                     self._config_mic284()
                     if self._mic284.initialised:
-                        self._mic284.lock.release()
+                        full_unlock(self._mic284)
 
                     # Init the AD7998 ADC
                     self._config_ad7998()
                     if self._ad7998.initialised:
-                        self._ad7998.lock.release()
+                        full_unlock(self._ad7998)
 
                     #TODO Init the Digial Potentiometers (see below)
 
@@ -549,16 +593,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                     # Check the COB has been detected
                     if not self.get_pin_value('app_present'):
-                        #TODO re-enable this once the pins are fixed in latest build
-                        #raise Exception('COB not present')
-                        pass
+                        raise Exception('COB not present')
+
+                    lock_devices([
+                        self._firefly_00to09,       # Lock prior to release in this stage
+                        self._firefly_10to19,       # Lock prior to release in this stage
+                    ])
 
                     # Config fireflies, disable all output channels by default to prevent overheat
                     self._config_fireflies()
                     if self._firefly_00to09.initialised:
-                        self._firefly_00to09.lock.release()
+                        full_unlock(self._firefly_00to09)
                     if self._firefly_10to19.initialised:
-                        self._firefly_00to09.lock.release()
+                        full_unlock(self._firefly_10to19)
+
+                    # Set up the LTC2986 to monitor the ASIC diode
+                    self._setup_ltc2986()
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -673,9 +723,35 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         else:
             self._logger.error('Invalid state requested: {}'.format(state_name))
 
-    def _config_ltc2986(self):
-        # HEXITEC-MHz is not using this device.
-        pass
+    def _setup_ltc2986(self):
+        # Enable the sensor channel for the on-ASIC diode temperature sensor.
+
+        # Since the LTC is already configured by the base class, getting the device should be done
+        # through the provided accessor:
+        ltc_dev = self.ltc_get_device()
+
+        with ltc_dev.acquire(blocking=True, timeout=1) as rslt:
+            if not rslt:
+                if ltc_dev.initialised:
+                    raise Exception('Failed to get LTC lock while setting up ASIC Diode channel')
+
+            ltc_dev.device.add_diode_channel(
+                endedness=LTC2986.Diode_Endedness.DIFFERENTIAL,
+                conversion_cycles=LTC2986.Diode_Conversion_Cycles.CYCLES_2,
+                average_en=LTC2986.Diode_Running_Average_En.OFF,
+                excitation_current=LTC2986.Diode_Excitation_Current.CUR_80UA_320UA_640UA,
+                diode_non_ideality=1.0,
+                channel_num=self._ltc2986.hmhz_diode_channel,
+            )
+
+            self._ltc2986.diode_setup_done = True
+            self._logger.info('Added channel for ASIC diode to LTC2986')
+
+    def _mhz_get_asic_diode_direct(self):
+        if self._ltc2986.initialised and self._ltc2986.diode_setup_done:
+            return self.ltc_read_channel_direct(self._ltc2986.hmhz_diode_channel)
+        else:
+            return None
 
     def _onChange_app_en(self, state):
         if state:
@@ -744,7 +820,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _get_mic284_internal_direct(self):
         with self._mic284.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
-                if self._ad7998.initialised:
+                if self._mic284.initialised:
                     raise Exception('Could not acquire lock for mic284, timed out')
                 return None
 
@@ -753,7 +829,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _get_mic284_external_direct(self):
         with self._mic284.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
-                if self._ad7998.initialised:
+                if self._mic284.initialised:
                     raise Exception('Could not acquire lock for mic284, timed out')
                 return None
 
@@ -778,6 +854,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             elif name == 'ASIC':
                 if sensor_type == 'temperature':
                     return self._get_mic284_external_direct()
+                else:
+                    raise
+            elif name == 'DIODE':
+                if sensor_type == 'temperature':
+                    return self._mhz_get_asic_diode_direct()
                 else:
                     raise
             elif name == 'FIREFLY00to09':
@@ -892,6 +973,47 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 return None
 
             return self._ad7998._reading_cache.get(channel_name, None)
+
+    def mhz_adc_read_VDDA_current_A(self):
+        #TODO
+        pass
+
+    def mhz_adc_read_VDDD_current_A(self):
+        #TODO
+        pass
+
+    def mhz_adc_read_HV_voltage_V(self):
+        # The HV_MONITOR_OUT voltage is 0 to +5v. I am assuming that this is simply proportional
+        # to the actual output HV voltage, over range 0 to -1500V for C1152-01.
+        adc_in_voltage = self.mhz_adc_read_chan('HV_MON')
+        if adc_in_voltage is None:
+            return None
+        else:
+            return (-1500) * (adc_in_voltage / 5.0)
+
+    def mhz_adc_read_trips(self):
+        # All four trip signals TRIP_<1:3> come from 74LS279. This device is a set of latches,
+        # therefore the output is actually digital and should be converted. Minimum Voh is 2.7v.
+
+        #TODO consider whether these should actually be related to the names on the inputs of the 74LS279 device.
+
+        def dig_convert(in_analog):
+            if in_analog is None:
+                return None
+            else:
+                return True if in_analog >= 2.7 else False
+
+        output_dict = {}
+
+        for trip_name in self._ad7998._trip_nice_names.keys():
+            output_dict.update({
+                trip_name: {
+                    'Tripped': dig_convert(self.mhz_adc_read_chan(trip_name)),
+                    'Description': self._ad7998._trip_nice_names[trip_name],
+                }
+            })
+
+        return output_dict
 
     def _config_fireflies(self):
 
@@ -1084,7 +1206,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             'system_state': {
                 'SYNC': (self.get_sync, self.set_sync),
                 'ASIC_EN': (self.get_app_enabled, self.set_app_enabled),
-                #'MAIN_EN': (self.get_main_enable, self.set_main_enable),
                 'ENABLE_STATE': (self.get_enable_state, self.set_enable_state),
                 'ENABLE_STATE_ERROR': (self.get_enable_state_error, None),
                 'DEVICES': {
@@ -1094,7 +1215,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     },
                     'MIC284': (lambda: 'error' if self._mic284.error else ('initialised' if self._mic284.initialised else 'unconfigured'), None),
                     'AD7998': (lambda: 'error' if self._ad7998.error else ('initialised' if self._ad7998.initialised else 'unconfigured'), None),
+                    'LTC2986': (lambda: 'error' if self.ltc_get_device().error else ('initialised' if self.ltc_get_device().initialised else 'unconfigured'), None),
                 },
+            },
+            'monitoring': {
+                'TRIPS': (self.mhz_adc_read_trips, None),
+                'HV': (self.mhz_adc_read_HV_voltage_V, None),
+                'VDDD_I': (self.mhz_adc_read_VDDD_current_A, None),
+                'VDDA_I': (self.mhz_adc_read_VDDA_current_A, None),
             },
             'firefly': {
                 '00to09': self._gen_firefly_paramtree('00to09'),
