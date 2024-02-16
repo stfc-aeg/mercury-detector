@@ -116,7 +116,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         #TODO add TRIP_CLK and TRIP_BUF, but I'm not sure of their direction yet
 
-        kwargs.update({'pin_config_active_low_per_en': True})      # Used for ASIC_EN, which is active low
+        kwargs.update({'pin_config_active_low_per_en': False})      # Is active low reset, therefore active high enable for ASIC_EN
+        kwargs.update({'pin_config_default_value_per_en': False})      # Disabled by default
 
         kwargs.update({'pin_config_active_low_app_en': False})      # This will force the ASIC into reset
 
