@@ -139,6 +139,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._ad7998.i2c_address = 0x20
         self._ad7998.i2c_bus = self._application_interfaces_i2c['APP_PWR']
 
+        # Get the limit for the DAC, other functionality provided by base adapter.
+        kwargs.setdefault('vcal_in_limit', 1.8)     # 1.8v is max safe voltage to HEXITEC-MHz ASIC.
+        kwargs.setdefault('vcal_in_default', 1.5)   # VCAL setting that will be set on startup.
+        self._vcal_in_limit = kwargs.get('vcal_in_limit')
+        self._vcal_in_default = kwargs.get('vcal_in_default')
+
         # Store information about the ADC channels
         # <multiple> will multiply the calculated pin input voltage in case a divider has been used.
         # <name>: (<dac channel>, <multiple>)
@@ -501,7 +507,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                     # Grab all of the devices
                     lock_devices([
-                        self._zl30266,
                         self._mic284,
                         self._ad7998,
                         self._firefly_00to09,
@@ -516,6 +521,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                     # Perform init of devices on LOKI board
                     self._setup_clocks()
+                    self._setup_vcal_in()
 
                     # Although the LTC is present on the LOKI carrier, it is not set up until it is known that an
                     # ASIC is present, since it measures temperature through the on-die diode.
@@ -926,9 +932,33 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         (dac_chan, input_multiplier) = self._ad7998._channel_mapping.get(channel_name, (None, None))
         if dac_chan is None:
-            raise Exception('DAC channel {} does not exist'.format(channel_name))
+            raise Exception('ADC channel {} does not exist'.format(channel_name))
 
         return (self._mhz_adc_read_chan_num_direct(dac_chan) * input_multiplier)
+
+    def _setup_vcal_in(self):
+        # Initial setup for vcal, using default value.
+
+        if not self._max5306.initialised:
+            raise Exception('Could not setup DAC for VCAL, DAC was not initialised')
+
+        self.set_vcal_in(self._vcal_in_default)
+
+    def set_vcal_in(self, value):
+        # Use the DAC functionality provided by the generic carrier to set VCAL on DAC
+        # DAC output 0 (SEAF:B50).
+
+        # Check that we are in range for HEXITEC-MHz (nothing greater than 1.2)
+        if value >= self._vcal_in_limit:
+            raise Exception('VCAL cannot be set to {}v; it exceeds the limit {}v. To change the limit, set "vcal_in_limit" in the config file.'.format(
+                value, self._vcal_in_limit))
+        else:
+            self.dac_set_output(0, value)   # Output number is LOKI count, not MAX5306 count
+
+    def get_vcal_in(self):
+        # Return the last setting of the VCAL in signal using base adapter function for DAC
+        # channel 0. This is already cached, so can be returned directly.
+        return self.dac_get_output(0)       # Output number is LOKI count, not MAX5306 count
 
     def mhz_adc_get_channel_names(self):
         return list(self._ad7998._channel_mapping.keys())
@@ -1229,6 +1259,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 '10to19': self._gen_firefly_paramtree('10to19'),
             },
             'CHANNELS': self._gen_firefly_paramtree_channels(),
+            'vcal': (self.get_vcal_in, self.set_vcal_in),
         }
 
         self._logger.debug('HEXITEC-MHz ParameterTree dict:{}'.format(self.hmhzpt))
