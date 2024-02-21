@@ -102,7 +102,7 @@ class HEXITEC_MHz(object):
         # support burst read.
 
         if not self._interface_enabled:
-            raise ASICInterfaceDisabledError('Cannot read from ASIC')
+            raise ASICInterfaceDisabledError('Cannot read from ASIC when disabled')
 
         # Set the register page
         if (address == 0):      # CONFIG appears on both pages
@@ -148,6 +148,9 @@ class HEXITEC_MHz(object):
     def _write_register(self, address, data, verify=False):
         # Write a value / series of values directly to the ASIC, ignoring caching (this is handled
         # by the register controller). Should handle burst writes.
+
+        if not self._interface_enabled:
+            raise ASICInterfaceDisabledError('Cannot write to ASIC when disabled')
 
         # Set the register page
         if (address == 0):      # CONFIG appears on both pages
@@ -262,9 +265,9 @@ class HEXITEC_MHz(object):
         con.add_field('GL_DigSig_EN', 'Global / Local digital signals enable', 3, 5, 1, is_volatile=False)
         con.add_field('GL_AnaSig_EN', 'Global / Local analog signals enable', 3, 4, 1, is_volatile=False)
         con.add_field('GL_AnaBias_EN', 'Global / Local analog bias enable', 3, 3, 1, is_volatile=False)
-        con.add_field('GL_TDC_EN', 'Global / Local TDC Oscillator enable', 3, 2, 1, is_volatile=False)
+        con.add_field('GL_TDCOsc_EN', 'Global / Local TDC Oscillator enable', 3, 2, 1, is_volatile=False)
         con.add_field('GL_SerPLL_EN', 'Global / Local Serialiser PLL enable', 3, 1, 1, is_volatile=False)
-        con.add_field('GL_TDC_EN', 'Global / Local TDC PLL enable', 3, 0, 1, is_volatile=False)
+        con.add_field('GL_TDCPLL_EN', 'Global / Local TDC PLL enable', 3, 0, 1, is_volatile=False)
 
         self._REGISTER_NAMES[4] = 'GL_EN2'
         con.add_field('GL_VCALsel_EN', 'Global / Local VCAL enable', 4, 6, 1, is_volatile=False)
@@ -627,12 +630,14 @@ class HEXITEC_MHz(object):
     def get_cache_hitrate(self):
         # Return the proportion of read operations that hit the cache
         cache, direct = self._register_controller.stats_cached_direct()
+        failed = self._register_controller.stats_failed()
 
         return (
             {
                 'hitrate': (cache / (cache + direct)) if ((cache + direct) > 0) else 0,
                 'hits': cache,
                 'misses': direct,
+                'failed': failed,
             }
         )
 
@@ -893,8 +898,6 @@ class HEXITEC_MHz(object):
 
         # Set optimal settings
         for serialiser_number in range(1,11):
-            serialiser = self._serialiser_block_configs[serialiser_number-1]
-
             self.write_field('Ser{}_EnableCCP'.format(serialiser_number), 0b1)
             self.write_field('Ser{}_EnableCCPInitial'.format(serialiser_number), 0b1)
             self.write_field('Ser{}_LowPriorityCCP'.format(serialiser_number), 0b1)
@@ -921,14 +924,24 @@ class HEXITEC_MHz(object):
     def get_all_serialiser_pattern(self, direct=False):
         # Get the pattern control field for the first serialiser control block, assuming that
         # this will be the same for all blocks.
-        return get_channel_serialiser_pattern(0)
+        return self.get_channel_serialiser_pattern(0)
 
-    def set_all_serialiser_bit_scramble(self, scrable_en):
+    def set_all_serialiser_bit_scramble(self, scramble_en):
         # Set the bit scramble enable (Aurora) for all seriailisers. Note that the bit
         # disables the scrambler, hence logic inversion.
         scramble_bit = 0 if scramble_en else 1
         for serialiser_number in range(1,11):
             self.write_field('Ser{}_BypassScramble'.format(serialiser_number), scramble_bit)
+
+    def get_all_serialiser_bit_scramble(self):
+        # Will return True if ALL serialisers have the scramble enabled, and False if
+        # ANY serialiser config has scrambling disabled.
+        for serialiser_number in range(1,11):
+            current_scramble_en = self.read_field('Ser{}_BypassScramble'.format(serialiser_number))
+            if not current_scramble_en:
+                return False
+
+        return True
 
     def set_channel_serialiser_pattern(self, channel, pattern):
         # Selectively set the output pattern for the serialiser associated with an ASIC
