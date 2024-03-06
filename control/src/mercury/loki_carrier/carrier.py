@@ -6,9 +6,11 @@ from odin_devices.mic284 import MIC284
 from odin_devices.ltc2986 import LTC2986
 from odin_devices.i2c_device import I2CDevice
 from odin_devices.firefly import FireFly
+from odin_devices.ad5259 import AD5259
 import logging
 import time
 from enum import IntEnum, unique
+import threading
 
 
 # Holds information mapping ASIC channels onto different devices, for example, fireflies, retimers etc.
@@ -136,6 +138,21 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._mic284 = DeviceHandler(device_type_name='MIC284')
         self._mic284.i2c_address = 0x48
         self._mic284.i2c_bus = self._application_interfaces_i2c['APP_PWR']
+
+        # Get config for digital potentiometers - one for peltier, other for HV
+        self._digipot_peltier = DeviceHandler(device_type_name='AD5259')
+        self._digipot_peltier.resistance_AB_kohms = 100
+        self._digipot_peltier.voltage_A = 1.5   # Only 1% accuracy, but datasheet claims proportional so does not matter
+        self._digipot_peltier.voltage_B = 0
+        self._digipot_peltier.address = AD5259.ad_pins_to_address(AD0=0, AD1=0)
+        self._digipot_peltier.busnum = self._application_interfaces_i2c['APP_PWR']
+
+        self._digipot_hv = DeviceHandler(device_type_name='AD5259')
+        self._digipot_hv.resistance_AB_kohms = 50
+        self._digipot_hv.voltage_A = 5.2    # Typically
+        self._digipot_hv.voltage_B = 0
+        self._digipot_hv.address = AD5259.ad_pins_to_address(AD0=0, AD1=1)
+        self._digipot_hv.busnum = self._application_interfaces_i2c['APP_PWR']
 
         # Get config for AD7998 ADC
         self._ad7998= DeviceHandler(device_type_name='AD7998')
@@ -345,6 +362,26 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._STATE_ASIC_INITIALISED = False
         self._STATE_ASIC_FASTDATA_INITIALISED = False
 
+        # Create HV lock and settings (set once)
+        self._HV_mutex = threading.RLock()
+        self._HV_setup_complete = False
+
+        self.mhz_hv_set_kp(kwargs.get('hv_pid_initial_kp', 0.01))
+        self.mhz_hv_set_ki(kwargs.get('hv_pid_initial_ki', 0.00))
+        self.mhz_hv_set_kd(kwargs.get('hv_pid_initial_kd', 0.00))
+        self._HV_Vcont_MAX = kwargs.get('hv_vcont_max', 2.5)    #TODO This is the current ADC reference, will be reworked
+        self._HV_Vcont_MIN = kwargs.get('hv_vcont_min', 0.0)
+        self._HV_PID_DISABLED = False
+        self._HV_cal_HVMON_Apoint = kwargs.get('hv_cal_hvmon_bpoint', (0.0, 0))
+        self._HV_cal_HVMON_Bpoint = kwargs.get('hv_cal_hvmon_apoint', (5.0, -1500))
+        self._HV_cal_VCONT_Apoint = kwargs.get('hv_cal_vcont_bpoint', (0.0, 0))
+        self._HV_cal_VCONT_Bpoint = kwargs.get('hv_cal_vcont_apoint', (5.0, -1500))
+        self.mhz_hv_set_auto(kwargs.get('hv_pid_enabled', False))
+        self.mhz_hv_set_target_bias(kwargs.get('hv_pid_target_bias', None)) # Manual mode with no target is allowed
+        self._HV_cached_vcont = None
+        self._HV_cached_vcont_eeprom = None
+        self._HV_vcont_override = kwargs.get('hv_startup_vcont_override', None)
+
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
 
         # Get config for LTC2986 (mostly done in base class), done after superclass init for this reason
@@ -393,6 +430,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.add_thread('firefly_channel_loop', self._mhz_firefly_channel_loop)
         self.watchdog_add_thread('firefly_channel_loop', 10, lambda: logging.error('!!!! Firefly Loop watchdog triggered !!!!'))
 
+        self.add_thread('HV', self._mhz_hv_loop, update_period_s=1)
+        self.watchdog_add_thread('HV', 10, lambda: logging.error('!!!! HV Loop watchdog triggered !!!!'))
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -427,7 +466,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.set_pin_value('per_en', False)
 
         # Disable HV
-        self.set_pin_value('hven', False)
+        self.mhz_hv_set_enable(False)
 
         self._logger.critical('HEXITEC-MHz Cleanup done')
 
@@ -469,7 +508,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             # Force the current state to the latest 'idle' state to prevent further advancement until
             # the user requests it.
             self._ENABLE_STATE_CURRENT = self._ENABLE_STATE_LAST_IDLE
-            
+
             self._logger.error('Moving back to last idle state ({}) until user advances it...'.format(self._ENABLE_STATE_LAST_IDLE.name))
 
         def clear_error():
@@ -591,9 +630,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     if self._ad7998.initialised:
                         full_unlock(self._ad7998)
 
-                    #TODO Init the Digial Potentiometers (see below)
+                    # Init the Digial Potentiometers (see below)
+                    self._config_potentiometers()
+                    if self._digipot_peltier.initialised:
+                        # This will start the peltier control
+                        full_unlock(self._digipot_peltier)
+                    if self._digipot_hv.initialised:
+                        full_unlock(self._digipot_hv)
 
-                    #TODO Init the HV system
+                    # Init the HV system
+                    self._mhz_hv_setup()
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -1061,7 +1107,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._ad7998.initialised = True
 
         except Exception as e:
-            self._ad7998.critical_error('Failed to init MIC284 {}: {}'.format(self._ad7998, e))
+            self._ad7998.critical_error('Failed to init AD7998 {}: {}'.format(self._ad7998, e))
 
     def _mhz_adc_read_chan_num_direct(self, channel_number):
         with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
@@ -1124,21 +1170,27 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 time.sleep(1)
                 continue
 
-            for channel_name in self.mhz_adc_get_channel_names():
-                # Protect the cache and device with mutex while reading
-                with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
-                    if not rslt:
-                        if self._ad7998.initialised:
-                            raise Exception('Failed to get ADC mutex while syncing cache for input {}, mutex timed out'.format(channel_name))
-                        return None
-
-                    # Read channel, this is mutex protected already, but RLock can have more than one entry
-                    direct_reading = self._mhz_adc_read_chan_direct(channel_name)
-
-                    # Update the cache
-                    self._ad7998._reading_cache.update({channel_name: direct_reading})
+            self._mhz_adc_update()
 
             time.sleep(update_period_s)
+
+    def _mhz_adc_update(self):
+        # Called by update loop
+        for channel_name in self.mhz_adc_get_channel_names():
+            # Protect the cache and device with mutex while reading
+            with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+                if not rslt:
+                    if self._ad7998.initialised:
+                        raise Exception('Failed to get ADC mutex while syncing cache for input {}, mutex timed out'.format(channel_name))
+                    continue
+
+                # Read channel, this is mutex protected already, but RLock can have more than one entry
+                direct_reading = self._mhz_adc_read_chan_direct(channel_name)
+
+                # Update the cache
+                self._ad7998._reading_cache.update({channel_name: direct_reading})
+                logging.error('read channel {} as {}'.format(channel_name, direct_reading))
+
 
     def _mhz_adc_clear_reading_cache(self):
         with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
@@ -1166,15 +1218,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         #TODO
         pass
 
-    def mhz_adc_read_HV_voltage_V(self):
-        # The HV_MONITOR_OUT voltage is 0 to +5v. I am assuming that this is simply proportional
-        # to the actual output HV voltage, over range 0 to -1500V for C1152-01.
-        adc_in_voltage = self.mhz_adc_read_chan('HV_MON')
-        if adc_in_voltage is None:
-            return None
-        else:
-            return (-1500) * (adc_in_voltage / 5.0)
-
     def mhz_adc_read_trips(self):
         # All four trip signals TRIP_<1:3> come from 74LS279. This device is a set of latches,
         # therefore the output is actually digital and should be converted. Minimum Voh is 2.7v.
@@ -1199,14 +1242,49 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         return output_dict
 
-    def _mhz_hv_set_potentiometer(self, value):
-        #TODO
-        pass
+    ############################################################################################################
+    # High Voltage Bias System                                                                                 #
+    ############################################################################################################
+    # The HV system is comprised of a C1152 series high voltage power supply. This unit is controlled with an  #
+    # incoming control voltage between 0-5v, which in our case is controlled with a digital potentiometer. The #
+    # HV bias is then read back from a similar analog pin HV_MONITOR_OUT (HVMON) which varies between 0-5.2v.  #
+    # It is assumed that this is proportional. The relationship between the control voltage (VCONT) and the    #
+    # monitoring voltage (HVMON) to the actual bias voltage is defined by conversion functions _mhz_hv_calc*() #
+    # where a two-point linear conversion is performed. As part of calibration, the two points for each can be #
+    # overridden in the config.                                                                                #
+    #                                                                                                          #
+    # The target HV bias is set with self.mhz_hv_set_target_bias(). This target will be used in two different  #
+    # ways depending on the selected mode:                                                                     #
+    #                                                                                                          #
+    #   Manual mode:                                                                                           #
+    #       The target bias will be used to directly set VCONT, using the conversion functions mentioned. The  #
+    #       user is also free to directly set VCONT if desired, and the current value will be reported.        #
+    #                                                                                                          #
+    #   Auto mode:                                                                                             #
+    #       The target bias will be used to determine a target HVMON readback value, which will then be the    #
+    #       setpoint of a PID loop that will vary VCONT until it reaches the correct value. In this mode,      #
+    #       directly setting VCONT is not allowed.                                                             #
+    #                                                                                                          #
+    # In both modes, the current 'actual' HV bias value will be reported as the conversion using HVMON. If the #
+    # target HV voltage set in manual mode does not match the readback HV voltage, this implies that the cal   #
+    # points for one or both of VCONT / HVMON are wrong. Compare both against a true measurement of HV voltage #
+    # to correct.                                                                                              #
+    #                                                                                                          #
+    # The start-up value of this system can be overridden with a configuration file flag. However, without     #
+    # this flag, the system will use the value that was stored in the potentiometer's EEPROM for VCONT. After  #
+    # using auto mode or manual mode to achieve the desired VCONT setting, this can be overwritten.            #
+    #                                                                                                 ~JN      #
+    ############################################################################################################
 
     def mhz_hv_set_enable(self, value):
         # External HV enable / disable
-        #TODO
-        pass
+        if value:
+            self._mhz_hv_enable()
+        else:
+            self._mhz_hv_disable()
+
+    def mhz_hv_get_enable(self):
+        return self.get_pin_value('hven')
 
     def _mhz_hv_enable(self):
         # Directly enable the HV
@@ -1215,6 +1293,346 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _mhz_hv_disable(self):
         # Directly disable the HV
         self.set_pin_value('hven', 0)
+
+    def _mhz_hv_setup(self):
+        # Initialise vairables for auto / manual HV control, ensure the potentiometer is configured, and
+        # handle value already stored in the potentiometer based on configuration file preferences.
+        with self._HV_mutex:
+            self._logger.info('Starting HV setup')
+
+            # In case setup is called again, but fails this time
+            self._HV_setup_complete = False
+
+            # Force the HV off with the dedicated control line while peltier configuration is completed
+            self.mhz_hv_set_enable(False)
+
+            # Check potentiometer is init
+            if not self._digipot_hv.initialised:
+                raise Exception('Could not set up HV; digipot not initialised')
+
+            # Wait for valid HV_MON reading
+            self._logger.info('HV waiting for valid HV_MON reading')
+            t_give_up = time.time() + 10
+            while True:
+                if time.time() > t_give_up:
+                    raise Exception('Could not set up HV; failed to read HV_MON, timed out')
+                else:
+                    if self.mhz_adc_read_chan('HV_MON') is not None:
+                        break
+                time.sleep(1)
+
+            # The potentiometer will have loaded an EEPROM setting by default. If the user config has
+            # requested a specific starting wiper voltage, overwrite it not matter if we're going into
+            # auto mode or not (though in auto mode it will be immediately overwritten, just treated as
+            # set starting point).
+            vcont_override = self._HV_vcont_override
+            if vcont_override is not None:
+                # Directly set the value now
+                self._mhz_hv_set_control_voltage_direct(vcont_override)
+
+            # Determine whether to start in 'auto' or 'manual' mode based on configuration
+            if (
+                (self.mhz_hv_get_target_bias() is None) and
+                (self._HV_MODE_AUTO)
+            ):
+                raise Exception('Cannot start HV control in auto mode without a target HV Bias')
+
+            # Finish setup, allowing the loop to continue
+            self.mhz_hv_set_enable(True)
+            self._HV_setup_complete = True
+
+    @staticmethod
+    def _two_point_convert(a_x, a_y, b_x, b_y, X):
+        """
+        Convert between values with a proportional relationship, given two known points on the line.
+
+        :param a_x: Point A, x value
+        :param a_y: Point A, y value
+        :param b_x: Point B, x value
+        :param b_y: Point B, y value
+        """
+        # Work out terms of y = mx + c
+        m = (b_y - a_y) / (b_x - a_x)
+        c = a_y - (m * a_x)
+
+        # Convert to get Y for X
+        return (m * X + c)
+
+    def _mhz_hv_calc_hvmon_from_hvbias(self, hv_bias_v):
+        # Calculates the target HV_MON analog output to achieve a given high voltage bias target
+        # Uses two-point overrideable calibration with defaults based on guesswork assuming proportional over range
+
+        (A_point_mon, A_point_hv) = self._HV_cal_HVMON_Apoint
+        (B_point_mon, B_point_hv) = self._HV_cal_HVMON_Bpoint
+        return (
+            self._two_point_convert(
+                a_x=A_point_hv,
+                a_y=A_point_mon,
+                b_x=B_point_hv,
+                b_y=B_point_mon,
+                X=hv_bias_v,
+            )
+        )
+
+    def _mhz_hv_calc_hvbias_from_hvmon(self, hv_monitor_v):
+        # Calculates an expected high voltage bias output given a known HV_MON analog output value.
+        # Uses two-point overrideable calibration with defaults based on guesswork assuming proportional over range
+
+        (A_point_mon, A_point_hv) = self._HV_cal_HVMON_Apoint
+        (B_point_mon, B_point_hv) = self._HV_cal_HVMON_Bpoint
+        return (
+            self._two_point_convert(
+                a_x=A_point_mon,
+                a_y=A_point_hv,
+                b_x=B_point_mon,
+                b_y=B_point_hv,
+                X=hv_monitor_v,
+            )
+        )
+
+    def _mhz_hv_calc_control_voltage_from_hvbias(self, hv_bias_v):
+        # Calculate the value that should be set on VCONT to achieve a certain HV bias.
+        # Uses two-point overrideable calibration with defaults based on datasheet curve.
+
+        (A_point_cont, A_point_hv) = self._HV_cal_VCONT_Apoint
+        (B_point_cont, B_point_hv) = self._HV_cal_VCONT_Bpoint
+        return (
+            self._two_point_convert(
+                a_x=A_point_hv,
+                a_y=A_point_cont,
+                b_x=B_point_hv,
+                b_y=B_point_cont,
+                X=hv_bias_v,
+            )
+        )
+
+    def _mhz_hv_calc_hvbias_from_control_voltage(self, control_voltage):
+        # Calculate the expected output HV bias voltage if a given control voltage was to be set
+        # Uses two-point overrideable calibration with defaults based on datasheet curve.
+
+        (A_point_cont, A_point_hv) = self._HV_cal_VCONT_Apoint
+        (B_point_cont, B_point_hv) = self._HV_cal_VCONT_Bpoint
+        return (
+            self._two_point_convert(
+                a_x=A_point_cont,
+                a_y=A_point_hv,
+                b_x=B_point_cont,
+                b_y=B_point_hv,
+                X=control_voltage,
+            )
+        )
+
+    def mhz_hv_set_auto(self, auto=True):
+        # Set whether or not the system is currently in auto mode
+        with self._HV_mutex:
+            self._HV_MODE_AUTO = auto
+
+    def mhz_hv_get_auto(self):
+        # Get whether or not the system is currently in auto mode
+        with self._HV_mutex:
+            return self._HV_MODE_AUTO
+
+    def _mhz_hv_set_control_voltage_direct(self, control_v):
+        # Same as below but with no checks, called by the PID loop and by below if allowed
+
+        # Check against hard limits
+        if control_v > self._HV_Vcont_MAX:
+            control_v = self._HV_Vcont_MAX
+            self._logger.error('HV PID: vcont at max limit')
+        elif control_v < self._HV_Vcont_MIN:
+            control_v = self._HV_Vcont_MIN
+            self._logger.error('HV PID: vcont at min limit')
+
+        self._digipot_hv.device.set_wiper_voltage(control_v)
+
+    def mhz_hv_set_control_voltage(self, control_v):
+        # Set a control voltage via the digital potentimeter directly. This is the userspace function, only allowed
+        # when in manual mode, as in auto mode this is being controlled by the PID loop.
+        with self._HV_mutex:
+            if self.mhz_hv_get_auto():
+                raise Exception('Cannot set vcont control voltage when in auto mode')
+            else:
+                # Remove the target HV bias, since this will be overriding it
+                self.mhz_hv_set_target_bias(None)
+
+                self._mhz_hv_set_control_voltage_direct(control_v)
+
+    def _mhz_hv_get_control_voltage_direct(self):
+        # Directly read the control voltage from the potentiometer, and cache it
+        tmp_vcont = self._digipot_hv.device.get_wiper_voltage()
+        with self._HV_mutex:
+            self._HV_cached_vcont = tmp_vcont
+        return tmp_vcont
+
+    def mhz_hv_get_control_voltage(self):
+        # Return the most recently cached value for the control voltage
+        return self._HV_cached_vcont
+
+    def _mhz_hv_get_control_count_eeprom_direct(self):
+        # Directly read the control count from the potentiometer's EEPROM, and cache it
+        tmp_vcont_eeprom = self._digipot_hv.device.read_eeprom()
+        with self._HV_mutex:
+            self._HV_cached_vcont_eeprom = tmp_vcont_eeprom
+        return tmp_vcont_eeprom
+
+    def mhz_hv_get_control_count_eeprom(self):
+        # Return the cached control count from the potentiometer's EEPROM
+        return self._HV_cached_vcont_eeprom
+
+    def mhz_hv_store_eeprom(self):
+        # Store the current value set on the potentiometer wiper to EEPROM.
+        self._digipot_hv.device.store_wiper_count()
+
+    def mhz_hv_set_target_bias(self, hv_bias_v):
+        # Request a high voltage bias setting, which will be targeted by the PID loop. Only possible when the loop is in
+        # 'auto' mode.
+        with self._HV_mutex:
+            self._HV_target_bias = hv_bias_v
+
+    def mhz_hv_get_target_bias(self):
+        with self._HV_mutex:
+            bias_tmp = self._HV_target_bias
+
+        return bias_tmp
+
+    def mhz_hv_get_bias(self):
+        # Return the current bias voltage determined based on the latest HVMON voltage
+        return self._mhz_hv_calc_hvbias_from_hvmon(self.mhz_hv_get_hvmon_voltage())
+
+    def mhz_hv_get_hvmon_voltage(self):
+        # Get the latest HVMON analog value for proportional HV bias status
+        return self.mhz_adc_read_chan('HV_MON')
+
+    def mhz_hv_get_pid_status(self):
+        # Return a textual representation of the current PID mode for the UI
+        #TODO
+        pass
+
+    def mhz_hv_set_kp(self, kp):
+        self._HV_PID_kp = kp
+
+    def mhz_hv_get_kp(self, kp):
+        return self._HV_PID_kp
+
+    def mhz_hv_set_ki(self, ki):
+        self._HV_PID_ki = ki
+
+    def mhz_hv_get_ki(self, ki):
+        return self._HV_PID_ki
+
+    def mhz_hv_set_kd(self, kd):
+        self._HV_PID_kd = kd
+
+    def mhz_hv_get_kd(self, kd):
+        return self._HV_PID_kd
+
+    def _mhz_hv_loop(self, update_period_s=1):
+        # Loop to handle both the PID (auto) and manual HV control. The manual control allows the user to specify
+        # an input potentiometer wiper voltage, and will read back the HV monitor voltage and derived HV output
+        # voltage. In auto mode, a target HV voltage will be specified, which will result in a calculated closest
+        # target HV monitor voltage, which will be reached by altering the wiper voltage with the PID loop. It should
+        # also be possible to specify a target HV monitor voltage directly instead if desired.
+
+        latest_time = None
+        integral = 0
+
+        while True:
+            with self._HV_mutex:
+                if self._HV_setup_complete:
+                    break
+            time.sleep(update_period_s)
+            self.watchdog_kick()
+
+        while not self.TERMINATE_THREADS:
+            time.sleep(update_period_s)
+            self.watchdog_kick()
+
+            # Nothing is permitted to edit HV variables while mid-PID loop
+            with self._HV_mutex:
+                # Update the latest EEPROM and live wiper settings from the potentiometer
+                latest_vcont = self._mhz_hv_get_control_voltage_direct()
+                if latest_vcont is None:
+                    raise Exception('HV could not get good reading for potentiometer wiper')
+                self._mhz_hv_get_control_count_eeprom_direct()
+
+                # Store the latest HV_MON feedback voltage from the ADC (to avoid it changing mid-calc)
+                latest_hvmon = self.mhz_adc_read_chan('HV_MON')
+                if latest_hvmon is None:
+                    raise Exception('HV could not get good reading for HV_MON')
+
+                if self._HV_MODE_AUTO:
+                    # Auto PID mode
+                    if self._HV_PID_DISABLED:
+                        # Disabled, due to error
+                        #TODO
+                        pass
+
+                    else:
+                        # Normal PID loop
+
+                        # Get timings between measurements
+                        last_time = latest_time
+                        latest_time = time.time()
+
+                        if last_time is None:
+                            # First loop
+                            dt = 0
+                        else:
+                            dt = latest_time - last_time
+
+                        error = self.mhz_hv_get_target_bias() - self.mhz_hv_get_bias()
+
+                        # PID intermediates
+                        proportional = error * dt
+                        derivative = error / dt
+                        integral +=  error * dt
+
+                        # PID output
+                        vcont_output = (
+                            (proportional * self._HV_PID_kp)
+                            + (derivative * self._HV_PID_kd)
+                            + (integral * self._HV_PID_ki)
+                        )
+
+                        # Set the output (already has safetly limits)
+                        self._mhz_hv_set_control_voltage_direct(vcont_output)
+                else:
+                    # Manual mode
+
+                    # The readings have already been updated, so work out the desired VCONT based on calibration,
+                    # and set it directly. Only do this if it's not None; we could still be using the EEPROM value
+                    # without a target yet specified.
+                    target_hv_bias = self.mhz_hv_get_target_bias()
+                    if target_hv_bias is not None:
+                        target_vcont = self._mhz_hv_calc_control_voltage_from_hvbias(target_hv_bias)
+                        self._logger.error('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
+                        self._mhz_hv_set_control_voltage_direct(target_vcont)
+
+    def _config_potentiometers(self):
+        for current_pot in [self._digipot_peltier, self._digipot_hv]:
+            try:
+                current_pot.initialised = False
+                current_pot.error= False
+                current_pot.error_message = False
+
+                # Create the device, which should not try to start any IO with it
+                current_pot.device = AD5259(
+                    address=current_pot.address,
+                    busnum=current_pot.busnum,
+                    resistance_AB_kohms=current_pot.resistance_AB_kohms,
+                    voltage_A=current_pot.voltage_A,
+                    voltage_B=current_pot.voltage_B,
+                )
+                self._logger.debug('AD5259 at {}:0x{} has resistance {}k, terminal voltages A:{} B:{}'.format(
+                    current_pot.busnum, current_pot.address, current_pot.resistance_AB_kohms,
+                    current_pot.voltage_A, current_pot.voltage_B
+                ))
+
+                # No further configuration is necessary
+                current_pot.initialised = True
+                self._logger.debug('Digital Potentiometer {} initialised successfuly'.format(current_pot))
+            except Exception as e:
+                current_pot.critical_error('Failed to init Digital Pot {}: {}'.format(current_pot.name, e))
 
     def _config_fireflies(self):
 
@@ -1432,6 +1850,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     'MIC284': (lambda: 'error' if self._mic284.error else ('initialised' if self._mic284.initialised else 'unconfigured'), None),
                     'AD7998': (lambda: 'error' if self._ad7998.error else ('initialised' if self._ad7998.initialised else 'unconfigured'), None),
                     'LTC2986': (lambda: 'error' if self.ltc_get_device().error else ('initialised' if self.ltc_get_device().initialised else 'unconfigured'), None),
+                    'Peltier Pot': (lambda: 'error' if self._digipot_peltier.error else ('initialised' if self._digipot_peltier.initialised else 'unconfigured'), None),
+                    'HV Pot': (lambda: 'error' if self._digipot_hv.error else ('initialised' if self._digipot_hv.initialised else 'unconfigured'), None),
                 },
             },
             'asic_settings': {
@@ -1459,7 +1879,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             },
             'monitoring': {
                 'TRIPS': (self.mhz_adc_read_trips, None),
-                'HV': (self.mhz_adc_read_HV_voltage_V, None),
                 'VDDD_I': (self.mhz_adc_read_VDDD_current_A, None),
                 'VDDA_I': (self.mhz_adc_read_VDDA_current_A, None),
             },
@@ -1469,6 +1888,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'CHANNELS': self._gen_firefly_paramtree_channels(),
             },
             'vcal': (self.get_vcal_in, self.set_vcal_in),
+            'HV': {
+            },
         }
 
         self._logger.debug('HEXITEC-MHz ParameterTree dict:{}'.format(self.hmhzpt))
