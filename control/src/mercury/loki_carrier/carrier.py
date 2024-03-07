@@ -9,7 +9,7 @@ from odin_devices.firefly import FireFly
 from odin_devices.ad5259 import AD5259
 import logging
 import time
-from enum import IntEnum, unique
+from enum import IntEnum, unique, auto
 import threading
 
 
@@ -29,15 +29,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     # States the enable state machine will step through, in 'normal' order.
     @unique
     class ENABLE_STATE (IntEnum):
-        PRE_INIT = 0
-        LOKI_INIT = 1
-        LOKI_DONE = 2
-        PWR_INIT = 3
-        PWR_DONE = 4
-        COB_INIT = 5
-        COB_DONE = 6
-        ASIC_INIT = 7
-        ASIC_DONE = 8
+        PRE_INIT = auto()
+        LOKI_INIT = auto()
+        LOKI_DONE = auto()
+        PWR_INIT = auto()
+        PWR_DONE = auto()
+        COB_INIT = auto()
+        COB_DONE = auto()
+        ASIC_INIT = auto()
+        ASIC_DONE = auto()
 
     def __init__(self, **kwargs):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
@@ -379,7 +379,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.mhz_hv_set_auto(kwargs.get('hv_pid_enabled', False))
         self.mhz_hv_set_target_bias(kwargs.get('hv_pid_target_bias', None)) # Manual mode with no target is allowed
         self._HV_cached_vcont = None
-        self._HV_cached_vcont_eeprom = None
+        self._HV_cached_vcont_saved = None
         self._HV_vcont_override = kwargs.get('hv_startup_vcont_override', None)
 
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
@@ -431,7 +431,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.watchdog_add_thread('firefly_channel_loop', 10, lambda: logging.error('!!!! Firefly Loop watchdog triggered !!!!'))
 
         self.add_thread('HV', self._mhz_hv_loop, update_period_s=1)
-        self.watchdog_add_thread('HV', 10, lambda: logging.error('!!!! HV Loop watchdog triggered !!!!'))
+        self.watchdog_add_thread('HV', 10, self._mhz_hv_handle_failure())
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -755,6 +755,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def get_enable_state(self):
         return self._ENABLE_STATE_CURRENT.name
+
+    def get_enable_state_progress(self):
+        return (int(self._ENABLE_STATE_CURRENT), int(max(self.ENABLE_STATE)))
 
     def _set_enable_state_target(self, target_state):
         # State machine will move to this target state directly if it is an earlier state,
@@ -1189,8 +1192,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                 # Update the cache
                 self._ad7998._reading_cache.update({channel_name: direct_reading})
-                logging.error('read channel {} as {}'.format(channel_name, direct_reading))
-
 
     def _mhz_adc_clear_reading_cache(self):
         with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
@@ -1468,16 +1469,20 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Return the most recently cached value for the control voltage
         return self._HV_cached_vcont
 
-    def _mhz_hv_get_control_count_eeprom_direct(self):
-        # Directly read the control count from the potentiometer's EEPROM, and cache it
+    def _mhz_hv_sync_control_voltage_stored(self):
+        # Directly check the current eeprom count against the latest control voltage count, and
+        # cache the result.
         tmp_vcont_eeprom = self._digipot_hv.device.read_eeprom()
+        tmp_vcont = self._digipot_hv.device.get_wiper_count()
         with self._HV_mutex:
-            self._HV_cached_vcont_eeprom = tmp_vcont_eeprom
-        return tmp_vcont_eeprom
+            if (tmp_vcont_eeprom is None) or (tmp_vcont is None):
+                self._HV_cached_vcont_saved = None
+            else:
+                self._HV_cached_vcont_saved = (tmp_vcont_eeprom == tmp_vcont)
 
-    def mhz_hv_get_control_count_eeprom(self):
-        # Return the cached control count from the potentiometer's EEPROM
-        return self._HV_cached_vcont_eeprom
+    def mhz_hv_control_voltage_is_stored(self):
+        with self._HV_mutex:
+            return self._HV_cached_vcont_saved
 
     def mhz_hv_store_eeprom(self):
         # Store the current value set on the potentiometer wiper to EEPROM.
@@ -1497,7 +1502,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def mhz_hv_get_bias(self):
         # Return the current bias voltage determined based on the latest HVMON voltage
-        return self._mhz_hv_calc_hvbias_from_hvmon(self.mhz_hv_get_hvmon_voltage())
+        latest_hvmon = self.mhz_hv_get_hvmon_voltage()
+        if latest_hvmon is None:
+            return None
+        else:
+            return self._mhz_hv_calc_hvbias_from_hvmon(latest_hvmon)
 
     def mhz_hv_get_hvmon_voltage(self):
         # Get the latest HVMON analog value for proportional HV bias status
@@ -1553,7 +1562,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 latest_vcont = self._mhz_hv_get_control_voltage_direct()
                 if latest_vcont is None:
                     raise Exception('HV could not get good reading for potentiometer wiper')
-                self._mhz_hv_get_control_count_eeprom_direct()
+                self._mhz_hv_sync_control_voltage_stored()
 
                 # Store the latest HV_MON feedback voltage from the ADC (to avoid it changing mid-calc)
                 latest_hvmon = self.mhz_adc_read_chan('HV_MON')
@@ -1607,6 +1616,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         target_vcont = self._mhz_hv_calc_control_voltage_from_hvbias(target_hv_bias)
                         self._logger.error('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
                         self._mhz_hv_set_control_voltage_direct(target_vcont)
+
+    def _mhz_hv_handle_failure(self):
+        # Called by the watchdog in the event of failure
+        self._logger.error('ERROR IN HV loop')
+
+        # If the mode is auto, disable the PID properly
+        #TODO
+
+        # Disable the HV
+        self.mhz_hv_set_enable(False)
+
+        # Move to the LOKI_DONE mode, since HV is enabled in PWR_INIT
+        self.set_enable_state('LOKI_DONE')
 
     def _config_potentiometers(self):
         for current_pot in [self._digipot_peltier, self._digipot_hv]:
@@ -1839,7 +1861,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ASIC_EN': (self.get_app_enabled, self.set_app_enabled),
                 'REGS_EN': (self.get_peripherals_enabled, None),
                 'ENABLE_STATE': (self.get_enable_state, self.set_enable_state),
+                'ENABLE_STATE_PROGRESS': (self.get_enable_state_progress, None),
                 'ENABLE_STATE_ERROR': (self.get_enable_state_error, None),
+                'POWER_BOARD_INIT': (lambda: self._ENABLE_STATE_CURRENT >= self.ENABLE_STATE.PWR_DONE, None),
+                'COB_INIT': (lambda: self._ENABLE_STATE_CURRENT >= self.ENABLE_STATE.COB_DONE, None),
                 'ASIC_INIT': (lambda: self._STATE_ASIC_INITIALISED, None),
                 'ASIC_FASTDATA_INIT': (lambda: self._STATE_ASIC_FASTDATA_INITIALISED, None),
                 'DEVICES': {
@@ -1889,6 +1914,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             },
             'vcal': (self.get_vcal_in, self.set_vcal_in),
             'HV': {
+                'AUTO_MODE_EN': (self.mhz_hv_get_auto, self.mhz_hv_set_auto),
+                'ENABLE': (self.mhz_hv_get_enable, self.mhz_hv_set_enable),
+                'control_voltage': (self.mhz_hv_get_control_voltage, self.mhz_hv_set_control_voltage),
+                'control_voltage_save': (self.mhz_hv_control_voltage_is_stored, lambda: self.mhz_hv_store_eeprom),
+                'target_bias': (self.mhz_hv_get_target_bias, self.mhz_hv_set_target_bias),
+                'readback_bias': (self.mhz_hv_get_bias, None),
+                'monitor_voltage': (self.mhz_hv_get_hvmon_voltage, None),
+                'PID_STATUS': (self.mhz_hv_get_pid_status, None),
             },
         }
 
