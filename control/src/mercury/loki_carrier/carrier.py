@@ -47,8 +47,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._default_clock_config = 'ZL30266_LOKI_Nosync_500MHz_218MHz.mfg'
 
         # If this is set false, ASIC init will just set up SPI
-        kwargs.setdefault('fast_data_enabled', True)
-        self._fast_data_enabled = kwargs.get('fast_data_enabled')
+        self.set_fast_data_enabled(kwargs.get('fast_data_enabled', True))
 
         # Override parent pin settings
 
@@ -701,14 +700,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_INIT:
                 try:
                     # Initialise the ASIC, either SPI only (if requested) or full functionality.
-                    if self._fast_data_enabled:
+                    if self.get_fast_data_enabled():
                         if self._firefly_00to09.initialised and self._firefly_00to09.initialised:
                             # Enable the firefly channels for the ASIC outputs
                             self._setup_fireflies()
                         else:
                             raise Exception('At least one firefly was not initialised while fast data is enabled, cannot switch on optical channels')
 
-                    self._initialise_asic(fast_data_enabled=self._fast_data_enabled)
+                    self._initialise_asic(fast_data_enabled=self.get_fast_data_enabled())
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -768,10 +767,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # State machine will proceed to a first target state, and once reached, will move
         # to a second target state. Often used to jump back through the state machine to a
         # different target while wanting to repeat previous init steps.
-        self._ENABLE_STATE_TARGET = self.ENABLE_STATE(via_state)
-        while (self._ENABLE_STATE_CURRENT != self.ENABLE_STATE(via_state)):
-            #TODO time this out
-            pass
+
+        # If the specified 'via' state is still ahead of where we are, ignore it since we could be skipping
+        # required process. The via is used for stepping backwards only.
+        if via_state < self._ENABLE_STATE_CURRENT:
+            self._ENABLE_STATE_TARGET = self.ENABLE_STATE(via_state)
+            while (self._ENABLE_STATE_CURRENT != self.ENABLE_STATE(via_state)):
+                #TODO time this out
+                pass
+
         self._ENABLE_STATE_TARGET = self.ENABLE_STATE(target_state)
 
     def set_enable_state(self, state_name):
@@ -789,22 +793,25 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             # Init power board devices, or re-init.
             self._set_enable_state_target_via(
                 self.ENABLE_STATE.PWR_DONE,
-                self.ENABLE_STATE.PWR_INIT
+                self.ENABLE_STATE.LOKI_DONE     # Via LOKI_DONE so that this will be saved stable state
             )
         elif state_name == self.ENABLE_STATE.COB_DONE.name:
             # Init COB devices, or re-init.
             self._set_enable_state_target_via(
                 self.ENABLE_STATE.COB_DONE,
-                self.ENABLE_STATE.COB_INIT
+                self.ENABLE_STATE.PWR_DONE      # Via PWR_DONE so that this will be saved stable state
             )
         elif state_name == self.ENABLE_STATE.ASIC_DONE.name:
             # Init ASIC, or re-init.
             self._set_enable_state_target_via(
                 self.ENABLE_STATE.ASIC_DONE,
-                self.ENABLE_STATE.ASIC_INIT
+                self.ENABLE_STATE.COB_DONE      # Via COB_DONE so that this will be saved stable state
             )
         else:
             self._logger.error('Invalid state requested: {}'.format(state_name))
+
+    def get_enable_state_target(self):
+        return self._ENABLE_STATE_TARGET.name
 
     def _initialise_asic(self, fast_data_enabled):
         # The general process for setting up the HEXITEC-MHz ASIC, assuming that it has
@@ -854,12 +861,17 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._STATE_ASIC_FASTDATA_INITIALISED = True
 
         except Exception as e:
-            fullmsg = 'Failed to init ASIC properly, disabling FireFlies: {e}'.format(e)
+            fullmsg = 'Failed to init ASIC properly, disabling FireFlies: {}'.format(e)
             self._logger.error(fullmsg)
             if fast_data_enabled:
                 self.mhz_firefly_set_all_enabled(False)
 
-            # Raise the error higher for the calling thread to handle raise Exception(fullmsg) def enter_global_mode(self): Complete the process defined in the ASIC manual for entering global mode. This is part of the carrier due to the requirement to synchronise parts of the process with the external SYNC signal, which is not under the control of the ASIC.  The ASIC is assumed to have been reset prior to this.  
+            # Raise the error higher for the calling thread to handle raise Exception(fullmsg)
+            raise
+
+    def enter_global_mode(self):
+        #Complete the process defined in the ASIC manual for entering global mode. This is part of the carrier due to the requirement to synchronise parts of the process with the external SYNC signal, which is not under the control of the ASIC.  The ASIC is assumed to have been reset prior to this.  
+
         # Set the sync line low before reset
         self.set_sync(False)
 
@@ -870,28 +882,28 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # analogue bias enable, TDC oscillator enable, serialiser PLL enable,
         # TDC PLL enable, VCAL select, serialiser mode, serialiser analogue/
         # digital reset.
-        self.write_field('GL_ROE_CONT', 0b1)
-        self.write_field('GL_DigSig_CONT', 0b1)
-        self.write_field('GL_AnaSig_CONT', 0b1)
-        self.write_field('GL_AnaBias_CONT', 0b1)
-        self.write_field('GL_TDCOsc_CONT', 0b1)
-        self.write_field('GL_SerPLL_CONT', 0b1)
-        self.write_field('GL_TDCPLL_CONT', 0b1)
-        self.write_field('GL_VCALsel_CONT', 0b1)
-        self.write_field('GL_SerMode_CONT', 0b1)
-        self.write_field('GL_SerAnaRstB_CONT', 0b1)
-        self.write_field('GL_SerDigRstB_CONT', 0b1)
+        self._asic.write_field('GL_ROE_CONT', 0b1)
+        self._asic.write_field('GL_DigSig_CONT', 0b1)
+        self._asic.write_field('GL_AnaSig_CONT', 0b1)
+        self._asic.write_field('GL_AnaBias_CONT', 0b1)
+        self._asic.write_field('GL_TDCOsc_CONT', 0b1)
+        self._asic.write_field('GL_SerPLL_CONT', 0b1)
+        self._asic.write_field('GL_TDCPLL_CONT', 0b1)
+        self._asic.write_field('GL_VCALsel_CONT', 0b1)
+        self._asic.write_field('GL_SerMode_CONT', 0b1)
+        self._asic.write_field('GL_SerAnaRstB_CONT', 0b1)
+        self._asic.write_field('GL_SerDigRstB_CONT', 0b1)
 
         # Set the sync active
         self.set_sync(True)
 
         # Enter further settings post sync raise
-        self.write_field('GL_AnaBias_EN', 0b1)  # Enable pixel bias
-        self.write_field('GL_TDCPLL_EN', 0b1)   # Enable TDC PLLs
-        self.write_field('GL_TDCOsc_EN', 0b1)   # Enable TDC oscillators
-        self.write_field('GL_SerPLL_EN', 0b1)   # Enable Serialiser PLLs
-        self.write_field('GL_AnaSig_EN', 0b1)   # Enable pixel analogue signals
-        self.write_field('GL_DigSig_EN', 0b1)   # Enable pixel digital signals
+        self._asic.write_field('GL_AnaBias_EN', 0b1)  # Enable pixel bias
+        self._asic.write_field('GL_TDCPLL_EN', 0b1)   # Enable TDC PLLs
+        self._asic.write_field('GL_TDCOsc_EN', 0b1)   # Enable TDC oscillators
+        self._asic.write_field('GL_SerPLL_EN', 0b1)   # Enable Serialiser PLLs
+        self._asic.write_field('GL_AnaSig_EN', 0b1)   # Enable pixel analogue signals
+        self._asic.write_field('GL_DigSig_EN', 0b1)   # Enable pixel digital signals
 
         time.sleep(0.1) #TEMP suggested by Lawrence
 
@@ -899,22 +911,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._asic._init_serialisers()
 
         # Remove serialiser digital and analogue reset
-        self.write_field('GL_SerAnaRstB_EN', 0b1)   # Remove analogue reset
+        self._asic.write_field('GL_SerAnaRstB_EN', 0b1)   # Remove analogue reset
         time.sleep(0.1) #TEMP suggested by Lawrence
-        self.write_field('GL_SerDigRstB_EN', 0b1)   # Remove analogue reset
+        self._asic.write_field('GL_SerDigRstB_EN', 0b1)   # Remove analogue reset
 
         # Enable readout
-        self.write_field('GL_ROE_EN', 0b1)
+        self._asic.write_field('GL_ROE_EN', 0b1)
 
-        self._logger.info("Global mode configured")
+        self._asic._logger.info("Global mode configured")
 
         # RE-INIT SERIALISERS (Serialisers will not function without additional reset. Reason unknown.)
         time.sleep(0.5)
-        self.write_field('GL_SerAnaRstB_EN', 0b0)
-        self.write_field('GL_SerDigRstB_EN', 0b0)
+        self._asic.write_field('GL_SerAnaRstB_EN', 0b0)
+        self._asic.write_field('GL_SerDigRstB_EN', 0b0)
         time.sleep(0.5)
-        self.write_field('GL_SerDigRstB_EN', 0b1)
-        self.write_field('GL_SerAnaRstB_EN', 0b1)
+        self._asic.write_field('GL_SerDigRstB_EN', 0b1)
+        self._asic.write_field('GL_SerAnaRstB_EN', 0b1)
         self._logger.info("Serialiser encoding state force reset")
 
     def _setup_ltc2986(self):
@@ -924,7 +936,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # through the provided accessor:
         ltc_dev = self.ltc_get_device()
 
-        with ltc_dev.acquire(blocking=True, timeout=1) as rslt:
+        with ltc_dev.acquire(blocking=True, timeout=5) as rslt:
             if not rslt:
                 if ltc_dev.initialised:
                     raise Exception('Failed to get LTC lock while setting up ASIC Diode channel')
@@ -1545,16 +1557,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         latest_time = None
         integral = 0
 
-        while True:
-            with self._HV_mutex:
-                if self._HV_setup_complete:
-                    break
-            time.sleep(update_period_s)
-            self.watchdog_kick()
-
         while not self.TERMINATE_THREADS:
             time.sleep(update_period_s)
             self.watchdog_kick()
+
+            # Always check if the setup is complete, in case re-init occurs
+            with self._HV_mutex:
+                if not self._HV_setup_complete:
+                    continue
 
             # Nothing is permitted to edit HV variables while mid-PID loop
             with self._HV_mutex:
@@ -1702,6 +1712,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 current_ff.critical_error('Failed to init FireFly {}: {}'.format(current_ff.name, e))
                 self._logger.critical('Will disable firefly via reset line')
                 self.set_pin_value('firefly_en', 0)
+
+    def set_fast_data_enabled(self, en=True):
+        # If fast data is enabled, fireflies will be set up on ASIC init. Otherwise, they will not. If Fireflies are not
+        # present and fast data is enabled, an error will be thrown.
+        self._fast_data_enabled = en
+
+    def get_fast_data_enabled(self):
+        return self._fast_data_enabled
 
     def _setup_fireflies(self):
         # Set up firefly for normal babyD usage, where all channels required are enabled
@@ -1861,12 +1879,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ASIC_EN': (self.get_app_enabled, self.set_app_enabled),
                 'REGS_EN': (self.get_peripherals_enabled, None),
                 'ENABLE_STATE': (self.get_enable_state, self.set_enable_state),
+                'ENABLE_STATE_TARGET': (self.get_enable_state_target, None),
                 'ENABLE_STATE_PROGRESS': (self.get_enable_state_progress, None),
                 'ENABLE_STATE_ERROR': (self.get_enable_state_error, None),
                 'POWER_BOARD_INIT': (lambda: self._ENABLE_STATE_CURRENT >= self.ENABLE_STATE.PWR_DONE, None),
                 'COB_INIT': (lambda: self._ENABLE_STATE_CURRENT >= self.ENABLE_STATE.COB_DONE, None),
                 'ASIC_INIT': (lambda: self._STATE_ASIC_INITIALISED, None),
                 'ASIC_FASTDATA_INIT': (lambda: self._STATE_ASIC_FASTDATA_INITIALISED, None),
+                'ASIC_FASTDATA_EN': (self.get_fast_data_enabled, None),
                 'DEVICES': {
                     'FIREFLY': {
                         '00to09': (lambda: 'error' if self._firefly_00to09.error else ('initialised' if self._firefly_00to09.initialised else 'unconfigured'), None),

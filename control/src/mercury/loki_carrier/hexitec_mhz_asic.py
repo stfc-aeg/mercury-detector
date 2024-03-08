@@ -84,15 +84,15 @@ class HEXITEC_MHz(object):
             # Read
             command = 0x00 | REGISTER_READ_TRANSACTION
             transfer_buffer = [command, 0x00]
-            config_value = self._device.spi.transfer(transfer_buffer)[1]
+            config_value = self._device.transfer(transfer_buffer)[1]
 
             # Modify
-            page_set_value = (config_value & 0b11111110) | (page_bit & 0b1)
+            page_set_value = (config_value & 0b11111110) | (page & 0b1)
 
             # Write
             command = 0x00 | REGISTER_WRITE_TRANSACTION
             transfer_buffer = [command, page_set_value]
-            self._device.spi.transfer(transfer_buffer)
+            self._device.transfer(transfer_buffer)
 
             self.page = page
 
@@ -118,7 +118,7 @@ class HEXITEC_MHz(object):
         transfer_buffer = [command]
         transfer_buffer.append(0x00)
 
-        readback = self._device.spi.transfer(transfer_buffer)
+        readback = self._device.transfer(transfer_buffer)
 
         if readback is None:
             raise ASICIOError('Failed to read {} bytes, SPI error'.format(length))
@@ -167,7 +167,7 @@ class HEXITEC_MHz(object):
         transfer_buffer = [command]
         transfer_buffer.append(data)
 
-        self._device.spi.transfer(transfer_buffer)
+        self._device.transfer(transfer_buffer)
 
         self._logger.debug("Register {} written with {}".format(address, data))
 
@@ -813,7 +813,7 @@ class HEXITEC_MHz(object):
             raise ValueError("Bias must be in range 0-15")
 
         for fieldname in ['RAMPControl{}'.format(x) for x in range(1,21)]:
-            self.write_field(bias)
+            self.write_field(fieldname, bias)
 
         self._logger.info("Set ramp bias for all 40 ASIC ramps to {}".format(bias))
 
@@ -824,7 +824,7 @@ class HEXITEC_MHz(object):
         self.read_field('IntTime')
 
     def set_frame_length(self, frame_length_clocks):
-        self.write_field('FrmLength', integration_time_frames)
+        self.write_field('FrmLength', frame_length_clocks)
 
     def get_frame_length(self, direct=False):
         self.read_field('FrmLength')
