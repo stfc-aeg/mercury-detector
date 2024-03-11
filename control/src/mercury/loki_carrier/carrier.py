@@ -47,7 +47,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._default_clock_config = 'ZL30266_LOKI_Nosync_500MHz_218MHz.mfg'
 
         # If this is set false, ASIC init will just set up SPI
-        self.set_fast_data_enabled(kwargs.get('fast_data_enabled', True))
+        self.set_fast_data_enabled(kwargs.get('fast_data_enabled', False))
 
         # Override parent pin settings
 
@@ -1354,6 +1354,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self.mhz_hv_set_enable(True)
             self._HV_setup_complete = True
 
+    def _mhz_hv_get_vcont_overridden(self):
+        # If the VCONT control voltage was overridden by a configuration file (rather than using whatever was
+        # in the EEPROM), this will return true.
+        return bool(self._HV_vcont_override)
+
     @staticmethod
     def _two_point_convert(a_x, a_y, b_x, b_y, X):
         """
@@ -1900,12 +1905,24 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 },
             },
             'asic_settings': {
-                'integration_time': (self._asic.get_integration_time, self._asic.set_integration_time),
-                'frame_length': (self._asic.get_frame_length, self._asic.set_frame_length),
-                'feedback_capacitance': (self._asic.get_feedback_capacitance, self._asic.set_feedback_capacitance),#TODO
-                'serialiser_all_mode': (self._asic.get_global_serialiser_mode, self._asic.set_global_serialiser_mode),
-                'serialiser_all_pattern': (self._asic.get_all_serialiser_pattern, self._asic.set_all_serialiser_pattern),
-                'serialiser_all_scrambleen': (self._asic.get_all_serialiser_bit_scramble, self._asic.set_all_serialiser_bit_scramble),
+                'integration_time': (
+                    lambda: self._asic.get_integration_time() if self._asic.interface_enabled() else None,
+                    self._asic.set_integration_time),
+                'frame_length': (
+                    lambda: self._asic.get_frame_length if self._asic.interface_enabled() else None,
+                    self._asic.set_frame_length),
+                'feedback_capacitance': (
+                    lambda: self._asic.get_feedback_capacitance if self._asic.interface_enabled() else None,
+                    self._asic.set_feedback_capacitance),#TODO
+                'serialiser_all_mode': (
+                    lambda: self._asic.get_global_serialiser_mode if self._asic.interface_enabled() else None,
+                    self._asic.set_global_serialiser_mode),
+                'serialiser_all_pattern': (
+                    lambda: self._asic.get_all_serialiser_pattern if self._asic.interface_enabled() else None,
+                    self._asic.set_all_serialiser_pattern),
+                'serialiser_all_scrambleen': (
+                    lambda: self._asic.get_all_serialiser_bit_scramble if self._asic.interface_enabled() else None,
+                    self._asic.set_all_serialiser_bit_scramble),
                 'segment_readout': {
                     'TRIGGER': (None, None),#TODO
                     'SEGMENT_DATA': (None, None),#TODO
@@ -1938,6 +1955,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ENABLE': (self.mhz_hv_get_enable, self.mhz_hv_set_enable),
                 'control_voltage': (self.mhz_hv_get_control_voltage, self.mhz_hv_set_control_voltage),
                 'control_voltage_save': (self.mhz_hv_control_voltage_is_stored, lambda: self.mhz_hv_store_eeprom),
+                'control_voltage_overridden': (self._mhz_hv_get_vcont_overridden, None),
                 'target_bias': (self.mhz_hv_get_target_bias, self.mhz_hv_set_target_bias),
                 'readback_bias': (self.mhz_hv_get_bias, None),
                 'monitor_voltage': (self.mhz_hv_get_hvmon_voltage, None),
