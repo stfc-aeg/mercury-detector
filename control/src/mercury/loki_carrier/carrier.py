@@ -47,7 +47,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._default_clock_config = 'ZL30266_LOKI_Nosync_500MHz_218MHz.mfg'
 
         # If this is set false, ASIC init will just set up SPI
-        self.set_fast_data_enabled(kwargs.get('fast_data_enabled', False))
+        self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
 
         # Override parent pin settings
 
@@ -82,12 +82,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         kwargs.setdefault('pin_config_id_firefly_sel1', 'EMIO29')
         kwargs.setdefault('pin_config_active_low_firefly_sel1', False)
         kwargs.setdefault('pin_config_is_input_firefly_sel1', False)
-        kwargs.setdefault('pin_config_default_value_firefly_sel1', 0)     # Active high so disabled by default
+        kwargs.setdefault('pin_config_default_value_firefly_sel1', 1)     # Active high (driver pulls low to select) so disabled by default
 
         kwargs.setdefault('pin_config_id_firefly_sel2', 'EMIO30')
         kwargs.setdefault('pin_config_active_low_firefly_sel2', False)
         kwargs.setdefault('pin_config_is_input_firefly_sel2', False)
-        kwargs.setdefault('pin_config_default_value_firefly_sel2', 0)     # Active high so disabled by default
+        kwargs.setdefault('pin_config_default_value_firefly_sel2', 1)     # Active high (driver pulls low to select) so disabled by default
 
         kwargs.setdefault('pin_config_id_firefly_int1', 'EMIO24')
         kwargs.setdefault('pin_config_active_low_firefly_int1', False)
@@ -196,15 +196,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Get config for FireFly
         self._firefly_00to09 = DeviceHandler(device_type_name='FireFly')
         self._firefly_00to09.name = '00to09'
-        self._firefly_00to09.select_pin_friendlyname = 'ff_sel_00to09'
-        self._firefly_00to09.int_pin_friendlyname = 'ff_int_00to09'
+        self._firefly_00to09.select_pin_friendlyname = 'firefly_sel1'
+        self._firefly_00to09.int_pin_friendlyname = 'firefly_int1'
         self._firefly_00to09.i2c_bus = self._application_interfaces_i2c['APP_PWR']
+        self._firefly_00to09.i2c_address = int(kwargs.get('firefly1_address_override', '0x50'), 0)
+        self._firefly_00to09.reset_ff_address = True if kwargs.get('firefly1_reset_address', 'True') in ['True', 'true'] else False
         self._firefly_10to19 = DeviceHandler(device_type_name='FireFly')
         self._firefly_10to19.name = '10to19'
-        self._firefly_10to19.select_pin_friendlyname = 'ff_sel_10to19'
-        self._firefly_10to19.int_pin_friendlyname = 'ff_int_10to19'
+        self._firefly_10to19.select_pin_friendlyname = 'firefly_sel2'
+        self._firefly_10to19.int_pin_friendlyname = 'firefly_int2'
         self._firefly_10to19.i2c_bus = self._application_interfaces_i2c['APP_PWR']
-        self._fireflies = [self._firefly_00to09, self._firefly_10to19]
+        self._firefly_10to19.i2c_address = int(kwargs.get('firefly2_address_override', '0x50'), 0)
+        self._firefly_10to19.reset_ff_address = True if kwargs.get('firefly2_reset_address', 'True') in ['True', 'true'] else False
+        self._fireflies = [self._firefly_10to19, self._firefly_00to09]      # Init FireFly 2 first to change its address
 
         # Holds channel mapping information, relating named external channels to other parts of the system
         self._merc_channels = {}
@@ -561,6 +565,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 try:
                     #TODO Set the IO lines so that all resets are active. Ultimate safe state. Grab all mutexes.
 
+                    # Disable HV
+                    with self._HV_mutex:
+                        self._HV_setup_complete = False
+
                     # Grab all of the devices
                     lock_devices([
                         self._mic284,
@@ -604,6 +612,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Check the power board has been detected
                     if not self.get_pin_value('bkpln_present'):
                         raise Exception('Backplane not present')
+
+                    # Disable HV
+                    with self._HV_mutex:
+                        self._HV_setup_complete = False
 
                     # Ensure that devices on the COB are locked
                     lock_devices([
@@ -662,7 +674,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                     # Check the COB has been detected
                     if not self.get_pin_value('app_present'):
-                        raise Exception('COB not present')
+                        pass#raise Exception('COB not present')
 
                     lock_devices([
                         self._firefly_00to09,       # Lock prior to release in this stage
@@ -679,7 +691,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         full_unlock(self._firefly_10to19)
 
                     # Set up the LTC2986 to monitor the ASIC diode
-                    self._setup_ltc2986()
+                    #self._setup_ltc2986()
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -858,7 +870,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 self._STATE_ASIC_FASTDATA_INITIALISED = True
 
             logging.info('ASIC initialisation complete')
-            self._STATE_ASIC_FASTDATA_INITIALISED = True
+            self._STATE_ASIC_INITIALISED = True
 
         except Exception as e:
             fullmsg = 'Failed to init ASIC properly, disabling FireFlies: {}'.format(e)
@@ -866,8 +878,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if fast_data_enabled:
                 self.mhz_firefly_set_all_enabled(False)
 
+            # Also disable the ASIC again
+            self.set_app_enabled(False)
+
             # Raise the error higher for the calling thread to handle raise Exception(fullmsg)
-            raise
+            raise Exception(fullmsg)
 
     def enter_global_mode(self):
         #Complete the process defined in the ASIC manual for entering global mode. This is part of the carrier due to the requirement to synchronise parts of the process with the external SYNC signal, which is not under the control of the ASIC.  The ASIC is assumed to have been reset prior to this.  
@@ -877,6 +892,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # Reset the ASIC
         self.reset_cycle_asic()
+
+        # Check that ASIC read-write is functional
+        self._asic.RW_CHECK()
 
         # Enable global control of readout, digital signals, analogue signals,
         # analogue bias enable, TDC oscillator enable, serialiser PLL enable,
@@ -1330,9 +1348,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 if time.time() > t_give_up:
                     raise Exception('Could not set up HV; failed to read HV_MON, timed out')
                 else:
+                    self._logger.info('HV_MON: {}'.format(self.mhz_adc_read_chan('HV_MON')))
                     if self.mhz_adc_read_chan('HV_MON') is not None:
                         break
-                time.sleep(1)
+                time.sleep(2)
 
             # The potentiometer will have loaded an EEPROM setting by default. If the user config has
             # requested a specific starting wiper voltage, overwrite it not matter if we're going into
@@ -1341,7 +1360,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             vcont_override = self._HV_vcont_override
             if vcont_override is not None:
                 # Directly set the value now
-                self._mhz_hv_set_control_voltage_direct(vcont_override)
+                self._mhz_hv_set_control_voltage_direct(float(vcont_override))
 
             # Determine whether to start in 'auto' or 'manual' mode based on configuration
             if (
@@ -1452,6 +1471,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def _mhz_hv_set_control_voltage_direct(self, control_v):
         # Same as below but with no checks, called by the PID loop and by below if allowed
+        control_v = float(control_v)
 
         # Check against hard limits
         if control_v > self._HV_Vcont_MAX:
@@ -1466,6 +1486,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_hv_set_control_voltage(self, control_v):
         # Set a control voltage via the digital potentimeter directly. This is the userspace function, only allowed
         # when in manual mode, as in auto mode this is being controlled by the PID loop.
+        control_v = float(control_v)
+
         with self._HV_mutex:
             if self.mhz_hv_get_auto():
                 raise Exception('Cannot set vcont control voltage when in auto mode')
@@ -1494,8 +1516,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         with self._HV_mutex:
             if (tmp_vcont_eeprom is None) or (tmp_vcont is None):
                 self._HV_cached_vcont_saved = None
+                self._logger.error('Failed to read either eeprom ({}) or current ({}) wiper setting for HV, could not check if stored value matches'.format(tmp_vcont_eeprom, tmp_vcont))
             else:
                 self._HV_cached_vcont_saved = (tmp_vcont_eeprom == tmp_vcont)
+                self._logger.debug('Checking EEPROM and wiper sync state: {} (wiper: {}, eeprom: {})'.format(
+                    self._HV_cached_vcont_saved, tmp_vcont, tmp_vcont_eeprom))
 
     def mhz_hv_control_voltage_is_stored(self):
         with self._HV_mutex:
@@ -1504,6 +1529,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_hv_store_eeprom(self):
         # Store the current value set on the potentiometer wiper to EEPROM.
         self._digipot_hv.device.store_wiper_count()
+
+    def mhz_hv_input_output_mismatched(self, percentage_difference_tolerated=20):
+        # If the HV is enabled, the input control voltage should be similar to the monitor output voltage, since they are
+        # both supposed to be proportional between around 0-5v. If this is not the case, it implies that either the ADC
+        # is reading incorrectly, or the HV module is not outputting the correct voltage because it is damaged, or the
+        # digital potentiometer is configured incorrectly.
+        if (self.mhz_hv_get_hvmon_voltage() is None) or (self.mhz_hv_get_control_voltage() is None):
+            return None
+
+        if self.mhz_hv_get_enable():
+            return abs(
+                (self.mhz_hv_get_hvmon_voltage() - self.mhz_hv_get_control_voltage()) / self.mhz_hv_get_control_voltage()
+            ) > (percentage_difference_tolerated / 100.0)
+
+        else:
+            return False
 
     def mhz_hv_set_target_bias(self, hv_bias_v):
         # Request a high voltage bias setting, which will be targeted by the PID loop. Only possible when the loop is in
@@ -1689,9 +1730,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 self._logger.warning('Setting default I2C bus number due to lack of functionality in firefly driver. This could cause issues with other drivers')
                 I2CDevice._default_i2c_bus = current_ff.i2c_bus
 
+                self._logger.info('Using select line {} for FireFly {}'.format(current_ff.select_pin_friendlyname, current_ff.name))
+
+
                 # If the device is present, it should auto-detect the type etc.
                 current_ff.device = FireFly(
                     base_address=current_ff.i2c_address,
+                    chosen_base_address=(0x00 if current_ff.reset_ff_address else None),    # 0x00 will make Device will respond to 0x50
                     select_line=self.get_pin(current_ff.select_pin_friendlyname),
                 )
 
@@ -1704,10 +1749,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 current_ff._cached_channels_disabled = 0
 
                 # Store the part number, vendor number, and OUI for later use
-                self._logger.info('Storing FireFly PN, VN, OUI')
                 current_ff.info_pn, current_ff.info_vn, current_ff.info_oui = current_ff.device.get_device_info()
+                self._logger.info('Stored FireFly PN ({}), VN ({}), OUI ({})'.format(current_ff.info_pn, current_ff.info_vn, current_ff.info_oui))
 
-                self._logger.info('Firefly current temperature {}C'.format(current_ff.device.get_temperature()))
+                self._logger.info('Firefly current temperature {}C'.format(current_ff.device.get_temperature(direction=FireFly.DIRECTION_TX)))
 
                 current_ff.initialised = True
 
@@ -1773,7 +1818,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     self._logger.error('Failed to get FireFly lock while returning temperature, timed out')
                 return None
 
-            return current_ff.device.get_temperature()
+            return current_ff.device.get_temperature(direction=FireFly.DIRECTION_TX)
 
     def mhz_firefly_get_partnumber(self, ff_dev_name):
         # Protect cache access and interaction with the I2C device with mutex
@@ -1906,22 +1951,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             },
             'asic_settings': {
                 'integration_time': (
-                    lambda: self._asic.get_integration_time() if self._asic.interface_enabled() else None,
+                    lambda: self._asic.get_integration_time() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_integration_time),
                 'frame_length': (
-                    lambda: self._asic.get_frame_length if self._asic.interface_enabled() else None,
+                    lambda: self._asic.get_frame_length() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_frame_length),
                 'feedback_capacitance': (
-                    lambda: self._asic.get_feedback_capacitance if self._asic.interface_enabled() else None,
+                    lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_feedback_capacitance),#TODO
                 'serialiser_all_mode': (
-                    lambda: self._asic.get_global_serialiser_mode if self._asic.interface_enabled() else None,
+                    lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_global_serialiser_mode),
                 'serialiser_all_pattern': (
-                    lambda: self._asic.get_all_serialiser_pattern if self._asic.interface_enabled() else None,
+                    lambda: self._asic.get_all_serialiser_pattern() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_all_serialiser_pattern),
                 'serialiser_all_scrambleen': (
-                    lambda: self._asic.get_all_serialiser_bit_scramble if self._asic.interface_enabled() else None,
+                    lambda: self._asic.get_all_serialiser_bit_scramble() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_all_serialiser_bit_scramble),
                 'segment_readout': {
                     'TRIGGER': (None, None),#TODO
@@ -1945,8 +1990,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'VDDA_I': (self.mhz_adc_read_VDDA_current_A, None),
             },
             'firefly': {
-                '00to09': self._gen_firefly_paramtree('00to09'),
-                '10to19': self._gen_firefly_paramtree('10to19'),
+                'ch00to09': self._gen_firefly_paramtree('00to09'),
+                'ch10to19': self._gen_firefly_paramtree('10to19'),
                 'CHANNELS': self._gen_firefly_paramtree_channels(),
             },
             'vcal': (self.get_vcal_in, self.set_vcal_in),
@@ -1959,6 +2004,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'target_bias': (self.mhz_hv_get_target_bias, self.mhz_hv_set_target_bias),
                 'readback_bias': (self.mhz_hv_get_bias, None),
                 'monitor_voltage': (self.mhz_hv_get_hvmon_voltage, None),
+                'monitor_control_mismatch_detected': (self.mhz_hv_input_output_mismatched, None),
                 'PID_STATUS': (self.mhz_hv_get_pid_status, None),
             },
         }

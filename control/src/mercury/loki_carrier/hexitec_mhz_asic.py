@@ -94,7 +94,32 @@ class HEXITEC_MHz(object):
             transfer_buffer = [command, page_set_value]
             self._device.transfer(transfer_buffer)
 
-            self.page = page
+            self._current_page = page
+
+    def RW_CHECK(self):
+        # The page select bit is quite useful for this, as it will not affect other settings
+        # so long is the system still keeps track of it.
+
+        # Lock access during this process
+        with self._register_controller.acquire(blocking=True, timeout=5) as mutex_rslt:
+            try:
+                if not mutex_rslt:
+                    raise Exception('Could not get MUTEX')
+
+                # Set the page low
+                self._set_page(0)
+
+                # Check that it's low
+                assert(self._register_controller.read_register(0x00, 1, direct_read=True) & 0b1 == 0)
+
+                # Set the page high
+                self._set_page(1)
+
+                # Check that it's high
+                assert(self._register_controller.read_register(0x00, 1, direct_read=True) & 0b1 == 1)
+
+            except Exception as e:
+                raise Exception('Failed ASIC read-write check: {}'.format(e))
 
     def _read_register(self, address, length=1):
         # Direct ASIC function for reading from a register address, without caching (which
@@ -199,7 +224,7 @@ class HEXITEC_MHz(object):
         except ASICInterfaceDisabledError as e:
             #TODO Actually handle the error properly once it's passed through the register controller
             self._logger.error('Failed to write to ASIC register')
-            # raise Exception('Failed to write to ASIC register')
+            raise
         except Exception as e:
             raise
 
