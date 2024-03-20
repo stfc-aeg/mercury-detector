@@ -1735,6 +1735,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                 # If the device is present, it should auto-detect the type etc.
                 current_ff.device = FireFly(
+                    direction=FireFly.DIRECTION_TX,
+                    num_channels=12,
                     base_address=current_ff.i2c_address,
                     chosen_base_address=(0x00 if current_ff.reset_ff_address else None),    # 0x00 will make Device will respond to 0x50
                     select_line=self.get_pin(current_ff.select_pin_friendlyname),
