@@ -21,6 +21,22 @@ class ChannelInfo(object):
         self.firefly_ch_num = firefly_ch_num
         self.firefly_ch_bitfield = firefly_ch_bitfield
 
+# Named preset calibration patterns. Rows and cols are an array of bits. Pixel value is boolean AND
+# of the relevant row and column value.
+CAL_PATTERNS = {
+    'DEFAULT': {
+        'rows': [0, 1]*40,
+        'cols': [1, 0]*40
+    },
+    'CORNERV': {
+        'rows': [1, 0]*40,
+        'cols': [1, 0]*40
+    },
+    'CHESS': {
+        'rows': [1, 1, 1, 1 , 0, 0, 0, 0]*10,
+        'cols': [0, 0, 0, 0 , 1, 1, 1, 1]*10
+    },
+}
 
 class LokiCarrier_HMHz (LokiCarrier_1v0):
 
@@ -351,6 +367,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             hz=20000,   #TODO make this an external setting again
             regmap_override_filenames=regmap_override_filenames_list,
             register_cache_enabled=False)   # Disabled until the ASIC is enabled
+
+        # ASIC-related carrier variables
+        self._calpattern_grid_cornersonly = False
+        self._calpattern_grid_div = 0
+        self._calpattern_grid_sect = 0
+        self._calpattern_mode = 'PRESET'
+        self._calpattern_preset_name = 'DEFAULT'
+        self._calpattern_single_pixel_row = 0
+        self._calpattern_single_pixel_col = 0
 
         self._logger.info('ASIC instance creation complete')
 
@@ -1930,6 +1955,119 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.set_pin_value('sync', bool(value))
         self._logger.info('SYNC {}'.format('high' if value else 'low'))
 
+    def get_calibration_pattern_mode(self):
+        return self._calpattern_mode
+
+    def set_calibration_pattern_mode(self, mode):
+        # Set a named mode using the currently configured settings for it to the ASIC.
+        if mode == 'PRESET':
+            self._send_calibration_pattern_preset()
+        elif mode == 'SINGLE_PIXEL':
+            self._send_calibration_pattern_single_pixel()
+        elif mode == 'GRID':
+            self._send_calibration_pattern_grid()
+        elif mode == 'DIRECT':
+            # Direct writing always writes directly anyway, just keep here to prevent other
+            # modes from writing in direct mode
+            pass
+        else:
+            raise Exception('Invalid calibration pattern mode: '.format(mode))
+
+        self._calpattern_mode = mode
+
+    def get_calibration_pattern_preset_avail(self):
+        return list(CAL_PATTERNS.keys())
+
+    def _send_calibration_pattern_preset(self):
+        # Send the currently selected preset pattern to the ASIC
+        self._asic.set_calibration_test_pattern_bits(
+            row_bits=CAL_PATTERNS[self._calpattern_preset_name]['rows'],
+            column_bits=CAL_PATTERNS[self._calpattern_preset_name]['cols'],
+        )
+
+    def get_calibration_pattern_preset(self):
+        return self._calpattern_preset_name
+
+    def set_calibration_pattern_preset(self, preset_name):
+        if preset_name in self.get_calibration_pattern_preset_avail():
+            self._calpattern_preset_name = preset_name
+        else:
+            raise Exception('Unrecognised preset {}'.format(preset_name))
+        self._logger.info('Set preset calibration pattern to {}'.format(preset_name))
+
+    def _send_calibration_pattern_single_pixel(self):
+        # Set the single pixel cal pattern currently configured
+        self.cal_pattern_highlight_pixel(
+            column=self._calpattern_single_pixel_col,
+            row=self._calpattern_single_pixel_row,
+        )
+        self._logger.info('Applied current calibration pattern preset ({})'.format(self.get_calibration_pattern_preset()))
+
+    def get_calibration_pattern_single_pixel(self):
+        return (self._calpattern_single_pixel_row, self._calpattern_single_pixel_col)
+
+    def set_calibration_pattern_single_pixel(self, rowcol_tuple):
+        self._calpattern_single_pixel_row, self._calpattern_single_pixel_col = rowcol_tuple
+        self._logger.info('Set calibration pattern single chosen pixel to row: {} col: {}'.format(
+            self._calpattern_single_pixel_row, self._calpattern_single_pixel_col)
+        )
+
+    def _send_calibration_pattern_grid(self):
+        # Set the calibration grid pattern currently configured
+        self._asic.cal_pattern_highlight_sector_division(
+            sector=self._calpattern_grid_sect,
+            division=self._calpattern_grid_div,
+            pattern_outer=True,
+            pattern_inner=not self._calpattern_grid_cornersonly,
+        )
+
+    def get_calibration_pattern_grid(self):
+        return (self._calpattern_grid_div, self._calpattern_grid_sect)
+
+    def set_calibration_pattern_grid(self, divsect_tuple):
+        # Cache the division and sector selection
+        (self._calpattern_grid_div, self._calpattern_grid_sect) = divsect_tuple
+
+    def get_calibration_pattern_grid_cornersonly(self):
+        return self._calpattern_grid_cornersonly
+
+    def set_calibration_pattern_grid_cornersonly(self, cornersonly):
+        # Cache the setting
+        self._calpattern_grid_cornersonly = cornersonly
+
+    def get_calibration_pattern_direct(self):
+        # In any mode, read back the current state of the bits (good for a display)
+        self._asic.get_calibration_test_pattern_bits()
+
+    def set_calibration_pattern_direct(self, rowbits_colbits_tuple):
+        # Directly manipulate the calibration pattern bits. Doing this will disable any other
+        # calibration pattern mode.
+        rows, cols = rowbits_colbits_tuple
+        self._asic.get_calibration_test_pattern_bits(rows, cols)
+
+        # If bits have been directly manipulated, set the mode to DIRECT
+        self.set_calibration_pattern_mode('DIRECT')
+
+    def get_calibration_pattern_direct_map(self):
+        # In any mode, read back the expected calibration mask for value of all pixels,
+        # which could be used to render an 'expected' view of the ASIC with a heatmap.
+        # This is simply returned as a 1D array reading from row 0-79, listing each col pixel.
+        full_img = []
+        row_col_bits = self.get_calibration_pattern_direct()
+        if row_col_bits is None:
+            return None
+
+        row_bits, col_bits = row_col_bits
+
+        full_img = []
+
+        for row in range (0, 80):
+            for col in range(0, 80):
+                # The calibration pattern is just a boolean AND of the col and row bits
+                full_img.append(row_bits[row] and col_bits[col])
+
+        return full_img
+
     def _gen_app_paramtree(self):
         # Override parameter tree generation to add application-specific tree
 
@@ -1988,17 +2126,28 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     'TRIGGER': (None, None),#TODO
                     'SEGMENT_DATA': (None, None),#TODO
                 },
-                #'calibration_pattern': {
-                    #"ENABLE":(self.get_asic_cal_pattern_en, self.set_asic_cal_pattern_en, {"description":"Enable ASIC calibration pattern injection"}),#TODO
-                    #"PATTERN":(None, self.set_asic_cal_pattern, {"description":"Selection of pattern type: default or highlight"}),#TODO
-                    #"HIGHLIGHT_DIVISION":(lambda: self._asic_cal_highlight_div, lambda division: self.cfg_asic_highlight(division=division), {"description":"Division chosen for 4x4 grid highlighting via calibration pattern"}),#TODO
-                    #"HIGHLIGHT_SECTOR":(lambda: self._asic_cal_highlight_sec, lambda sector: self.cfg_asic_highlight(sector=sector), {"description":"Sector chosen for 4x4 grid highlighting via calibration pattern"}),#TODO
-                    #"HIGHLIGHT_ROW":(lambda: self._asic_cal_highlight_row, lambda row: self.cfg_asic_highlight(row=row), {"description":"Row chosen for 1x1 pixel highlighting via calibration pattern"}),#TODO
-                    #"HIGHLIGHT_COLUMN":(lambda: self._asic_cal_highlight_col, lambda column: self.cfg_asic_highlight(column=column), {"description":"Column chosen for 1x1 pixel highlighting via calibration pattern"}),#TODO
-                #},
-                #'fast_data_setup': {
-                #    #TODO
-                #}
+                'calibration_pattern': {
+                    "ENABLE": (
+                        lambda: self._asic.get_calibration_test_pattern_enabled() if self._STATE_ASIC_INITIALISED else None,
+                        self._asic.enable_calibration_test_pattern,
+                        {"description": "Enable ASIC calibration pattern injection"}),
+                    "MODE": (self.get_calibration_pattern_mode, self.set_calibration_pattern_mode),
+                    "MODES": {
+                        "PRESET": {
+                            "AVAIL": (self.get_calibration_pattern_preset_avail, None),
+                            "SELECT": (self.get_calibration_pattern_preset, self.set_calibration_pattern_preset),
+                        },
+                        "SINGLE_PIXEL": {
+                            "SELECT": (self.get_calibration_pattern_single_pixel, self.set_calibration_pattern_single_pixel),
+                        },
+                        "GRID": {
+                            "SELECT": (self.get_calibration_pattern_grid, self.set_calibration_pattern_grid),
+                            "CORNERS_ONLY": (self.get_calibration_pattern_grid_cornersonly, self.set_calibration_pattern_grid_cornersonly),
+                        },
+                        "DIRECT": (self.get_calibration_pattern_direct, self.set_calibration_pattern_direct),
+                        "DIRECT_MAP": (self.get_calibration_pattern_direct_map, None),
+                    },
+                },
             },
             'monitoring': {
                 'TRIPS': (self.mhz_adc_read_trips, None),

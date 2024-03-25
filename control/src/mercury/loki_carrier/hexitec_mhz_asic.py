@@ -774,10 +774,40 @@ class HEXITEC_MHz(object):
 
         self.set_calibration_test_pattern(row_bytes=row_bytes, column_bytes=column_bytes)
 
-    def cal_pattern_highlight_sector_division(self, sector, division):
+    def get_calibration_test_pattern_bits(self):
+        # Reads the currently set calibration pattern, and separates out arrays of bits for
+        # rows and columns. Inverse of above 'set' function, returned as tuple of arrays.
+
+        # Get the raw pattern (there is no function for this) as a single value
+        rows_cols_raw = self.read_field('SRCal')
+
+        # Convert the single value into bytes with rows and cols combined
+        rows_cols_bytes = list((rows_cols_raw).to_bytes(20, byteorder='big'))
+
+        # Separate out the parts
+        rows_bytes = rows_cols_bytes[0:10]
+        cols_bytes = rows_cols_bytes[10:20]
+
+        # Convert bytes to array of bits
+        row_bits = [(rows_bytes[i] & (1 << x)) >> x for i in range(0, 10) for x in range(7, -1, -1)]
+        col_bits = [(cols_bytes[i] & (1 << x)) >> x for i in range(0, 10) for x in range(7, -1, -1)]
+
+        # Reverse the row array, since it's loaded pixel 79 to 0 in the ASIC
+        row_bits_reversed = reversed(row_bits)
+
+        return (row_bits_reversed, col_bits)
+
+    def cal_pattern_highlight_sector_division(self, sector, division, pattern_outer=True, pattern_inner=True):
         # Use the calibration test pattern to (within a single sector) zero all pixels
         # except those in a certain division and sector, which will be filled with all
         # high bits. There is one bit per pixel in the calibration pattern.
+
+        # pattern_x allows you to select different parts of the 4x4 grid to highlight.
+
+        # outer=True  1 1 1 1       outer=True  1 0 0 1       outer=False 0 1 1 0
+        # inner=True  1 1 1 1       inner=False 0 0 0 0       inner=True  1 1 1 1
+        #             1 1 1 1                   0 0 0 0                   1 1 1 1
+        #             1 1 1 1                   1 0 0 1                   0 1 1 0
 
         row_bits = []
         column_bits = []
@@ -789,8 +819,16 @@ class HEXITEC_MHz(object):
         for row_id in range(0, 80):
             sector_id = int(row_id / 4)
             if sector_id == sector:
-                row_bits.append(1)
+                # In correct sector
+                row_index_in_sector = int(row_id % 4)
+                if row_index_in_sector in [0, 3] and pattern_outer:
+                    row_bits.append(1)
+                elif row_index_in_sector in [1, 2] and pattern_inner:
+                    row_bits.append(1)
+                else:
+                    row_bits.append(0)
             else:
+                # Not in correct sector
                 self._logger.debug('{}: did not accept sector id {} from row {} to match sector {}'.format(
                     sector_id == sector, sector_id, row_id, sector))
                 row_bits.append(0)
@@ -799,8 +837,16 @@ class HEXITEC_MHz(object):
         for column_id in range(0, 80):
             division_id = int(column_id / 4)
             if division_id == division:
-                column_bits.append(1)
+                # In correct division
+                column_index_in_division = int(column_id % 4)
+                if column_index_in_division in [0, 3] and pattern_outer:
+                    column_bits.append(1)
+                elif column_index_in_division in [1, 2] and pattern_inner:
+                    column_bits.append(1)
+                else:
+                    column_bits.append(0)
             else:
+                # Not in correct division
                 column_bits.append(0)
 
         self._logger.info("Generated calibration test pattern to highlight sector {}, division {}".format(sector, division))
@@ -808,7 +854,6 @@ class HEXITEC_MHz(object):
 
         # Submit the test pattern and enable it
         self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
-        self.enable_calibration_test_pattern(True)
 
     def cal_pattern_highlight_pixel(self, column, row):
         # Use the calibration tesst pattern to zero all pixels except one defined pixel
@@ -823,13 +868,6 @@ class HEXITEC_MHz(object):
 
         # Submit the test pattern and enable it
         self.set_calibration_test_pattern_bits(row_bits=row_bits, column_bits=column_bits)
-        self.enable_calibration_test_pattern(True)
-
-    def cal_pattern_set_default(self):
-        self.set_calibration_test_pattern(CAL_PATTERN_DEFAULT_BYTES['rows'],
-                CAL_PATTERN_DEFAULT_BYTES['cols'])
-
-        self._logger.info("Set calibration test pattern to default value")
 
     def set_tdc_local_vcal(self, local_vcal_en=True):
         self.write_field('GL_VCALsel_EN', 1 if local_vcal_en else 0)
