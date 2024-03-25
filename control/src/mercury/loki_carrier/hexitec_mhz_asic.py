@@ -1134,3 +1134,27 @@ class HEXITEC_MHz(object):
 
 # TODO also work out how to add serialiser stuff....
 
+class HEXITEC_MHz_PROM_Emulator(HEXITEC_MHz):
+    # An emulated version of the ASIC that instead of actually writing to an ASIC will simply act similarly
+    # to programmable memory. Initially, all registers will be zero, and will retain their values if written
+    # to. The Register controller will not know this, and all other behaviour will remain the same.
+
+    def __init__(self, *args, **kwargs):
+        self._EMULATED_REGISTERS = {}
+        super(HEXITEC_MHz_PROM_Emulator, self).__init__(args, kwargs)
+
+    # Override the read function
+    def _read_register(self, address, length=1):
+        full_read = []
+        for i in range(0, length):
+            # Read value if present, otherwise 0
+            full_read.append(self._EMULATED_REGISTERS.get(address, 0))
+        return full_read
+
+    # Override the write function
+    def _write_register(self, address, data, verify=False):
+        for i in range(0, len(data)):
+            self._EMULATED_REGISTERS.update({address: data[i]})
+            if verify:
+                if self._read_register(address) != data[i]:
+                    raise ASICIOError('Verification failed')
