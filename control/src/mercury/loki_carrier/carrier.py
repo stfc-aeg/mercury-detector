@@ -42,7 +42,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def __init__(self, **kwargs):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
-
         #TODO update this for HMHZ
         self._default_clock_config = 'ZL30266_LOKI_Nosync_500MHz_218MHz.mfg'
 
@@ -167,14 +166,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Store information about the ADC channels
         # <multiple> will multiply the calculated pin input voltage in case a divider has been used.
         # <name>: (<dac channel>, <multiple>)
+        # NOTE: For this device, the odin-devices driver numbers channels from 0, no matter how they
+        #       are numbered on the device itself...
         self._ad7998._channel_mapping = {
-            'VDDA':         (1, 1),
-            'VDDD':         (2, 1),
-            'HV_MON':       (3, 1),
-            'TRIP_REG_T':   (4, 1),
-            'TRIP_REG_AI':  (5, 1),
-            'TRIP_REG_DI':  (6, 1),
-            'T_CRIT':       (7, 1),
+            'VDDA':         (0, 1),
+            'VDDD':         (1, 1),
+            'HV_MON':       (2, 1),
+            'TRIP_REG_T':   (3, 1),
+            'TRIP_REG_AI':  (4, 1),
+            'TRIP_REG_DI':  (5, 1),
+            'T_CRIT':       (6, 1),
         }
 
         self._ad7998._trip_nice_names = {
@@ -1120,7 +1121,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._ad7998.error = False
             self._ad7998.error_message = False
 
-            self._ad7998.reference_voltage = 2.5
+            self._ad7998.reference_voltage = 5.0
 
             self._ad7998.device = AD7998(
                 address=self._ad7998.i2c_address,
