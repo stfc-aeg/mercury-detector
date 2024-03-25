@@ -389,7 +389,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
 
         # Get config for LTC2986 (mostly done in base class), done after superclass init for this reason
-        self._ltc2986.hmhz_diode_channel = 6
+        # Can be used in differential if the COB has TEMP1 and TEMP2 the correct way around, or single ended on channel 5 if not (needs bridge)
+        if (True if kwargs.get('ltc_diode_use_single_ended', 'True')in ['True', 'true'] else False):
+            self._ltc2986.hmhz_diode_channel = int(kwargs.get('ltc_diode_channel_no', 5))   # Specifies the only channel
+            self._ltc2986.hmhz_diode_mode = LTC2986.Diode_Endedness.SINGLE
+        else:
+            self._ltc2986.hmhz_diode_channel = int(kwargs.get('ltc_diode_channel_no', 6))   # Specifies the uppper channel
+            self._ltc2986.hmhz_diode_mode = LTC2986.Diode_Endedness.DIFFERENTIAL
 
         # Register a callback for when the application enable state changes, since the API for this is
         # provided by the base class and we need to set state variables related to it.
@@ -692,7 +698,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         full_unlock(self._firefly_10to19)
 
                     # Set up the LTC2986 to monitor the ASIC diode
-                    #self._setup_ltc2986()
+                    self._setup_ltc2986()
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -955,13 +961,20 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # through the provided accessor:
         ltc_dev = self.ltc_get_device()
 
+        # TEMPORARY UNTIL IMPLEMENTED IN LOKI: PROVIDE RESET LTC AND RE-CONFIG CALL
+        with ltc_dev.acquire(blocking=True, timeout=5) as rslt:
+            if not rslt:
+                if ltc_dev.initialised:
+                    raise Exception('Failed to get LTC lock while trying to re-config it')
+            self._config_ltc2986()
+
         with ltc_dev.acquire(blocking=True, timeout=5) as rslt:
             if not rslt:
                 if ltc_dev.initialised:
                     raise Exception('Failed to get LTC lock while setting up ASIC Diode channel')
 
             ltc_dev.device.add_diode_channel(
-                endedness=LTC2986.Diode_Endedness.DIFFERENTIAL,
+                endedness=self._ltc2986.hmhz_diode_mode,
                 conversion_cycles=LTC2986.Diode_Conversion_Cycles.CYCLES_2,
                 average_en=LTC2986.Diode_Running_Average_En.OFF,
                 excitation_current=LTC2986.Diode_Excitation_Current.CUR_80UA_320UA_640UA,
