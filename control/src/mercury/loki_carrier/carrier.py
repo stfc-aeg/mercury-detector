@@ -137,7 +137,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         kwargs.setdefault('pin_config_active_low_tint', True)
         kwargs.setdefault('pin_config_is_input_tint', True)
 
-        #TODO add TRIP_CLK and TRIP_BUF, but I'm not sure of their direction yet
+        # TRIP_CLR clears any trips when taken low, BUT MUST BE OPEN DRAIN TO NOT CONFLICT WITH THE BUTTON / PULLUP
+        #TODO add TRIP_CLR: output to reset the trip
+        #TODO add TRIP_BUF: input goes high if any trip detected
+
+        # TRIP_BUF (TRIP) goes high if any trip is high
+        kwargs.setdefault('pin_config_id_trip', 'EMIO31')
+        kwargs.setdefault('pin_config_active_low_trip', False)
+        kwargs.setdefault('pin_config_is_input_trip', True)
 
         # per_en (Periphernal Enable) being used for regulator enable signal REG_EN, aka ASIC_EN. Do not confuse with ASIC reset.
         kwargs.update({'pin_config_active_low_per_en': False})      # Is active low reset, therefore active high enable for ASIC_EN
@@ -379,6 +386,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         self._logger.info('ASIC instance creation complete')
 
+        self._TRIPS_cached_any_trip = None
+
         # Init state machine
         self._ENABLE_STATE_CURRENT = self.ENABLE_STATE.PRE_INIT # The state the system is currently in
         self._ENABLE_STATE_NEXT = self.ENABLE_STATE.PRE_INIT    # The state the system will move to next
@@ -466,7 +475,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.add_thread('enable_state_machine', self._mhz_enable_state_machine_loop)
         self.watchdog_add_thread('enable_state_machine', 10, lambda: logging.error('!!!! Enable State Machine Loop watchdog triggered !!!!'))
 
-        self.add_thread('adc_update', self._mhz_adc_update_loop, update_period_s=5)
+        self.add_thread('adc_update', self._mhz_adc_update_loop, update_period_s=2)
         self.watchdog_add_thread('adc_update', 10, lambda: logging.error('!!!! ADC Loop watchdog triggered !!!!'))
 
         self.add_thread('firefly_channel_loop', self._mhz_firefly_channel_loop)
@@ -508,7 +517,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.set_pin_value('firefly_en', False)
 
         # Disable regulators
-        self.set_pin_value('per_en', False)
+        self.set_peripherals_enabled(False)
 
         # Disable HV
         self.mhz_hv_set_enable(False)
@@ -745,6 +754,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 try:
                     #TODO Set the ASIC into reset, grab its mutex.
 
+                    # Disable the regulators
+                    self.set_peripherals_enabled(False)
+
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
                 except Exception as e:
@@ -765,6 +777,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             self._setup_fireflies()
                         else:
                             raise Exception('At least one firefly was not initialised while fast data is enabled, cannot switch on optical channels')
+
+                    # Enable the regulators
+                    self.set_peripherals_enabled(True)
+                    self._logger.info('Enabled Regulators')
+                    time.sleep(0.5)
 
                     self._initialise_asic(fast_data_enabled=self.get_fast_data_enabled())
 
@@ -1259,6 +1276,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             self._mhz_adc_update()
 
+            # Not strictly ADC related, but read the trip input pin also
+            self._mhz_trips_sync_any_trip()
+
             time.sleep(update_period_s)
 
     def _mhz_adc_update(self):
@@ -1296,12 +1316,40 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             return self._ad7998._reading_cache.get(channel_name, None)
 
     def mhz_adc_read_VDDA_current_A(self):
-        #TODO
-        pass
+        with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+            if not rslt:
+                if self._ad7998.initialised:
+                    raise Exception('Failed to get access AD7998 reading cache while reading VDDA, mutex timed out')
+                return None
+
+            # Get the raw input voltage
+            Vout = self._ad7998._reading_cache.get('VDDA', None)
+
+            # Convert to a current
+            if Vout == None:
+                return None
+            else:
+                G = 100.0   # Gain, depends on IC version
+                Rs = 0.015  # Sense resistor
+                return round(Vout / (2 * G * Rs), 3)
 
     def mhz_adc_read_VDDD_current_A(self):
-        #TODO
-        pass
+        with self._ad7998.acquire(blocking=True, timeout=1) as rslt:
+            if not rslt:
+                if self._ad7998.initialised:
+                    raise Exception('Failed to get access AD7998 reading cache while reading VDDD, mutex timed out')
+                return None
+
+            # Get the raw input voltage
+            Vout = self._ad7998._reading_cache.get('VDDD', None)
+
+            # Convert to a current
+            if Vout == None:
+                return None
+            else:
+                G = 100.0   # Gain, depends on IC version
+                Rs = 0.015  # Sense resistor
+                return round(Vout / (2 * G * Rs), 3)
 
     def mhz_adc_read_trips(self):
         # All four trip signals TRIP_<1:3> come from 74LS279. This device is a set of latches,
@@ -1313,7 +1361,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if in_analog is None:
                 return None
             else:
-                return True if in_analog >= 2.7 else False
+                return True if in_analog >= 0.5 else False
 
         output_dict = {}
 
@@ -1325,7 +1373,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 }
             })
 
+        # Add the trip pin, which will go high if any trip is active, bypassing the ADC.
+        output_dict.update({
+            'ANY': {
+                'Tripped': self.mhz_trips_get_any_trip(),
+                'Description': 'Any trip has fired',
+            }
+        })
+
         return output_dict
+
+    def _mhz_trips_sync_any_trip(self):
+        self._TRIPS_cached_any_trip = self.get_pin_value('trip')
+
+    def mhz_trips_get_any_trip(self):
+        # Without using the ADC, just read the pin that defines if any trips have been fired
+        return self._TRIPS_cached_any_trip
 
     ############################################################################################################
     # High Voltage Bias System                                                                                 #
@@ -1770,7 +1833,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _mhz_peltier_get_proportion_direct(self):
         # Directly read the control voltage from the potentiometer, and cache it
         if self._digipot_peltier.initialised:
-            tmp_proportion = int(self._digipot_peltier.device.get_wiper_count() / 255)
+            tmp_proportion = self._digipot_peltier.device.get_wiper_count() / 255
             self._PELTIER_cached_proportion = tmp_proportion
             return tmp_proportion
         else:
@@ -1783,6 +1846,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_peltier_set_proportion(self, proportion):
         self._digipot_peltier.device.set_wiper_proportion(proportion)
         self._mhz_peltier_sync_proportion()
+        self._logger.info('Set peltier proportion to {}%'.format(round(proportion*100)))
 
     def _mhz_peltier_sync_proportion_stored(self):
         # Directly check the current eeprom count against the latest control voltage count, and
