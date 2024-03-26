@@ -388,7 +388,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # Peltier settings
         self._PELTIER_cal_Apoint = kwargs.get('peltier_cal_apoint', (0.1, 0)) # (proportion, temp)  TODO get a proper calibration for this
-        self._PELTIER_cal_Apoint = kwargs.get('peltier_cal_apoint', (1.0, 10)) # (proportion, temp)  TODO get a proper calibration for this
+        self._PELTIER_cal_Bpoint = kwargs.get('peltier_cal_bpoint', (1.0, 10)) # (proportion, temp)  TODO get a proper calibration for this
         self._PELTIER_cached_proportion = None
         self._PELTIER_cached_proportion_saved = False
         self._PELTIER_enabled = None
@@ -445,7 +445,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.watchdog_add_thread('HV', 10, self._mhz_hv_handle_failure())
 
         self.add_thread('Peltier', self._mhz_peltier_loop, update_period_s=1)
-        self.watchdog_add_thread('Peltier', 20, lambda: 'Failure in Peltier Loop')
+        self.watchdog_add_thread('Peltier', 10, lambda: 'Failure in Peltier Loop')
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -1704,15 +1704,23 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def _mhz_peltier_loop(self, update_period_s):
         while not self.TERMINATE_THREADS:
-            time.sleep(update_period_s)
-            self.watchdog_kick()
+            try:
+                time.sleep(update_period_s)
+                self.watchdog_kick()
 
-            self._mhz_peltier_sync_proportion()
-            self._mhz_peltier_sync_proportion_stored()
-            self._mhz_peltier_sync_enabled()
+                self._mhz_peltier_sync_proportion()
+                self._mhz_peltier_sync_proportion_stored()
+                self._mhz_peltier_sync_enabled()
+            except Exception as e:
+                self._logger.error('Error in Peltier thread: {}'.format(e))
+                raise
 
     def _mhz_peltier_sync_proportion(self):
         # Sync the direct proportion value from the device and cache it.
+        if not self._digipot_peltier.initialised:
+            self._PELTIER_cached_proportion = None
+            return
+
         try:
             latest_proportion = self._mhz_peltier_get_proportion_direct()
             self._PELTIER_cached_proportion = latest_proportion
@@ -1736,10 +1744,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def mhz_peltier_set_proportion(self, proportion):
         self._digipot_peltier.device.set_wiper_proportion(proportion)
+        self._mhz_peltier_sync_proportion()
 
     def _mhz_peltier_sync_proportion_stored(self):
         # Directly check the current eeprom count against the latest control voltage count, and
         # cache the result.
+        if not self._digipot_peltier.initialised:
+            self._PELTIER_cached_proportion_saved = None
+            return
+
         tmp_count_eeprom = self._digipot_peltier.device.read_eeprom()
         tmp_count = self._digipot_peltier.device.get_wiper_count()
 
@@ -1749,7 +1762,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         else:
             self._PELTIER_cached_proportion_saved = (tmp_count_eeprom == tmp_count)
             self._logger.debug('Checking EEPROM and wiper sync state for peltier: {} (wiper: {}, eeprom: {})'.format(
-                self._PELTIER_cached_proprortion_saved, tmp_count, tmp_count_eeprom))
+                self._PELTIER_cached_proportion_saved, tmp_count, tmp_count_eeprom))
 
     def mhz_peltier_proportion_is_stored(self):
         return self._PELTIER_cached_proportion_saved
@@ -1757,6 +1770,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_peltier_store_eeprom(self):
         # Store the current value set on the potentiometer wiper to EEPROM.
         self._digipot_peltier.device.store_wiper_count()
+        self._mhz_peltier_sync_proportion_stored()
 
     def _mhz_peltier_convert_proportion_to_temp(self, proportion):
         # Uses two-point overrideable calibration with defaults based on datasheet curve.
@@ -1802,16 +1816,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         if target_proportion is None:
             return None
         else:
-            return self._mhz_peltier_convert_proportion_to_temp(target_proportion)
+            return round(self._mhz_peltier_convert_proportion_to_temp(target_proportion), 2)
 
     def mhz_peltier_set_enabled(self, enable):
         # Always let the peltier be enabled / disabled. Until the power board is init, this will
         # just use the default potentiometer setting saved to the device, so the user may not
         # initially get a temperature setting reading back.
-        self.set_pin_value('peltier_enable', enable)
+        self.set_pin_value('peltier_en', enable)
 
     def _mhz_peltier_sync_enabled(self):
-        self._PELTIER_enabled = self.get_pin_value('peltier_enable')
+        self._PELTIER_enabled = self.get_pin_value('peltier_en')
 
     def mhz_peltier_get_enabled(self):
         return self._PELTIER_enabled
