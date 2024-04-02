@@ -59,7 +59,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
         #TODO update this for HMHZ
-        self._default_clock_config = 'ZL30266_LOKI_Nosync_500MHz_218MHz.mfg'
+        self._default_clock_config = 'ZL30266_All_outputs_200MHz.mfg'
 
         # If this is set false, ASIC init will just set up SPI
         self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
@@ -97,12 +97,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         kwargs.setdefault('pin_config_id_firefly_sel1', 'EMIO29')
         kwargs.setdefault('pin_config_active_low_firefly_sel1', False)
         kwargs.setdefault('pin_config_is_input_firefly_sel1', False)
-        kwargs.setdefault('pin_config_default_value_firefly_sel1', 1)     # Active high (driver pulls low to select) so disabled by default
+        kwargs.setdefault('pin_config_default_value_firefly_sel1', 0)     # Active high (driver pulls low to select) so disabled by default
 
         kwargs.setdefault('pin_config_id_firefly_sel2', 'EMIO30')
         kwargs.setdefault('pin_config_active_low_firefly_sel2', False)
         kwargs.setdefault('pin_config_is_input_firefly_sel2', False)
-        kwargs.setdefault('pin_config_default_value_firefly_sel2', 1)     # Active high (driver pulls low to select) so disabled by default
+        kwargs.setdefault('pin_config_default_value_firefly_sel2', 0)     # Active high (driver pulls low to select) so disabled by default
 
         kwargs.setdefault('pin_config_id_firefly_int1', 'EMIO24')
         kwargs.setdefault('pin_config_active_low_firefly_int1', False)
@@ -421,9 +421,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._HV_vcont_override = kwargs.get('hv_startup_vcont_override', None)
 
         # Peltier settings
-        self._PELTIER_cal_Apoint = kwargs.get('peltier_cal_apoint', (0.1, 0)) # (proportion, temp)  TODO get a proper calibration for this
-        self._PELTIER_cal_Bpoint = kwargs.get('peltier_cal_bpoint', (1.0, 10)) # (proportion, temp)  TODO get a proper calibration for this
+        self._PELTIER_cal_Apoint = kwargs.get('peltier_cal_apoint', (0.4, 28)) # (proportion, temp)  TODO get a proper calibration for this
+        self._PELTIER_cal_Bpoint = kwargs.get('peltier_cal_bpoint', (0.6, 11)) # (proportion, temp)  TODO get a proper calibration for this
         self._PELTIER_cached_proportion = None
+        self._PELTIER_cached_count = None
         self._PELTIER_cached_proportion_saved = False
         self._PELTIER_enabled = None
 
@@ -755,7 +756,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     #TODO Set the ASIC into reset, grab its mutex.
 
                     # Disable the regulators
-                    self.set_peripherals_enabled(False)
+                    #TODO put this back in again for if ASIC init fails
+                    #self.set_peripherals_enabled(False)
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -1032,8 +1034,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             ltc_dev.device.add_diode_channel(
                 endedness=self._ltc2986.hmhz_diode_mode,
-                conversion_cycles=LTC2986.Diode_Conversion_Cycles.CYCLES_2,
-                average_en=LTC2986.Diode_Running_Average_En.OFF,
+                conversion_cycles=LTC2986.Diode_Conversion_Cycles.CYCLES_3,
+                average_en=LTC2986.Diode_Running_Average_En.ON,
                 excitation_current=LTC2986.Diode_Excitation_Current.CUR_80UA_320UA_640UA,
                 diode_non_ideality=1.0,
                 channel_num=self._ltc2986.hmhz_diode_channel,
@@ -1260,7 +1262,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def get_vcal_in(self):
         # Return the last setting of the VCAL in signal using base adapter function for DAC
         # channel 0. This is already cached, so can be returned directly.
-        return self.dac_get_output(0)       # Output number is LOKI count, not MAX5306 count
+        reading = self.dac_get_output(0)    # Output number is LOKI count, not MAX5306 count
+        return reading if isinstance(reading, float) else None
 
     def mhz_adc_get_channel_names(self):
         return list(self._ad7998._channel_mapping.keys())
@@ -1645,7 +1648,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def mhz_hv_store_eeprom(self):
         # Store the current value set on the potentiometer wiper to EEPROM.
+        self._logger.info('Stored hv setting in potentimeter EEPROM')
         self._digipot_hv.device.store_wiper_count()
+        self._mhz_hv_sync_control_voltage_stored()
 
     def mhz_hv_input_output_mismatched(self, percentage_difference_tolerated=20):
         # If the HV is enabled, the input control voltage should be similar to the monitor output voltage, since they are
@@ -1719,76 +1724,100 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         latest_time = None
         integral = 0
+        error = None
 
         while not self.TERMINATE_THREADS:
-            time.sleep(update_period_s)
-            self.watchdog_kick()
+            try:
+                time.sleep(update_period_s)
+                self.watchdog_kick()
 
-            # Always check if the setup is complete, in case re-init occurs
-            with self._HV_mutex:
-                if not self._HV_setup_complete:
-                    continue
+                # Always check if the setup is complete, in case re-init occurs
+                with self._HV_mutex:
+                    if not self._HV_setup_complete:
+                        continue
 
-            # Nothing is permitted to edit HV variables while mid-PID loop
-            with self._HV_mutex:
-                # Update the latest EEPROM and live wiper settings from the potentiometer
-                latest_vcont = self._mhz_hv_get_control_voltage_direct()
-                if latest_vcont is None:
-                    raise Exception('HV could not get good reading for potentiometer wiper')
-                self._mhz_hv_sync_control_voltage_stored()
+                # Nothing is permitted to edit HV variables while mid-PID loop
+                with self._HV_mutex:
+                    # Update the latest EEPROM and live wiper settings from the potentiometer
+                    latest_vcont = self._mhz_hv_get_control_voltage_direct()
+                    if latest_vcont is None:
+                        raise Exception('HV could not get good reading for potentiometer wiper')
+                    self._mhz_hv_sync_control_voltage_stored()
 
-                # Store the latest HV_MON feedback voltage from the ADC (to avoid it changing mid-calc)
-                latest_hvmon = self.mhz_adc_read_chan('HV_MON')
-                if latest_hvmon is None:
-                    raise Exception('HV could not get good reading for HV_MON')
+                    # Store the latest HV_MON feedback voltage from the ADC (to avoid it changing mid-calc)
+                    latest_hvmon = self.mhz_adc_read_chan('HV_MON')
+                    if latest_hvmon is None:
+                        raise Exception('HV could not get good reading for HV_MON')
 
-                if self._HV_MODE_AUTO:
-                    # Auto PID mode
-                    if self._HV_PID_DISABLED:
-                        # Disabled, due to error
-                        #TODO
-                        pass
+                    if self._HV_MODE_AUTO:
+                        # Auto PID mode
+                        if self._HV_PID_DISABLED:
+                            # Disabled, due to error
+                            #TODO
+                            pass
 
-                    else:
-                        # Normal PID loop
-
-                        # Get timings between measurements
-                        last_time = latest_time
-                        latest_time = time.time()
-
-                        if last_time is None:
-                            # First loop
-                            dt = 0
                         else:
-                            dt = latest_time - last_time
+                            # Normal PID loop
 
-                        error = self.mhz_hv_get_target_bias() - self.mhz_hv_get_bias()
+                            # Get timings between measurements
+                            last_time = latest_time
+                            latest_time = time.time()
 
-                        # PID intermediates
-                        proportional = error * dt
-                        derivative = error / dt
-                        integral +=  error * dt
+                            if last_time is None:
+                                # First loop
+                                dt = 0
+                                continue
+                            else:
+                                dt = latest_time - last_time
 
-                        # PID output
-                        vcont_output = (
-                            (proportional * self._HV_PID_kp)
-                            + (derivative * self._HV_PID_kd)
-                            + (integral * self._HV_PID_ki)
-                        )
+                            target = self.mhz_hv_get_target_bias()
 
-                        # Set the output (already has safetly limits)
-                        self._mhz_hv_set_control_voltage_direct(vcont_output)
-                else:
-                    # Manual mode
+                            if target is None:
+                                raise Exception('Cannot enter HV mode when target is None')
 
-                    # The readings have already been updated, so work out the desired VCONT based on calibration,
-                    # and set it directly. Only do this if it's not None; we could still be using the EEPROM value
-                    # without a target yet specified.
-                    target_hv_bias = self.mhz_hv_get_target_bias()
-                    if target_hv_bias is not None:
-                        target_vcont = self._mhz_hv_calc_control_voltage_from_hvbias(target_hv_bias)
-                        self._logger.error('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
-                        self._mhz_hv_set_control_voltage_direct(target_vcont)
+                            error_last = error
+                            error = self.mhz_hv_get_bias() - self.mhz_hv_get_target_bias()
+
+                            if error_last is None:
+                                d_error = 0
+                            else:
+                                d_error = error - error_last
+
+                            # PID intermediates
+                            proportional = error
+                            derivative = 0 if dt == 0 else (d_error) / dt
+                            integral += error * dt
+
+                            # PID output
+                            vcont_output = (
+                                latest_vcont
+                                + (proportional * self._HV_PID_kp)
+                                + (derivative * self._HV_PID_kd)
+                                + (integral * self._HV_PID_ki)
+                            )
+
+                            self._logger.info('HV PID: P:{} I:{} D:{} (({}) + ({}) +({})) --> vcont to {}'.format(
+                                proportional, integral, derivative,
+                                proportional * self._HV_PID_kp, integral * self._HV_PID_ki, derivative * self._HV_PID_kd,
+                                vcont_output
+                            ))
+
+                            # Set the output (already has safetly limits)
+                            self._mhz_hv_set_control_voltage_direct(vcont_output)
+                    else:
+                        # Manual mode
+
+                        # The readings have already been updated, so work out the desired VCONT based on calibration,
+                        # and set it directly. Only do this if it's not None; we could still be using the EEPROM value
+                        # without a target yet specified.
+                        target_hv_bias = self.mhz_hv_get_target_bias()
+                        if target_hv_bias is not None:
+                            target_vcont = self._mhz_hv_calc_control_voltage_from_hvbias(target_hv_bias)
+                            self._logger.error('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
+                            self._mhz_hv_set_control_voltage_direct(target_vcont)
+            except Exception as e:
+                self._logger.error('Error in HV thread: {}'.format(e))
+                raise
 
     def _mhz_hv_handle_failure(self):
         # Called by the watchdog in the event of failure
@@ -1823,21 +1852,23 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             return
 
         try:
-            latest_proportion = self._mhz_peltier_get_proportion_direct()
+            latest_count = self._mhz_peltier_get_count_direct()
+            latest_proportion = latest_count / 255
+            self._PELTIER_cached_count = latest_count
             self._PELTIER_cached_proportion = latest_proportion
 
         except Exception as e:
             self._PELTIER_cached_proportion = None
             self._logger.error('Failure during syncing peltier potentiometer value: {}'.format(e))
 
-    def _mhz_peltier_get_proportion_direct(self):
-        # Directly read the control voltage from the potentiometer, and cache it
+    def _mhz_peltier_get_count_direct(self):
         if self._digipot_peltier.initialised:
-            tmp_proportion = self._digipot_peltier.device.get_wiper_count() / 255
-            self._PELTIER_cached_proportion = tmp_proportion
-            return tmp_proportion
+            return self._digipot_peltier.device.get_wiper_count()
         else:
             return None
+
+    def mhz_peltier_get_count(self):
+        return self._PELTIER_cached_count
 
     def mhz_peltier_get_proportion(self):
         # Return the most recently cached value for the control voltage
@@ -1871,6 +1902,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def mhz_peltier_store_eeprom(self):
         # Store the current value set on the potentiometer wiper to EEPROM.
+        self._logger.info('Stored peltier setting in potentimeter EEPROM')
         self._digipot_peltier.device.store_wiper_count()
         self._mhz_peltier_sync_proportion_stored()
 
@@ -1925,6 +1957,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # just use the default potentiometer setting saved to the device, so the user may not
         # initially get a temperature setting reading back.
         self.set_pin_value('peltier_en', enable)
+        self._mhz_peltier_sync_enabled()
 
     def _mhz_peltier_sync_enabled(self):
         self._PELTIER_enabled = self.get_pin_value('peltier_en')
@@ -1959,6 +1992,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 current_pot.critical_error('Failed to init Digital Pot {}: {}'.format(current_pot.name, e))
 
     def _config_fireflies(self):
+
+        # Deselect both devices
+        self.set_pin_value('firefly_sel1', 1)
+        self.set_pin_value('firefly_sel2', 1)
 
         # Enable the devices (reset line)
         self.set_pin_value('firefly_en', 1)
@@ -2243,8 +2280,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._calpattern_grid_cornersonly = cornersonly
 
     def get_calibration_pattern_direct(self):
-        # In any mode, read back the current state of the bits (good for a display)
-        self._asic.get_calibration_test_pattern_bits()
+        # In any mode, read back the current state of the bits (good for a display), cached version
+        return self._asic.get_calibration_test_pattern_bits()
 
     def set_calibration_pattern_direct(self, rowbits_colbits_tuple):
         # Directly manipulate the calibration pattern bits. Doing this will disable any other
@@ -2271,14 +2308,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         for row in range (0, 80):
             for col in range(0, 80):
                 # The calibration pattern is just a boolean AND of the col and row bits
-                full_img.append(row_bits[row] and col_bits[col])
+                rowbit = int(row_bits[row])
+                colbit = int(col_bits[col])
+                full_img.append(rowbit and colbit)
 
         return full_img
 
     def _gen_app_paramtree(self):
         # Override parameter tree generation to add application-specific tree
 
-        self._logger.debug('Creating BabyD-specific ParameterTree')
+        self._logger.debug('Creating HEXITEC-MHz-specific ParameterTree')
         self.hmhzpt = {
             'info': {
                 'asic_cache_hitrate': (lambda: self._asic.get_cache_hitrate(), None),
@@ -2287,8 +2326,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             },
             'system_state': {
                 'SYNC': (self.get_sync, self.set_sync),
-                'ASIC_EN': (self.get_app_enabled, self.set_app_enabled),
-                'REGS_EN': (self.get_peripherals_enabled, None),
+                'ASIC_EN': (self.get_app_enabled, self.set_app_enabled),    #TODO prevent user from changing this once state machine works
+                'REGS_EN': (self.get_peripherals_enabled, self.set_peripherals_enabled),    #TODO prevent user from changing this once state machine works
                 'ENABLE_STATE': (self.get_enable_state, self.set_enable_state),
                 'ENABLE_STATE_TARGET': (self.get_enable_state_target, None),
                 'ENABLE_STATE_PROGRESS': (self.get_enable_state_progress, None),
@@ -2320,6 +2359,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'feedback_capacitance': (
                     lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_feedback_capacitance),#TODO
+                'feedback_gain': (lambda: {7: 'high', 14: 'medium', 21: 'low', None:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else None, None),
                 'serialiser_all_mode': (
                     lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_global_serialiser_mode),
@@ -2351,8 +2391,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             "SELECT": (self.get_calibration_pattern_grid, self.set_calibration_pattern_grid),
                             "CORNERS_ONLY": (self.get_calibration_pattern_grid_cornersonly, self.set_calibration_pattern_grid_cornersonly),
                         },
-                        "DIRECT": (self.get_calibration_pattern_direct, self.set_calibration_pattern_direct),
-                        "DIRECT_MAP": (self.get_calibration_pattern_direct_map, None),
+                        "DIRECT": (lambda: self.get_calibration_pattern_direct() if self._STATE_ASIC_INITIALISED else None, self.set_calibration_pattern_direct),
+                        "DIRECT_MAP": (lambda: self.get_calibration_pattern_direct_map() if self._STATE_ASIC_INITIALISED else None, None),
                     },
                 },
             },
@@ -2360,6 +2400,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'TRIPS': (self.mhz_adc_read_trips, None),
                 'VDDD_I': (self.mhz_adc_read_VDDD_current_A, None),
                 'VDDA_I': (self.mhz_adc_read_VDDA_current_A, None),
+                'ADC_RAW': (lambda: self._ad7998._reading_cache if self._ad7998.initialised else None, None),
             },
             'firefly': {
                 'ch00to09': self._gen_firefly_paramtree('00to09'),
@@ -2371,7 +2412,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'AUTO_MODE_EN': (self.mhz_hv_get_auto, self.mhz_hv_set_auto),
                 'ENABLE': (self.mhz_hv_get_enable, self.mhz_hv_set_enable),
                 'control_voltage': (self.mhz_hv_get_control_voltage, self.mhz_hv_set_control_voltage),
-                'control_voltage_save': (self.mhz_hv_control_voltage_is_stored, lambda: self.mhz_hv_store_eeprom),
+                'control_voltage_save': (self.mhz_hv_control_voltage_is_stored, lambda val: self.mhz_hv_store_eeprom()),
                 'control_voltage_overridden': (self._mhz_hv_get_vcont_overridden, None),
                 'target_bias': (self.mhz_hv_get_target_bias, self.mhz_hv_set_target_bias),
                 'readback_bias': (self.mhz_hv_get_bias, None),
@@ -2381,7 +2422,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             },
             'peltier': {
                 'proportion': (self.mhz_peltier_get_proportion, self.mhz_peltier_set_proportion),
-                'proportion_save': (self.mhz_peltier_proportion_is_stored, lambda: self.mhz_peltier_store_eeprom),
+                'proportion_save': (self.mhz_peltier_proportion_is_stored, lambda val: self.mhz_peltier_store_eeprom()),
+                'count': (self.mhz_peltier_get_count, None),
                 'temperature': (self.mhz_peltier_get_temperature, self.mhz_peltier_set_temperature),
                 'enable': (self.mhz_peltier_get_enabled, self.mhz_peltier_set_enabled),
             },

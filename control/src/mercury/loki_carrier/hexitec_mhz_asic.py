@@ -112,13 +112,13 @@ class HEXITEC_MHz(object):
                 self._set_page(0)
 
                 # Check that it's low
-                assert(self._register_controller.read_register(0x00, 1, direct_read=True) & 0b1 == 0)
+                assert(self._register_controller.read_register(0x00, 1, direct_read=True)[0] & 0b1 == 0)
 
                 # Set the page high
                 self._set_page(1)
 
                 # Check that it's high
-                assert(self._register_controller.read_register(0x00, 1, direct_read=True) & 0b1 == 1)
+                assert(self._register_controller.read_register(0x00, 1, direct_read=True)[0] & 0b1 == 1)
 
             except Exception as e:
                 raise Exception('Failed ASIC read-write check: {}'.format(e))
@@ -143,16 +143,20 @@ class HEXITEC_MHz(object):
         command = address | REGISTER_READ_TRANSACTION
 
         transfer_buffer = [command]
-        transfer_buffer.append(0x00)
+        for i in range(0, length):
+            transfer_buffer.append(0x00)
 
         readback = self._device.transfer(transfer_buffer)
+        readback_payload = readback[1:]
 
         if readback is None:
             raise ASICIOError('Failed to read {} bytes, SPI error'.format(length))
-        elif len(readback) != length:
-            raise ASICIOError('Got incorrect number of bytes back. Expected {}, got {}'.format(length, len(readback)))
+        elif len(readback_payload) != length:
+            raise ASICIOError('Got incorrect number of bytes back. Expected {}, got {} (raw: {})'.format(length, len(readback_payload), [hex(x) for x in readback]))
 
-        self._logger.debug("Register {} read as {}".format(address, readback))
+        self._logger.debug("Register {} read as {}".format(address, readback_payload))
+
+        return readback_payload
 
     def read_register(self, address, length=1):
         # Read a register through the register controller, therefore cache already handled
@@ -166,15 +170,15 @@ class HEXITEC_MHz(object):
         try:
             return self._register_controller.read_register(address, length)
         except ASICInterfaceDisabledError as e:
-            #TODO Actually handle the error properly once it's passed through the register controller
             self._logger.error('Failed to read from ASIC register')
-            # raise Exception('Failed to read from ASIC register')
+            raise Exception('Failed to read from ASIC register 0x{}: {}'.format(hex(address), e))
         except Exception as e:
             raise
 
     def _write_register(self, address, data, verify=False):
         # Write a value / series of values directly to the ASIC, ignoring caching (this is handled
         # by the register controller). Should handle burst writes.
+        self._logger.debug('Writing register 0x{} with data {}'.format(hex(address), data))
 
         if not self._interface_enabled:
             raise ASICInterfaceDisabledError('Cannot write to ASIC when disabled')
@@ -192,7 +196,7 @@ class HEXITEC_MHz(object):
         command = address | REGISTER_WRITE_TRANSACTION
 
         transfer_buffer = [command]
-        transfer_buffer.append(data)
+        transfer_buffer.extend(data)
 
         self._device.transfer(transfer_buffer)
 
@@ -224,7 +228,6 @@ class HEXITEC_MHz(object):
         try:
             self._register_controller.write_register(address, data)
         except ASICInterfaceDisabledError as e:
-            #TODO Actually handle the error properly once it's passed through the register controller
             self._logger.error('Failed to write to ASIC register')
             raise
         except Exception as e:
@@ -613,18 +616,16 @@ class HEXITEC_MHz(object):
         try:
             return self._register_controller.read_field(fieldname)
         except Exception as e:
-            #TODO Actually handle the error properly once it's passed through the register controller
             self._logger.error('Failed to read from ASIC field: {}'.format(e))
-            # raise Exception('Failed to read from ASIC field')
+            raise Exception('Failed to read from ASIC field {}: {}'.format(fieldname, e))
             return 0
 
     def write_field(self, fieldname, value):
         try:
             self._register_controller.write_field(fieldname, value)
         except Exception as e:
-            #TODO Actually handle the error properly once it's passed through the register controller
-            self._logger.error('Failed to write to ASIC field')
-            # raise Exception('Failed to write to ASIC field')
+            self._logger.error('Failed to write to ASIC field {} with value {}'.format(fieldname, value))
+            raise Exception('Failed to write to ASIC field {} with value {}: {}'.format(fieldname, value, e))
 
     def clear_register_cache(self):
         # Should be called every time the ASIC is reset and the register cache is known
@@ -793,7 +794,7 @@ class HEXITEC_MHz(object):
         col_bits = [(cols_bytes[i] & (1 << x)) >> x for i in range(0, 10) for x in range(7, -1, -1)]
 
         # Reverse the row array, since it's loaded pixel 79 to 0 in the ASIC
-        row_bits_reversed = reversed(row_bits)
+        row_bits_reversed = list(reversed(row_bits))
 
         return (row_bits_reversed, col_bits)
 
@@ -886,13 +887,13 @@ class HEXITEC_MHz(object):
         self.write_field('IntTime', integration_time_frames)
 
     def get_integration_time(self):
-        self.read_field('IntTime')
+        return self.read_field('IntTime')
 
     def set_frame_length(self, frame_length_clocks):
         self.write_field('FrmLength', frame_length_clocks)
 
     def get_frame_length(self, direct=False):
-        self.read_field('FrmLength')
+        return self.read_field('FrmLength')
 
     def set_feedback_capacitance(self, feedback_capacitance_fF):
         if not feedback_capacitance_fF in [0, 7, 14, 21]:
@@ -903,8 +904,9 @@ class HEXITEC_MHz(object):
 
     def get_feedback_capacitance(self):
         total_ff = 0
-        total_ff += 7 if self.read_field('7fF') else 0
-        total_ff += 14 if self.read_field('14fF') else 0
+        total_ff += 7 if self.read_field('7fF') == 1 else 0
+        total_ff += 14 if self.read_field('14fF') == 1 else 0
+        return total_ff
 
     ##############################################################################
     # Serialiser Control                                                         #
@@ -1096,7 +1098,7 @@ class HEXITEC_MHz(object):
         self.set_all_ramp_bias(0b0000)
 
         #self.clear_register_bit(0,0b00000100)
-        self.write_field('7Ff', 0)
+        self.write_field('7fF', 0)
         #self.clear_register_bit(0,0b00100000)
         self.write_field('Ipre', 0)
 
