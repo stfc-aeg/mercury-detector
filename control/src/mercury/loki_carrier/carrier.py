@@ -384,6 +384,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._calpattern_single_pixel_row = 0
         self._calpattern_single_pixel_col = 0
 
+        self._segment_capture_due = None
+        self._segment_data = None
+        self._segment_data_ready = False
+
         self._logger.info('ASIC instance creation complete')
 
         self._TRIPS_cached_any_trip = None
@@ -487,6 +491,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         self.add_thread('Peltier', self._mhz_peltier_loop, update_period_s=1)
         self.watchdog_add_thread('Peltier', 10, lambda: 'Failure in Peltier Loop')
+
+        self.add_thread('SegmentCapture', self._segment_capture_loop)
+        self.watchdog_add_thread('SegmentCapture', 10, lambda: 'Failure in segment capture loop')
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -2199,6 +2206,67 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.set_pin_value('sync', bool(value))
         self._logger.info('SYNC {}'.format('high' if value else 'low'))
 
+    def _segment_capture_loop(self):
+        self._logger.error('THIS IS THE SEGMENT CAPTURE LOOP')
+        while not self.TERMINATE_THREADS:
+            self.watchdog_kick()
+            time.sleep(0.2)
+
+            if self._segment_capture_due is not None:
+                if self._STATE_ASIC_INITIALISED:
+                    self.perform_asic_segment_capture(self._segment_capture_due)
+                    self._segment_capture_due = None
+                else:
+                    self._logger.error('Cannot perform a segment capture when ASIC has not been initiliased')
+                    self._segment_capture_due = None
+
+    def trigger_segment_capture(self, segment):
+        self._segment_capture_due = segment
+
+    def perform_asic_segment_capture(self, segment):
+        logging.info('Capturing image from segment {}'.format(segment))
+
+        def create_reshaped_array():
+            # Get the segment pattern read from the ASIC, 320 pixel values
+            patternout_12bit = self._asic.read_test_pattern(segment)
+            logging.warning('Pattern out: {}'.format(patternout_12bit))
+
+            # Re-order the data with numpy
+            reshaped = np.empty((4,80), dtype=np.uint16)
+            for scol in range(20):
+                idx = scol*16
+                ridx = scol*4
+                reshaped[::, ridx:ridx+4] = np.array(patternout_12bit)[idx:idx+16].reshape(4,4)
+
+            logging.warning('Reshaped array: {}'.format(reshaped))
+
+            # Converts numpy array to python array - adds commas
+            reshaped = reshaped.tolist()
+
+            self._segment_data = self._segment_data + reshaped
+
+        blank_segment = [[0] * 80]*4
+
+        try:
+
+            self._segment_data =[]
+
+            if segment == 20:                   # If segment == 20, then all segments will be displayed
+                for segment in range(20):
+                    create_reshaped_array()
+            else:
+                for i in range(0, segment):
+                    self._segment_data = self._segment_data + blank_segment
+                create_reshaped_array()
+                for i in range (segment+1, 20):
+                    self._segment_data = self._segment_data + blank_segment
+
+            self._segment_ready = True
+
+        except ASICDisabledError:
+            logging.error('Could not trigger segment readout due to disabled ASIC')
+            return None
+
     def get_calibration_pattern_mode(self):
         return self._calpattern_mode
 
@@ -2287,7 +2355,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Directly manipulate the calibration pattern bits. Doing this will disable any other
         # calibration pattern mode.
         rows, cols = rowbits_colbits_tuple
-        self._asic.get_calibration_test_pattern_bits(rows, cols)
+        self._asic.set_calibration_test_pattern_bits(rows, cols)
 
         # If bits have been directly manipulated, set the mode to DIRECT
         self.set_calibration_pattern_mode('DIRECT')
@@ -2370,8 +2438,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     lambda: self._asic.get_all_serialiser_bit_scramble() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_all_serialiser_bit_scramble),
                 'segment_readout': {
-                    'TRIGGER': (None, None),#TODO
-                    'SEGMENT_DATA': (None, None),#TODO
+                    'TRIGGER': (lambda: self._segment_capture_due, self.trigger_segment_capture),
+                    'SEGMENT_DATA': (lambda: self._segment_data if self._segment_data_ready else None, None),
                 },
                 'calibration_pattern': {
                     "ENABLE": (
