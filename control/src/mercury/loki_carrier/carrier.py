@@ -97,12 +97,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         kwargs.setdefault('pin_config_id_firefly_sel1', 'EMIO29')
         kwargs.setdefault('pin_config_active_low_firefly_sel1', False)
         kwargs.setdefault('pin_config_is_input_firefly_sel1', False)
-        kwargs.setdefault('pin_config_default_value_firefly_sel1', 0)     # Active high (driver pulls low to select) so disabled by default
+        kwargs.setdefault('pin_config_default_value_firefly_sel1', 1)     # Active high (driver pulls low to select) so disabled by default
 
         kwargs.setdefault('pin_config_id_firefly_sel2', 'EMIO30')
         kwargs.setdefault('pin_config_active_low_firefly_sel2', False)
         kwargs.setdefault('pin_config_is_input_firefly_sel2', False)
-        kwargs.setdefault('pin_config_default_value_firefly_sel2', 0)     # Active high (driver pulls low to select) so disabled by default
+        kwargs.setdefault('pin_config_default_value_firefly_sel2', 1)     # Active high (driver pulls low to select) so disabled by default
+        kwargs.setdefault('pin_config_bias_pull_up_firefly_sel2', True)
 
         kwargs.setdefault('pin_config_id_firefly_int1', 'EMIO24')
         kwargs.setdefault('pin_config_active_low_firefly_int1', False)
