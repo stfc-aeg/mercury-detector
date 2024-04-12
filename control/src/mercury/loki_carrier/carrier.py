@@ -211,7 +211,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Add more sensors to environment system for MIC
         self._env_sensor_info.extend([
             ('POWER_BOARD', 'temperature', {"description": "Power Board MIC284 internal temperature", "units": "C"}),
-            ('ASIC', 'temperature', {"description": "ASIC via MIC84 external reading", "units": "C"}),
+            ('BLOCK', 'temperature', {"description": "COB Block via MIC84 external reading", "units": "C"}),
             ('DIODE', 'temperature', {"description": "ASIC internal temperature diode via LTC2986", "units": "C"}),
             ('FIREFLY00to09', 'temperature', {"description": "FireFly channels 0-9 temperature", "units": "C"}),
             ('FIREFLY10to19', 'temperature', {"description": "FireFly channels 10-19 temperature", "units": "C"}),
@@ -1168,7 +1168,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     return self._get_mic284_internal_direct()
                 else:
                     raise
-            elif name == 'ASIC':
+            elif name == 'BLOCK':
                 if sensor_type == 'temperature':
                     return self._get_mic284_external_direct()
                 else:
