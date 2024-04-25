@@ -423,6 +423,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._HV_cached_vcont = None
         self._HV_cached_vcont_saved = None
         self._HV_vcont_override = kwargs.get('hv_startup_vcont_override', None)
+        self._HV_enable_after_setup = True if kwargs.get('hv_enable_after_setup', 'False')in ['True', 'true'] else False
 
         # Peltier settings
         self._PELTIER_cal_Apoint = kwargs.get('peltier_cal_apoint', (0.4, 28)) # (proportion, temp)  TODO get a proper calibration for this
@@ -709,7 +710,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         full_unlock(self._digipot_hv)
 
                     # Init the HV system
-                    self._mhz_hv_setup()
+                    self._mhz_hv_setup(self._HV_enable_after_setup)
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -1452,7 +1453,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Directly disable the HV
         self.set_pin_value('hven', 0)
 
-    def _mhz_hv_setup(self):
+    def _mhz_hv_setup(self, enable_after_setup=False):
         # Initialise vairables for auto / manual HV control, ensure the potentiometer is configured, and
         # handle value already stored in the potentiometer based on configuration file preferences.
         with self._HV_mutex:
@@ -1497,7 +1498,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 raise Exception('Cannot start HV control in auto mode without a target HV Bias')
 
             # Finish setup, allowing the loop to continue
-            self.mhz_hv_set_enable(True)
+            if enable_after_setup:
+                self.mhz_hv_set_enable(True)
             self._HV_setup_complete = True
 
     def _mhz_hv_get_vcont_overridden(self):
