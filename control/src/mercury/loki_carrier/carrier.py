@@ -61,8 +61,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         #TODO update this for HMHZ
         self._default_clock_config = 'ZL30266_All_outputs_200MHz_intdiv.mfg'
 
-        # If this is set false, ASIC init will just set up SPI
+        # If this is set false, ASIC init will just set up SPI while leaving the FireFlies completely disabled.
         self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
+
+        # If simple enable is active, just power up the fireflies but don't monitor them (overridden by fast_data_enabled)
+        self._FASTDATA_SIMPLE_ENABLE = True if kwargs.get('fast_data_simple_enable', 'False') in ['True', 'true'] else False
 
         # Override parent pin settings
 
@@ -233,9 +236,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._firefly_10to19.i2c_address = int(kwargs.get('firefly2_address_override', '0x50'), 0)
         self._firefly_10to19.reset_ff_address = True if kwargs.get('firefly2_reset_address', 'True') in ['True', 'true'] else False
         self._fireflies = [self._firefly_10to19, self._firefly_00to09]      # Init FireFly 2 first to change its address
-
-        # If simple enable is active, just power up the fireflies but don't monitor them
-        self._FASTDATA_SIMPLE_ENABLE = True if kwargs.get('firefly2_reset_address', 'False') in ['True', 'true'] else False
 
         # Holds channel mapping information, relating named external channels to other parts of the system
         self._merc_channels = {}
@@ -789,7 +789,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             # Enable the firefly channels for the ASIC outputs
                             self._setup_fireflies()
                         else:
-                            raise Exception('At least one firefly was not initialised while fast data is enabled, cannot switch on optical channels')
+                            if self._FASTDATA_SIMPLE_ENABLE:
+                                self._logger.warning('Enabling the ASIC while fast data enabled im simple mode. This should work, but FireFly channel states / temperatures cannot be monitored')
+                            else:
+                                raise Exception('At least one firefly was not initialised while fast data is enabled, cannot switch on optical channels')
 
                     # Enable the regulators
                     self.set_peripherals_enabled(True)

@@ -828,7 +828,10 @@ class HEXITEC_MHz(object):
         self._logger.debug('Writing calibration test pattern {}'.format(
             [hex(x) for x in (row_bytes + column_bytes)]))
 
-        self.write_SRCal_Cached(row_bytes + column_bytes)
+        srcal_bytes = row_bytes + column_bytes
+
+        # Shift register must be written as one value
+        self.write_SRCal_Cached(int.from_bytes(srcal_bytes, byteorder='big'))
 
     def set_calibration_test_pattern_bits(self, row_bits, column_bits):
         # Constructs a calibration pattern using arrays of bits for rows and columns.
