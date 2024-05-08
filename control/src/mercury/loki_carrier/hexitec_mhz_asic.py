@@ -9,6 +9,7 @@ REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
 REGISTER_ADDRESS_MASK = 0b01111111
 
+
 def convert_16b_8b(array_16b):
     array_out = []
     for word_16b in array_16b:
@@ -34,6 +35,51 @@ def convert_8b_16b(array_8b):
     return array_out
 
 
+def convert_8bit_12bit(values_8bit):
+    val1 = 0
+    val2 = 0
+    val_index = 0
+    output_array = []
+
+    for i in range(len(values_8bit)):
+        if val_index == 0:      # First byte
+            val1 = values_8bit[i]
+        elif val_index == 1:    # Second byte
+            val2 = values_8bit[i]
+        else:                   # Third byte
+            val3 = values_8bit[i]
+
+            output_12bit_1 = (val1 << 4) + ((val2 & 0xF0) >> 4)
+            output_12bit_2 = ((val2 & 0x0F) << 8) + val3
+            output_array.append(output_12bit_1)
+            output_array.append(output_12bit_2)
+
+        if val_index == 2:
+            val_index = 0
+        else:
+            val_index += 1
+
+    return output_array
+
+
+def convert_12bit_8bit(values_12bit):
+    output_array = []
+    for i in range(len(values_12bit)):
+        if i % 2 == 0:      # First 12-bit value in pair
+            val_12bit_1 = values_12bit[i]
+        else:               # Second 12-bit value in pair
+            val_12bit_2 = values_12bit[i]
+
+            # All 24-bits have been collected and can be converted to 8-bit
+            byte1 = (val_12bit_1 >> 4) & 0xFF
+            byte2 = (((val_12bit_1 & 0xF) << 4) + (val_12bit_2 >> 8)) & 0xFF
+            byte3 = (val_12bit_2 & 0xFF)
+
+            output_array.extend(byte1, byte2, byte3)
+
+    return output_array
+
+
 class ASICInterfaceDisabledError(Exception):
     def __init__(self, message):
         self.message = 'ASIC Interface Disabled, {}'.format(message)
@@ -42,8 +88,6 @@ class ASICInterfaceDisabledError(Exception):
 class ASICIOError(Exception):
     def __init__(self, message):
         self.message = 'ASIC IO Error: {}'.format(message)
-
-
 
 
 class HEXITEC_MHz(object):
@@ -587,10 +631,12 @@ class HEXITEC_MHz(object):
             )
 
         # Calibration shift register is actually 20-byte depth, at one address
+        # Volatile because when read, data is destroyed
         con.add_field('SRCal', 'Test Pattern shift register, 20 bytes', 126, 7, 20*8, is_volatile=True)
 
         # Test pattern shift register is actually 20-byte depth, at one address
-        con.add_field('SRTest', 'Test Pattern shift register, 20 bytes', 127, 7, 20*8, is_volatile=True)
+        # Volatile because when read, data is destroyed
+        con.add_field('SRTest', 'Test Pattern shift register, 480 bytes', 127, 7, 480*8, is_volatile=True)
 
         # Page 2 registers, paging handled automatically
         ################################################
@@ -645,6 +691,7 @@ class HEXITEC_MHz(object):
     def enable_interface(self):
         # Used to tell the ASIC that its state is currently unreadible, and therefore
         # it should not respond to read / write operations
+        self._SRCAL_CACHED = None   # Invalid until written again (reads to not count, as it is destruct-on-read)
         self._interface_enabled = True
 
     def disable_interface(self):
@@ -687,12 +734,14 @@ class HEXITEC_MHz(object):
         # Put test shift register into shift mode
         self.write_field('TS_MODE', 0b01)
 
-        # Read the test shift register
-        #readout = self.burst_read(127, 480)
-        readout = self.read_field('SRTest')
+        # Read the test shift register as a single value
+        readout_raw = self.read_field('SRTest')
 
-        # Convert to 12-bit data and remove first byte (not part of read)        
-        readout_12bit = Asic.convert_8bit_12bit(readout[1:])
+        # Convert the single value into bytes
+        readout_bytes = list((readout_raw).to_bytes(480, byteorder='big'))
+
+        # Convert to 12-bit data and remove first byte (not part of read)
+        readout_12bit = convert_8bit_12bit(readout_bytes)
 
         return readout_12bit
 
@@ -704,7 +753,7 @@ class HEXITEC_MHz(object):
         # manual Test Shfit Reigster Data Order (v1.3 section 5.7.2).
 
         # Prepare the 8-bit data
-        pattern_data_8bit = Asic.convert_12bit_8bit(pattern_data_12bit)
+        pattern_data_8bit = convert_12bit_8bit(pattern_data_12bit)
 
         # Set the test register to shift mode with no trigger
         self.write_field('TS_SECT', sector)
@@ -713,6 +762,7 @@ class HEXITEC_MHz(object):
 
         # Burst write register 127 with the 8-bit data
         #self.burst_write(pattern_data_8bit, 480)
+        #TODO convert this list into a single value???
         self.write_field('SRTest', pattern_data_8bit)
 
         # Set the test register to write mode
@@ -743,6 +793,27 @@ class HEXITEC_MHz(object):
     def get_calibration_test_pattern_enabled(self, direct=True):
         return self.read_field('CalEn')
 
+    def write_SRCal_Cached(self, values):
+        self.write_field('SRCal', values)
+
+        # Cache the value, which is assumed to be retained unless ASIC is reset (since we can't read it
+        # without destroying it).
+        self._SRCAL_CACHED = values
+
+    def read_SRCal_Cached(self):
+        # If there is a cached value return it. Not using the generic register cache as these shift registers
+        # behave exceptionally.
+        if self._SRCAL_CACHED:
+            self._logger.debug('SRCal cached value in use: {}'.format(self._SRCAL_CACHED))
+            return self._SRCAL_CACHED
+        else:
+            # If there is no known value (it has not been written), read the value from the ASIC, but also
+            # write it back again, since this field is destroy-on-read.
+            self._logger.debug('No SRCal value cached, read-writing it to avoid destroying the setting')
+            read_val = self.read_field('SRCal')
+            self.write_SRCal_Cached(read_val)
+            return read_val
+
     def set_calibration_test_pattern(self, row_bytes, column_bytes):
         # Submit a calibration test pattern, which consists of two arrays (one for
         # row and the other for columns). Each array contains binary pixel values.
@@ -757,8 +828,7 @@ class HEXITEC_MHz(object):
         self._logger.debug('Writing calibration test pattern {}'.format(
             [hex(x) for x in (row_bytes + column_bytes)]))
 
-        #self.burst_write(126, row_bytes + column_bytes)
-        self.write_field('SRCal', row_bytes + column_bytes)
+        self.write_SRCal_Cached(row_bytes + column_bytes)
 
     def set_calibration_test_pattern_bits(self, row_bits, column_bits):
         # Constructs a calibration pattern using arrays of bits for rows and columns.
@@ -779,8 +849,8 @@ class HEXITEC_MHz(object):
         # Reads the currently set calibration pattern, and separates out arrays of bits for
         # rows and columns. Inverse of above 'set' function, returned as tuple of arrays.
 
-        # Get the raw pattern (there is no function for this) as a single value
-        rows_cols_raw = self.read_field('SRCal')
+        # Get the raw pattern as a single value
+        rows_cols_raw = self.read_SRCal_Cached()
 
         # Convert the single value into bytes with rows and cols combined
         rows_cols_bytes = list((rows_cols_raw).to_bytes(20, byteorder='big'))

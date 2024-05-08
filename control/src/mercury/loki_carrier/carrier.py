@@ -1,5 +1,5 @@
 from loki.adapter import LokiCarrier_1v0, DeviceHandler
-from mercury.loki_carrier.hexitec_mhz_asic import HEXITEC_MHz
+from mercury.loki_carrier.hexitec_mhz_asic import HEXITEC_MHz, ASICInterfaceDisabledError
 from odin_devices.ad5593r import AD5593R
 from odin_devices.ad7998 import AD7998
 from odin_devices.mic284 import MIC284
@@ -11,7 +11,7 @@ import logging
 import time
 from enum import IntEnum, unique, auto
 import threading
-
+import numpy as np
 
 # Holds information mapping ASIC channels onto different devices, for example, fireflies, retimers etc.
 class ChannelInfo(object):
@@ -59,7 +59,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
         #TODO update this for HMHZ
-        self._default_clock_config = 'ZL30266_All_outputs_200MHz.mfg'
+        self._default_clock_config = 'ZL30266_All_outputs_200MHz_intdiv.mfg'
 
         # If this is set false, ASIC init will just set up SPI
         self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
@@ -233,6 +233,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._firefly_10to19.i2c_address = int(kwargs.get('firefly2_address_override', '0x50'), 0)
         self._firefly_10to19.reset_ff_address = True if kwargs.get('firefly2_reset_address', 'True') in ['True', 'true'] else False
         self._fireflies = [self._firefly_10to19, self._firefly_00to09]      # Init FireFly 2 first to change its address
+
+        # If simple enable is active, just power up the fireflies but don't monitor them
+        self._FASTDATA_SIMPLE_ENABLE = True if kwargs.get('firefly2_reset_address', 'False') in ['True', 'true'] else False
 
         # Holds channel mapping information, relating named external channels to other parts of the system
         self._merc_channels = {}
@@ -744,7 +747,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Config fireflies, disable all output channels by default to prevent overheat
                     # This will be tried no matter if fast data is enabled or not, since we must
                     # still disable the channels to prevent overheat, if transceivers are present.
-                    self._config_fireflies()
+                    self._config_fireflies(simple_enable=self._FASTDATA_SIMPLE_ENABLE)
                     if self._firefly_00to09.initialised:
                         full_unlock(self._firefly_00to09)
                     if self._firefly_10to19.initialised:
@@ -969,6 +972,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # Check that ASIC read-write is functional
         self._asic.RW_CHECK()
+        self._logger.warning('ASIC Read-write check passed')
 
         # Enable global control of readout, digital signals, analogue signals,
         # analogue bias enable, TDC oscillator enable, serialiser PLL enable,
@@ -1107,7 +1111,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _setup_clocks(self):
         #TODO create a real clock config
         pass
-        #self.clkgen_set_config(self._default_clock_config)
+        self.clkgen_set_config(self._default_clock_config)
 
     def _config_mic284(self):
         try:
@@ -2000,7 +2004,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             except Exception as e:
                 current_pot.critical_error('Failed to init Digital Pot {}: {}'.format(current_pot.name, e))
 
-    def _config_fireflies(self):
+    def _config_fireflies(self, simple_enable=True):
+        # If simple_enable is true, enable the fireflies but don't do anything else. This means that it will not be possible to monitor
+        # channel states, temperature etc, but they will function as their defaults are configured on power up.
 
         # Deselect both devices
         self.set_pin_value('firefly_sel1', 1)
@@ -2015,6 +2021,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 current_ff.initialised = False
                 current_ff.error = False
                 current_ff.error_message = False
+
+                if simple_enable:
+                    current_ff.critical_error('Not attempting to initialise FireFly {}; simple_enable mode (channels powered up without monitoring)'.format(current_ff.name))
+                    self._logger.error('Not attempting to initialise FireFly {}; simple_enable mode (channels powered up without monitoring)'.format(current_ff.name))
 
                 #TODO because the driver is currently not very smart, it does not set the bus used, and
                 # relies on the default setting. Therefore set the I2CDevice default bus and hope it doesn't
@@ -2263,9 +2273,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 for i in range (segment+1, 20):
                     self._segment_data = self._segment_data + blank_segment
 
-            self._segment_ready = True
+            self._segment_data_ready = True
 
-        except ASICDisabledError:
+        except ASICInterfaceDisabledError:
             logging.error('Could not trigger segment readout due to disabled ASIC')
             return None
 
@@ -2429,7 +2439,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'feedback_capacitance': (
                     lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_feedback_capacitance),#TODO
-                'feedback_gain': (lambda: {7: 'high', 14: 'medium', 21: 'low', None:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else None, None),
+                'feedback_gain': (lambda: {7: 'high', 14: 'medium', 21: 'low', None:None, 0:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else None, None),
                 'serialiser_all_mode': (
                     lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_global_serialiser_mode),
