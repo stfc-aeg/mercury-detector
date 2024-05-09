@@ -416,13 +416,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.mhz_hv_set_kp(kwargs.get('hv_pid_initial_kp', 0.01))
         self.mhz_hv_set_ki(kwargs.get('hv_pid_initial_ki', 0.00))
         self.mhz_hv_set_kd(kwargs.get('hv_pid_initial_kd', 0.00))
-        self._HV_Vcont_MAX = kwargs.get('hv_vcont_max', 2.5)    #TODO This is the current ADC reference, will be reworked
+        self._HV_Vcont_MAX = kwargs.get('hv_vcont_max', 5.0)
         self._HV_Vcont_MIN = kwargs.get('hv_vcont_min', 0.0)
         self._HV_PID_DISABLED = False
-        self._HV_cal_HVMON_Apoint = kwargs.get('hv_cal_hvmon_bpoint', (0.0, 0))
-        self._HV_cal_HVMON_Bpoint = kwargs.get('hv_cal_hvmon_apoint', (5.0, -1500))
-        self._HV_cal_VCONT_Apoint = kwargs.get('hv_cal_vcont_bpoint', (0.0, 0))
-        self._HV_cal_VCONT_Bpoint = kwargs.get('hv_cal_vcont_apoint', (5.0, -1500))
+        self._HV_cal_HVMON_Apoint = kwargs.get('hv_cal_hvmon_bpoint', (-0.0106, 0))
+        self._HV_cal_HVMON_Bpoint = kwargs.get('hv_cal_hvmon_apoint', (2.1494, -600))
+        self._HV_cal_VCONT_Apoint = kwargs.get('hv_cal_vcont_bpoint', (-0.0259, 0))
+        self._HV_cal_VCONT_Bpoint = kwargs.get('hv_cal_vcont_apoint', (2.4941, -600))
         self.mhz_hv_set_auto(kwargs.get('hv_pid_enabled', False))
         self.mhz_hv_set_target_bias(kwargs.get('hv_pid_target_bias', None)) # Manual mode with no target is allowed
         self._HV_cached_vcont = None
