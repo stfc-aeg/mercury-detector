@@ -5,6 +5,8 @@ from pathlib import Path
 provides = [
 'spi_read_reg',
 'spi_write_reg',
+'spi_read_field',
+'spi_write_field',
 'spi_read_burst',
 'test_12bit_output',
 'asic_reset',
@@ -61,6 +63,16 @@ def spi_write_reg(register="0", value="0"):
     asic.write_register(register, value)
 
     # Force ASIC to 'forget' cached values that now may not be validCdZnTe_D320771_0V_initialTest_currentSettings_10000sampleshex(value)))
+
+def spi_read_field(fieldname='CalEn'):
+    asic = get_context('asic')
+    value = asic.read_field(fieldname)
+    print('Read field {}: {} ({})'.format(fieldname, value, hex(value))) 
+
+def spi_write_field(fieldname='CalEn', value=0):
+    asic = get_context('asic')
+    asic.write_field(fieldname, value)
+    print('Wrote field {} with {} ({})'.format(fieldname, value, hex(value))) 
 
 def spi_read_burst(start_register="0", num_bytes=1):
     asic = get_context('asic')
@@ -564,32 +576,19 @@ def ASIC_register_dump(path='/opt/loki-detector/exports/regdumps/', prefix='HEXI
     asic = get_context('asic')
 
     print("Reading full set of ASIC registers...")
+
+    # Address 'range' is actually just a list, so can contain many combined ranges
+    if include_shift_regs:
+        address_range = range(0, 146)
+    else:
+        address_range = list(range(0, 126)) + list(range(128, 146))
+        print('\tShift registers will be excluded (since reading them will clear them)')
+
     with open(filename, 'w') as f:
-        # Read registers from the first page
-        regdump_firstpage_singles = asic.burst_read(0, 126)[1:] # 0 - 125, first value is echo
-        for regnum in range(0, 126):
-            f.write('{},{}\n'.format(regnum, regdump_firstpage_singles[regnum]))
-            set_progress(regnum, 126 + 20 + 480 + 16)
-        print("\tPage 1 Single Registers (<126) Done")
-
-        # Read shift registers manually because read-through behaviour is unknown
-        if include_shift_regs:
-            regdump_126 = asic.burst_read(126, 20)[1:]
-            f.write('126,{}\n'.format('-'.join([str(x) for x in regdump_126])))
-            set_progress(126 + 20, 126 + 20 + 480 + 16)
-            print("\tPage 1 Shift Register 126 Done")
-            regdump_127 = asic.burst_read(127, 480)[1:]
-            f.write('127,{}\n'.format('-'.join([str(x) for x in regdump_127])))
-            set_progress(126 + 20 + 480, 126 + 20 + 480 + 16)
-            print("\tPage 1 Shift Register 127 Done")
-
-        # Read registers from the second page (16 registers, starting at 130)
-        regdump_secondpage_singles = asic.burst_read(130, 16)[1:]
-        for regcount in range(0, 16):
-            regnum = regcount + 130
-            f.write('{},{}\n'.format(regnum, regdump_secondpage_singles[regcount]))
-            set_progress(126 + 20 + 480 + regcount, 126 + 20 + 480 + 16)
-        print("\tPage 2 Single Registers Done")
+        # Read registers using the register controller
+        regdump = asic._register_controller.summarise_fields(address_range=address_range)
+        f.write(regdump)
+        print("\tAll registers stored to {}".format(filename))
 
 def printcmds():
     asic = get_context('asic')
