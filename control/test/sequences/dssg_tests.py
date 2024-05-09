@@ -1,6 +1,9 @@
 import time
 requires = ['asic_spi']
-provides = ['test_time_difference', 'test_proxy_adapter']
+provides = ['test_time_difference', 'test_proxy_adapter', 'basic_readout_check']
+
+def basic_readout_check(test_name='default'):
+    store_sector_readout(sector_samples=1000, sector_array=[9], vcal_values=[1.0], test_name=test_name, test_index=0, suppress_progress_update=False, timesleep=0.0)
 
 def test_time_difference(time_difference=0.001):
     print("This test will check difference if 1ms delay is introduced between each ASIC SPI read")

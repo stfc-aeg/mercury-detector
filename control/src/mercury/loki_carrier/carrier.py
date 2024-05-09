@@ -388,6 +388,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._calpattern_single_pixel_col = 0
 
         self._segment_capture_due = None
+        self._segment_capture_selected_segment = 20 # All segments
+        self._segment_capture_triggervalue = 0
         self._segment_data = None
         self._segment_data_ready = False
 
@@ -2229,19 +2231,46 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             if self._segment_capture_due is not None:
                 if self._STATE_ASIC_INITIALISED:
-                    self.perform_asic_segment_capture(self._segment_capture_due)
+                    self.perform_asic_segment_capture(
+                        self.get_segment_capture_selected_segment(),
+                        self.get_segment_capture_triggervalue()
+                    )
                     self._segment_capture_due = None
                 else:
                     self._logger.error('Cannot perform a segment capture when ASIC has not been initiliased')
                     self._segment_capture_due = None
 
-    def trigger_segment_capture(self, segment):
-        self._segment_capture_due = segment
+    def set_segment_capture_selected_segment(self, segment):
+        self._segment_capture_selected_segment = segment
 
-    def perform_asic_segment_capture(self, segment):
+    def get_segment_capture_selected_segment(self):
+        return self._segment_capture_selected_segment
+
+    def get_segment_capture_triggervalue(self):
+        return self._segment_capture_triggervalue
+
+    def set_segment_capture_triggervalue(self, triggervalue):
+        # Set the trigger for 'accpeptable frames' over SPI segment readout. A segment that does not contain at least
+        # one pixel higher than this value will be rejected and read again. Allows user to filter out calibration frames
+        # that are not the 'high' one.
+        # Set 0 to disable
+        self._segment_capture_triggervalue = triggervalue
+        self._logger.info('Set SPI capture minimum segment max to {}'.format(triggervalue))
+
+    def trigger_segment_capture(self, value):
+        if self.get_segment_capture_selected_segment() is None:
+            self._logger.error('Cannot trigger a capture without a selected segment')
+            return
+        self._segment_capture_due = True
+
+    def perform_asic_segment_capture(self, segment, trigger):
+        # Trigger: Read data from the ASIC until at least one pixel in the segment is at least the trigger value
+        # This can be used to read only the 'high' frame for calibration test patterns.
+        # Will abort after 10 tries (using the last result) to avoid locking up.
+
         logging.info('Capturing image from segment {}'.format(segment))
 
-        def create_reshaped_array():
+        def read_8bit_array(segment):
             # Get the segment pattern read from the ASIC, 320 pixel values
             patternout_12bit = self._asic.read_test_pattern(segment)
             logging.warning('Pattern out: {}'.format(patternout_12bit))
@@ -2258,7 +2287,28 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             # Converts numpy array to python array - adds commas
             reshaped = reshaped.tolist()
 
-            self._segment_data = self._segment_data + reshaped
+            return reshaped
+
+        def read_8bit_array_minimum_trigger(segment, trigger):
+            # Read data from the ASIC until at least one pixel in the segment is at least the trigger value
+            # This can be used to read only the 'high' frame for calibration test patterns.
+            maxval = 0
+            trycount = 0
+
+            reshaped = read_8bit_array(segment)
+            maxval = max([max(row) for row in reshaped])
+
+            while maxval < trigger:
+                reshaped = read_8bit_array(segment)
+                maxval = max([max(row) for row in reshaped])
+                self._logger.error('Read a segment, max value was {}'.format(maxval))
+
+                trycount += 1
+                if trycount > 15:
+                    self._logger.error('Tried to find segment with pixel above {} too many times, just using last frame'.format(maxval))
+                    break
+
+            return reshaped
 
         blank_segment = [[0] * 80]*4
 
@@ -2268,11 +2318,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             if segment == 20:                   # If segment == 20, then all segments will be displayed
                 for segment in range(20):
-                    create_reshaped_array()
+                    self._segment_data = self._segment_data + read_8bit_array_minimum_trigger(segment, trigger)
             else:
+                # Create dummy data before chosen segment
                 for i in range(0, segment):
                     self._segment_data = self._segment_data + blank_segment
-                create_reshaped_array()
+
+                self._segment_data = self._segment_data + read_8bit_array_minimum_trigger(segment, trigger)
+
+                # Create dummy data after chosen segment
                 for i in range (segment+1, 20):
                     self._segment_data = self._segment_data + blank_segment
 
@@ -2324,7 +2378,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def _send_calibration_pattern_single_pixel(self):
         # Set the single pixel cal pattern currently configured
-        self.cal_pattern_highlight_pixel(
+        self._asic.cal_pattern_highlight_pixel(
             column=self._calpattern_single_pixel_col,
             row=self._calpattern_single_pixel_row,
         )
@@ -2453,7 +2507,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     lambda: self._asic.get_all_serialiser_bit_scramble() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_all_serialiser_bit_scramble),
                 'segment_readout': {
-                    'TRIGGER': (lambda: self._segment_capture_due, self.trigger_segment_capture),
+                    'REQUEST': (lambda: self._segment_capture_due, self.trigger_segment_capture),
+                    'SEGMENT_SELECT': (self.get_segment_capture_selected_segment, self.set_segment_capture_selected_segment),
+                    'TRIGGER': (self.get_segment_capture_triggervalue, self.set_segment_capture_triggervalue),  # Only segment reads with a pixel at least this high will be counted
                     'SEGMENT_DATA': (lambda: self._segment_data if self._segment_data_ready else None, None),
                 },
                 'calibration_pattern': {
