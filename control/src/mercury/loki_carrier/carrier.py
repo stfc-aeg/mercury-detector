@@ -59,7 +59,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
         #TODO update this for HMHZ
-        self._default_clock_config = 'ZL30266_All_outputs_200MHz_intdiv.mfg'
+        self._default_clock_config = kwargs.get('clkgen_default_config', 'ZL30266_All_outputs_200MHz_intdiv.mfg')
 
         # If this is set false, ASIC init will just set up SPI while leaving the FireFlies completely disabled.
         self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
@@ -787,7 +787,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                     # Initialise the ASIC, either SPI only (if requested) or full functionality.
                     if self.get_fast_data_enabled():
-                        if self._firefly_00to09.initialised and self._firefly_00to09.initialised:
+                        if self._firefly_00to09.initialised and self._firefly_10to19.initialised:
                             # Enable the firefly channels for the ASIC outputs
                             self._setup_fireflies()
                         else:
@@ -1091,6 +1091,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._asic.disable_interface()
             self._STATE_ASIC_INITIALISED = False
             self._STATE_ASIC_FASTDATA_INITIALISED = False
+            self._segment_data_ready = False
 
     def set_asic_register_cache_allowed(self, value):
         # Set the allowed value directly, will only take place on
@@ -2030,6 +2031,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 if simple_enable:
                     current_ff.critical_error('Not attempting to initialise FireFly {}; simple_enable mode (channels powered up without monitoring)'.format(current_ff.name))
                     self._logger.error('Not attempting to initialise FireFly {}; simple_enable mode (channels powered up without monitoring)'.format(current_ff.name))
+                    continue
 
                 #TODO because the driver is currently not very smart, it does not set the bus used, and
                 # relies on the default setting. Therefore set the I2CDevice default bus and hope it doesn't
@@ -2081,7 +2083,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         return self._fast_data_enabled
 
     def _setup_fireflies(self):
-        # Set up firefly for normal babyD usage, where all channels required are enabled
+        # Set up firefly for normal MHz usage, where all channels required are enabled
 
         for current_ff in self._fireflies:
             with current_ff.acquire(blocking=True, timeout=1) as rslt:
@@ -2090,8 +2092,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         self._logger.error('Failed to get FireFly lock while setting up base channel states, timed out')
                     return None
 
-                self.mhz_firefly_set_channel_enabled('Z1', True)
-                self.mhz_firefly_set_channel_enabled('Z2', True)
+        for chnum in range(0, 20):
+            self._logger.info('Enabled MHz channel {}'.format(chnum))
+            self.mhz_firefly_set_channel_enabled(str(chnum), True)
 
     def _mhz_firefly_channel_loop(self):
         while not self.TERMINATE_THREADS:
@@ -2339,7 +2342,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def get_calibration_pattern_mode(self):
         return self._calpattern_mode
 
-    def set_calibration_pattern_mode(self, mode):
+    def set_calibration_pattern_mode(self, mode=None):
         # Set a named mode using the currently configured settings for it to the ASIC.
         if mode == 'PRESET':
             self._send_calibration_pattern_preset()
