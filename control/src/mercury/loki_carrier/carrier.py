@@ -36,6 +36,14 @@ CAL_PATTERNS = {
         'rows': [1, 1, 1, 1 , 0, 0, 0, 0]*10,
         'cols': [0, 0, 0, 0 , 1, 1, 1, 1]*10
     },
+    'ASYMMETRICAL': {
+        'rows': [1,1,1,1,0,0,0,0, 1,1,1,0,0,0,0,0, 1,1,0,0,0,0,0,0, 1,0,0,0,0,0,0,0] + [ 0]*45 + [1]*3,
+        'cols': [1]*32 + [ 0]*45 + [1]*3,
+    },
+    'ASYMMETRICAL_FLIP': {
+        'cols': [1,1,1,1,0,0,0,0, 1,1,1,0,0,0,0,0, 1,1,0,0,0,0,0,0, 1,0,0,0,0,0,0,0] + [ 0]*45 + [1]*3,
+        'rows': [1]*32 + [ 0]*45 + [1]*3,
+    }
 }
 
 class LokiCarrier_HMHz (LokiCarrier_1v0):
@@ -2344,20 +2352,25 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def set_calibration_pattern_mode(self, mode=None):
         # Set a named mode using the currently configured settings for it to the ASIC.
-        if mode == 'PRESET':
+        self._calpattern_mode = mode
+
+        # Always update the pattern in the ASIC if the user changes mode
+        self.send_calibration_pattern()
+
+    def send_calibration_pattern(self):
+        # Send the currently configured calibration pattern to the ASIC based on the selected mode
+        if self._calpattern_mode == 'PRESET':
             self._send_calibration_pattern_preset()
-        elif mode == 'SINGLE_PIXEL':
+        elif self._calpattern_mode == 'SINGLE_PIXEL':
             self._send_calibration_pattern_single_pixel()
-        elif mode == 'GRID':
+        elif self._calpattern_mode == 'GRID':
             self._send_calibration_pattern_grid()
-        elif mode == 'DIRECT':
+        elif self._calpattern_mode == 'DIRECT':
             # Direct writing always writes directly anyway, just keep here to prevent other
             # modes from writing in direct mode
             pass
         else:
-            raise Exception('Invalid calibration pattern mode: '.format(mode))
-
-        self._calpattern_mode = mode
+            raise Exception('Invalid calibration pattern mode: '.format(self._calpattern_mode))
 
     def get_calibration_pattern_preset_avail(self):
         return list(CAL_PATTERNS.keys())
@@ -2375,6 +2388,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def set_calibration_pattern_preset(self, preset_name):
         if preset_name in self.get_calibration_pattern_preset_avail():
             self._calpattern_preset_name = preset_name
+            self.send_calibration_pattern()
         else:
             raise Exception('Unrecognised preset {}'.format(preset_name))
         self._logger.info('Set preset calibration pattern to {}'.format(preset_name))
@@ -2392,6 +2406,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def set_calibration_pattern_single_pixel(self, rowcol_tuple):
         self._calpattern_single_pixel_row, self._calpattern_single_pixel_col = rowcol_tuple
+        self.send_calibration_pattern()
         self._logger.info('Set calibration pattern single chosen pixel to row: {} col: {}'.format(
             self._calpattern_single_pixel_row, self._calpattern_single_pixel_col)
         )
@@ -2411,6 +2426,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def set_calibration_pattern_grid(self, divsect_tuple):
         # Cache the division and sector selection
         (self._calpattern_grid_div, self._calpattern_grid_sect) = divsect_tuple
+        self.send_calibration_pattern()
 
     def get_calibration_pattern_grid_cornersonly(self):
         return self._calpattern_grid_cornersonly
@@ -2418,6 +2434,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def set_calibration_pattern_grid_cornersonly(self, cornersonly):
         # Cache the setting
         self._calpattern_grid_cornersonly = cornersonly
+        self.send_calibration_pattern()
 
     def get_calibration_pattern_direct(self):
         # In any mode, read back the current state of the bits (good for a display), cached version
@@ -2431,6 +2448,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # If bits have been directly manipulated, set the mode to DIRECT
         self.set_calibration_pattern_mode('DIRECT')
+
+        self.send_calibration_pattern()
 
     def get_calibration_pattern_direct_map(self):
         # In any mode, read back the expected calibration mask for value of all pixels,
@@ -2534,8 +2553,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             "CORNERS_ONLY": (self.get_calibration_pattern_grid_cornersonly, self.set_calibration_pattern_grid_cornersonly),
                         },
                         "DIRECT": (lambda: self.get_calibration_pattern_direct() if self._STATE_ASIC_INITIALISED else None, self.set_calibration_pattern_direct),
-                        "DIRECT_MAP": (lambda: self.get_calibration_pattern_direct_map() if self._STATE_ASIC_INITIALISED else None, None),
                     },
+                    "DIRECT_MAP": (lambda: self.get_calibration_pattern_direct_map() if self._STATE_ASIC_INITIALISED else None, None),
                 },
             },
             'monitoring': {
