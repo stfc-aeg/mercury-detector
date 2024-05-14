@@ -382,7 +382,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._asic = HEXITEC_MHz(
             bus=kwargs.get('asic_bus', 2),
             device=kwargs.get('asic_device', 0),
-            hz=20000,   #TODO make this an external setting again
+            hz=1000,   #TODO make this an external setting again
             regmap_override_filenames=regmap_override_filenames_list,
             register_cache_enabled=False)   # Disabled until the ASIC is enabled
 
@@ -774,11 +774,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.COB_DONE:
                 try:
-                    #TODO Set the ASIC into reset, grab its mutex.
+                    # Set the ASIC into reset
+                    self.set_app_enabled(False)
 
-                    # Disable the regulators
-                    #TODO put this back in again for if ASIC init fails
-                    #self.set_peripherals_enabled(False)
+                    # Disable the regulators in case the ASIC init failes, and so that re-performing the
+                    # init stage will power cycle the regulators.
+                    self.set_peripherals_enabled(False)
+
+                    # Disable the peltier so that cooling does not occur until the ASIC is actually active
+                    self.mhz_peltier_set_enabled(False)
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -788,6 +792,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_INIT:
                 try:
+                    # Initially ensure that ASIC and regulators are disabled, so that re-initialisation
+                    # will result in a proper cycle.
+                    self.set_app_enabled(False)
+                    self.set_peripherals_enabled(False)
+                    time.sleep(1)
+
                     # Enable the peltier, and check that temperature has settled
                     self.mhz_peltier_set_enabled(True)
                     #TODO set a desired temperature from file if desired
@@ -807,8 +817,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Enable the regulators
                     self.set_peripherals_enabled(True)
                     self._logger.info('Enabled Regulators')
-                    time.sleep(0.5)
-
+                    time.sleep(2)
                     self._initialise_asic(fast_data_enabled=self.get_fast_data_enabled())
 
                     # Set the next step, will be advanced depending on target
