@@ -498,7 +498,7 @@ class HEXITEC_MHz(object):
         # the registers, in reverse.
 
         for serialiser_number  in range(1, 11):
-            base_addr = (66 + serialiser_number) -1
+            base_addr = 66 + (serialiser_number - 1) * 6
 
             # The register names match the manual, but do not relate to field organisation
             self._REGISTER_NAMES.update({
