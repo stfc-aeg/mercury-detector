@@ -1099,6 +1099,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _onChange_app_en(self, state):
         if state:
             # ASIC is enabled, so start caching successful writes
+            time.sleep(0.1)  # Allow time for ASIC to init before register R/W
             self._asic.enable_interface()
             self._set_asic_register_cache_enabled(True)
 
@@ -1132,8 +1133,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._asic.disable_cache()
 
     def _setup_clocks(self):
-        #TODO create a real clock config
-        pass
         self.clkgen_set_config(self._default_clock_config)
 
     def _config_mic284(self):

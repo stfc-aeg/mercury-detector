@@ -563,7 +563,7 @@ class HEXITEC_MHz(object):
             con.add_field(
                 'Ser{}_CCPCount'.format(serialiser_number),
                 'CCP Count for Serialiser {}'.format(serialiser_number),
-                base_addr+4, 5, 2, is_volatile=False
+                base_addr+4, 5, 3, is_volatile=False
             )
             con.add_field(
                 'Ser{}_DLLPhaseConfig'.format(serialiser_number),

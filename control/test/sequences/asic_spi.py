@@ -566,7 +566,10 @@ def store_sector_readout(sector_samples=50, sector_array=[9], vcal_values=[0.2, 
 
     return filename
 
-def ASIC_register_dump(path='/opt/loki-detector/exports/regdumps/', prefix='HEXITEC-MHz-Dump-', include_shift_regs=False):
+def ASIC_register_dump(path='/opt/loki-detector/exports/regdumps/', prefix='HEXITEC-MHz-Dump-', include_shift_regs=False, legacy_mode=False):
+    # legacy mode will just output register values directly without fields,
+    # useful for direct comparison with the prototype system (shift registers
+    # not currently supported in legacy mode).
     time_now = time.gmtime()
     filename = path + prefix + '-'.join( [str(x) for x in [time_now.tm_year, time_now.tm_mon, time_now.tm_mday, time_now.tm_hour, time_now.tm_min, time_now.tm_sec]]) + '.csv'
 
@@ -585,9 +588,15 @@ def ASIC_register_dump(path='/opt/loki-detector/exports/regdumps/', prefix='HEXI
         print('\tShift registers will be excluded (since reading them will clear them)')
 
     with open(filename, 'w') as f:
-        # Read registers using the register controller
-        regdump = asic._register_controller.summarise_fields(address_range=address_range)
-        f.write(regdump)
+        if legacy_mode:
+            # Read each register value in the range manually
+            for regnum in address_range:
+                regval = asic.read_register(regnum)[0]
+                f.write('{},{}\n'.format(regnum, regval))
+        else:
+            # Read registers using the register controller
+            regdump = asic._register_controller.summarise_fields(address_range=address_range)
+            f.write(regdump)
         print("\tAll registers stored to {}".format(filename))
 
 def printcmds():
