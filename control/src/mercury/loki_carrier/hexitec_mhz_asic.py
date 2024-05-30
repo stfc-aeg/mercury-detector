@@ -244,7 +244,7 @@ class HEXITEC_MHz(object):
 
         self._device.transfer(transfer_buffer)
 
-        self._logger.debug("Register {} written with {}".format(address, data))
+        self._logger.error("Register {} written with {}".format(address, data))
 
         # If verification has been requested, read back the same address range and compare
         if verify:
@@ -345,8 +345,7 @@ class HEXITEC_MHz(object):
 
         self._REGISTER_NAMES[4] = 'GL_EN2'
         con.add_field('GL_VCALsel_EN', 'Global / Local VCAL enable', 4, 6, 1, is_volatile=False)
-        con.add_field('GL_SerMode2_EN', 'Global / Local Serialiser 2 Mode bits', 4, 5, 2, is_volatile=False)
-        con.add_field('GL_SerMode1_EN', 'Global / Local Serialiser 1 Mode bits', 4, 3, 2, is_volatile=False)
+        con.add_field('GL_SerMode21_EN', 'Global / Local Serialiser 1&2 Mode bits', 4, 5, 4, is_volatile=False)
         con.add_field('GL_SerAnaRstB_EN', 'Global / Local Serialiser Analogue Reset Control', 4, 1, 1, is_volatile=False)
         con.add_field('GL_SerDigRstB_EN', 'Global / Local Serialiser Digital Reset Control', 4, 0, 1, is_volatile=False)
 
@@ -1145,15 +1144,14 @@ class HEXITEC_MHz(object):
             mode_bits = self._serialiser_mode_names[mode]
 
         # Set serialiser global mode for both serialiser 1 and 2
-        self.write_field('GL_SerMode2_EN', mode_bits)
-        self.write_field('GL_SerMode1_EN', mode_bits)
+        self.write_field('GL_SerMode21_EN', mode_bits | (mode_bits << 2))
 
     def get_global_serialiser_mode(self, bits_only=False, direct=False):
         # Return the currently set mode. If bits_only is True, will send
         # the bit encoding rather than the name.
 
         # Assume that modes are the same, and only read SERMode1xG
-        mode = self.read_field('GL_SerMode1_EN')
+        mode = self.read_field('GL_SerMode21_EN' & 0b11)
 
         if bits_only:
             return mode

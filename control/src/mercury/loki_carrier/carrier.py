@@ -460,6 +460,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Register a callback for when the application enable state changes, since the API for this is
         # provided by the base class and we need to set state variables related to it.
         self.register_change_callback('application_enable', self._onChange_app_en)
+        self.register_change_callback('peripheral_enable', self._onChange_asic_regs)
 
         self._logger.info('LOKI super init complete')
 
@@ -492,7 +493,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         super(LokiCarrier_HMHz, self)._start_io_loops(options)
 
         self.add_thread('enable_state_machine', self._mhz_enable_state_machine_loop)
-        self.watchdog_add_thread('enable_state_machine', 10, lambda: logging.error('!!!! Enable State Machine Loop watchdog triggered !!!!'))
+        self.watchdog_add_thread('enable_state_machine', 60, lambda: logging.error('!!!! Enable State Machine Loop watchdog triggered !!!!'))
 
         self.add_thread('adc_update', self._mhz_adc_update_loop, update_period_s=2)
         self.watchdog_add_thread('adc_update', 10, lambda: logging.error('!!!! ADC Loop watchdog triggered !!!!'))
@@ -766,6 +767,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Set up the LTC2986 to monitor the ASIC diode
                     self._setup_ltc2986()
 
+                    # One-shot disable the regaultors (the user can override this in COB_DONE)
+                    self.set_peripherals_enabled(False)
+
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
                 except Exception as e:
@@ -776,10 +780,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 try:
                     # Set the ASIC into reset
                     self.set_app_enabled(False)
-
-                    # Disable the regulators in case the ASIC init failes, and so that re-performing the
-                    # init stage will power cycle the regulators.
-                    self.set_peripherals_enabled(False)
 
                     # Disable the peltier so that cooling does not occur until the ASIC is actually active
                     self.mhz_peltier_set_enabled(False)
@@ -796,6 +796,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # will result in a proper cycle.
                     self.set_app_enabled(False)
                     self.set_peripherals_enabled(False)
+
                     time.sleep(1)
 
                     # Enable the peltier, and check that temperature has settled
@@ -817,13 +818,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Enable the regulators
                     self.set_peripherals_enabled(True)
                     self._logger.info('Enabled Regulators')
-                    time.sleep(2)
+                    time.sleep(10)
                     self._initialise_asic(fast_data_enabled=self.get_fast_data_enabled())
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
                 except Exception as e:
                     handle_state_error(e)
+
+                    # Also disabled the regulators
+                    self.set_peripherals_enabled(False)
                     continue
 
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_DONE:
@@ -934,6 +938,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Any errors will be caught externally, but in addition, this function will disable
         # the firefly channels.
 
+        step_delay_s = 10
+
+        def step_delay():
+            if step_delay_s > 0:
+                self._logger.warning('DELAY {}s'.format(step_delay_s))
+                time.sleep(step_delay_s)
+
         try:
             # Enter Global mode - and reset the ASIC
             try:
@@ -941,11 +952,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             except Exception as e:
                 raise Exception('Failed while entering global mode: {}'.format(e))
 
+            step_delay()
+
             # Set Diamond Default Registers
             try:
                 self._asic.Set_DiamondDefault_Registers()
             except Exception as e:
                 raise Exception('Failed while setting DIAMOND defaults: {}'.format(e))
+
+            step_delay()
 
             if fast_data_enabled:
                 # Reset the serialisers
@@ -955,10 +970,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 time.sleep(0.5)
                 self._asic.ser_exit_reset()
 
+                step_delay()
+
                 # Enter Bonding mode
                 logging.info("\tEntering Bonding Mode...")
                 time.sleep(0.5)
                 self._asic.enter_bonding_mode()
+
+                step_delay()
 
                 # Enter Data mode
                 logging.info("\tEntering Data Mode...")
@@ -969,7 +988,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 self._STATE_ASIC_FASTDATA_INITIALISED = True
 
             logging.info('ASIC initialisation complete')
-            self._STATE_ASIC_INITIALISED = True
+
+            # Allow background tasks to access the ASIC registers
+            #self._STATE_ASIC_INITIALISED = True
+            self._STATE_ASIC_INITIALISED = False
 
         except Exception as e:
             fullmsg = 'Failed to init ASIC properly, disabling FireFlies: {}'.format(e)
@@ -1000,17 +1022,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # analogue bias enable, TDC oscillator enable, serialiser PLL enable,
         # TDC PLL enable, VCAL select, serialiser mode, serialiser analogue/
         # digital reset.
-        self._asic.write_field('GL_ROE_CONT', 0b1)
-        self._asic.write_field('GL_DigSig_CONT', 0b1)
-        self._asic.write_field('GL_AnaSig_CONT', 0b1)
-        self._asic.write_field('GL_AnaBias_CONT', 0b1)
-        self._asic.write_field('GL_TDCOsc_CONT', 0b1)
-        self._asic.write_field('GL_SerPLL_CONT', 0b1)
-        self._asic.write_field('GL_TDCPLL_CONT', 0b1)
-        self._asic.write_field('GL_VCALsel_CONT', 0b1)
-        self._asic.write_field('GL_SerMode_CONT', 0b1)
-        self._asic.write_field('GL_SerAnaRstB_CONT', 0b1)
-        self._asic.write_field('GL_SerDigRstB_CONT', 0b1)
+        #self._asic.write_field('GL_ROE_CONT', 0b1)
+        #self._asic.write_field('GL_DigSig_CONT', 0b1)
+        #self._asic.write_field('GL_AnaSig_CONT', 0b1)
+        #self._asic.write_field('GL_AnaBias_CONT', 0b1)
+        #self._asic.write_field('GL_TDCOsc_CONT', 0b1)
+        #self._asic.write_field('GL_SerPLL_CONT', 0b1)
+        #self._asic.write_field('GL_TDCPLL_CONT', 0b1)
+        #self._asic.write_field('GL_VCALsel_CONT', 0b1)
+        #self._asic.write_field('GL_SerMode_CONT', 0b1)
+        #self._asic.write_field('GL_SerAnaRstB_CONT', 0b1)
+        #self._asic.write_field('GL_SerDigRstB_CONT', 0b1)
+        self._asic.write_register(0x01, 0x7F)
+        self._asic.write_register(0x02, 0x63)
 
         # Set the sync active
         self.set_sync(True)
@@ -1034,7 +1058,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._asic.write_field('GL_SerDigRstB_EN', 0b1)   # Remove analogue reset
 
         # Enable readout
-        self._asic.write_field('GL_ROE_EN', 0b1)
+        #self._asic.write_field('GL_ROE_EN', 0b1)
+        self._asic.write_register(0x03, 0x7F)
 
         self._asic._logger.info("Global mode configured")
 
@@ -1110,6 +1135,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._STATE_ASIC_INITIALISED = False
             self._STATE_ASIC_FASTDATA_INITIALISED = False
             self._segment_data_ready = False
+        self._logger.warning('ASIC {}'.format('enabled' if state else 'disabled'))
+
+    def _onChange_asic_regs(self, state):
+        self._logger.warning('ASIC regulators {}'.format('enabled' if state else 'disabled'))
 
     def set_asic_register_cache_allowed(self, value):
         # Set the allowed value directly, will only take place on
@@ -2225,14 +2254,17 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_firefly_set_all_enabled(self, enabled=True):
         for current_ff in self._fireflies:
 
-            with current_ff.acquire(blocking=True, timeout=1) as rslt:
-                if not rslt:
-                    if current_ff.initialised:
-                        self._logger.error('Failed to get FireFly lock while setting all states')
-                if enabled:
-                    current_ff.device.enable_tx_channels(FireFly.CHANNEL_ALL)
-                else:
-                    current_ff.device.disable_tx_channels(FireFly.CHANNEL_ALL)
+            if current_ff.device:
+                with current_ff.acquire(blocking=True, timeout=1) as rslt:
+                    if not rslt:
+                        if current_ff.initialised:
+                            self._logger.error('Failed to get FireFly lock while setting all states')
+                    if enabled:
+                        current_ff.device.enable_tx_channels(FireFly.CHANNEL_ALL)
+                    else:
+                        current_ff.device.disable_tx_channels(FireFly.CHANNEL_ALL)
+            else:
+                self._logger.warning('Cannot set FireFly channels enabled when the device is not initialised')
 
     def get_sync(self):
         # Cached by handler, safe to directly request
