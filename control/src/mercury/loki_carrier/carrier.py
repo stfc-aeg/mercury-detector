@@ -818,7 +818,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Enable the regulators
                     self.set_peripherals_enabled(True)
                     self._logger.info('Enabled Regulators')
-                    time.sleep(10)
+                    time.sleep(3)
                     self._initialise_asic(fast_data_enabled=self.get_fast_data_enabled())
 
                     # Set the next step, will be advanced depending on target
@@ -826,7 +826,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 except Exception as e:
                     handle_state_error(e)
 
-                    # Also disabled the regulators
+                    # Also disable the regulators
                     self.set_peripherals_enabled(False)
                     continue
 
@@ -938,7 +938,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Any errors will be caught externally, but in addition, this function will disable
         # the firefly channels.
 
-        step_delay_s = 10
+        step_delay_s = 1
 
         def step_delay():
             if step_delay_s > 0:
@@ -990,8 +990,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             logging.info('ASIC initialisation complete')
 
             # Allow background tasks to access the ASIC registers
-            #self._STATE_ASIC_INITIALISED = True
-            self._STATE_ASIC_INITIALISED = False
+            self._STATE_ASIC_INITIALISED = True
 
         except Exception as e:
             fullmsg = 'Failed to init ASIC properly, disabling FireFlies: {}'.format(e)
@@ -1022,19 +1021,17 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # analogue bias enable, TDC oscillator enable, serialiser PLL enable,
         # TDC PLL enable, VCAL select, serialiser mode, serialiser analogue/
         # digital reset.
-        #self._asic.write_field('GL_ROE_CONT', 0b1)
-        #self._asic.write_field('GL_DigSig_CONT', 0b1)
-        #self._asic.write_field('GL_AnaSig_CONT', 0b1)
-        #self._asic.write_field('GL_AnaBias_CONT', 0b1)
-        #self._asic.write_field('GL_TDCOsc_CONT', 0b1)
-        #self._asic.write_field('GL_SerPLL_CONT', 0b1)
-        #self._asic.write_field('GL_TDCPLL_CONT', 0b1)
-        #self._asic.write_field('GL_VCALsel_CONT', 0b1)
-        #self._asic.write_field('GL_SerMode_CONT', 0b1)
-        #self._asic.write_field('GL_SerAnaRstB_CONT', 0b1)
-        #self._asic.write_field('GL_SerDigRstB_CONT', 0b1)
-        self._asic.write_register(0x01, 0x7F)
-        self._asic.write_register(0x02, 0x63)
+        self._asic.write_field('GL_ROE_CONT', 0b1)
+        self._asic.write_field('GL_DigSig_CONT', 0b1)
+        self._asic.write_field('GL_AnaSig_CONT', 0b1)
+        self._asic.write_field('GL_AnaBias_CONT', 0b1)
+        self._asic.write_field('GL_TDCOsc_CONT', 0b1)
+        self._asic.write_field('GL_SerPLL_CONT', 0b1)
+        self._asic.write_field('GL_TDCPLL_CONT', 0b1)
+        self._asic.write_field('GL_VCALsel_CONT', 0b1)
+        self._asic.write_field('GL_SerMode_CONT', 0b1)
+        self._asic.write_field('GL_SerAnaRstB_CONT', 0b1)
+        self._asic.write_field('GL_SerDigRstB_CONT', 0b1)
 
         # Set the sync active
         self.set_sync(True)
@@ -1058,8 +1055,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._asic.write_field('GL_SerDigRstB_EN', 0b1)   # Remove analogue reset
 
         # Enable readout
-        #self._asic.write_field('GL_ROE_EN', 0b1)
-        self._asic.write_register(0x03, 0x7F)
+        self._asic.write_field('GL_ROE_EN', 0b1)
 
         self._asic._logger.info("Global mode configured")
 

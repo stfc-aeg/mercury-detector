@@ -198,7 +198,7 @@ class HEXITEC_MHz(object):
         elif len(readback_payload) != length:
             raise ASICIOError('Got incorrect number of bytes back. Expected {}, got {} (raw: {})'.format(length, len(readback_payload), [hex(x) for x in readback]))
 
-        self._logger.error("Register {} read as {} ({} bytes)".format(address, readback_payload, len(readback_payload)))
+        self._logger.debug("Register {} read as {} ({} bytes)".format(address, readback_payload, len(readback_payload)))
 
         return readback_payload
 
@@ -244,7 +244,7 @@ class HEXITEC_MHz(object):
 
         self._device.transfer(transfer_buffer)
 
-        self._logger.error("Register {} written with {}".format(address, data))
+        self._logger.debug("Register {} written with {}".format(address, data))
 
         # If verification has been requested, read back the same address range and compare
         if verify:
