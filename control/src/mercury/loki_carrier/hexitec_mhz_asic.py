@@ -1151,7 +1151,7 @@ class HEXITEC_MHz(object):
         # the bit encoding rather than the name.
 
         # Assume that modes are the same, and only read SERMode1xG
-        mode = self.read_field('GL_SerMode21_EN' & 0b11)
+        mode = self.read_field('GL_SerMode21_EN') & 0b11
 
         if bits_only:
             return mode
