@@ -67,7 +67,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
         #TODO update this for HMHZ
-        self._default_clock_config = kwargs.get('clkgen_default_config', 'ZL30266_All_outputs_200MHz_intdiv.mfg')
+        self._default_clock_config = kwargs.get('clkgen_default_config', 'ZL30266_out12_205_out3_200_intdiv.mfg')
 
         # If this is set false, ASIC init will just set up SPI while leaving the FireFlies completely disabled.
         self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
