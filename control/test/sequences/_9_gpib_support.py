@@ -40,7 +40,9 @@ def get_frames_written(hide_printout=False):
     if not status:
         raise Exception('Failed to contact munir')
 
-    frames_written = status['frames_written']
+    frames_written = status.get('frames_written', None)
+    if frames_written is None:
+        print('No valid frames_written returned- this is fine for a direct wrapper')
 
     if not hide_printout:
         print('\tmunir Frames written: ', frames_written)
@@ -163,6 +165,7 @@ def capture_data(
         path: str = "/dev/null",
         file_name: str = "capture",
         num_frames: int = 100000,
+        num_batches: int = 1,
         ):
     if path == '/dev/null':
         raise Exception('Sensible destination path not set')
@@ -172,7 +175,7 @@ def capture_data(
 
     # Trigger munir data capture
     print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
-    response = munir.execute_capture(path, file_name, num_frames)
+    response = munir.execute_capture(path, file_name, num_frames, num_batches)
 
     if response:
         #print('response: {} (type {})'.format(response, type(response)))

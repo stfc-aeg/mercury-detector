@@ -151,7 +151,7 @@ def log_instrument_values(output_fullpath, output_filename, associated_data_file
         file.write(','.join([str(x) for x in [datefmt, timefmt, asic_temp, temp, cur, vol, associated_data_file]]))
         file.write('\n')
 
-def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000):
+def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000, num_batches):
     # This will demonstrate what it might be like to log ASIC bias measurements as well
     # as capturing data spaced out over a long period of time.
     # Suffix is used to record parameter values along with the data. This will be split 
@@ -217,6 +217,7 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
             path=fastdata_output_root,
             file_name=data_filename,
             num_frames=num_frames,
+            num_batches=num_batches,
         )
 
         capture_count += 1
@@ -229,7 +230,7 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
         print('Delaying for {}s until next capture...'.format(interval_s))
         if _sleep_abortable(interval_s): return
 
-def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000):
+def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000 num_batches = 1):
     example_extended_capture(
         output_folder=output_folder,
         filename=filename,
@@ -238,5 +239,6 @@ def single_capture(output_folder = "default", filename = "capture", suffix="", n
         period_s=10,
         interval_s=100,
         num_frames=num_frames,
+        num_batches=num_batches
     )
 
