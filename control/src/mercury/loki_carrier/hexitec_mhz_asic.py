@@ -951,7 +951,7 @@ class HEXITEC_MHz(object):
             raise ValueError("Bias must be in range 0-15")
 
         for fieldname in ['RAMPControl{}'.format(x) for x in range(1,21)]:
-            self.write_field(fieldname, bias)
+            self.write_field(fieldname, bias | (bias << 5))
 
         self._logger.info("Set ramp bias for all 40 ASIC ramps to {}".format(bias))
 
