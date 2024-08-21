@@ -1548,6 +1548,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             ):
                 raise Exception('Cannot start HV control in auto mode without a target HV Bias')
 
+            # If the target bias is still not known, and has not been overridden, work it out backwards
+            # from the potentiometer setting to populate the UI.
+            self.mhz_hv_set_target_bias(self._mhz_hv_calc_hvbias_from_control_voltage(self._mhz_hv_get_control_voltage_direct()))
+
             # Finish setup, allowing the loop to continue
             if enable_after_setup:
                 self.mhz_hv_set_enable(True)
