@@ -482,9 +482,7 @@ def all_sector_cal_capture(vcal_setting=0.8, acceptable_threshold=1000):
 
 def set_all_ramp_bias(bias=0b1000):
     asic = get_context('asic')
-    #asic.set_all_ramp_bias(bias)
-    for reg in range(46, 66):
-        spi_write_reg(reg, (bias | bias << 4))
+    asic.set_all_ramp_bias(bias)
     print("Set all ramp bias to {}".format(bias))
 
 def set_clock_config(config=205):
