@@ -6,6 +6,8 @@ provides = [
 'spi_read_reg',
 'spi_write_reg',
 'spi_read_field',
+'spi_get_fields',
+'spi_print_fields',
 'spi_write_field',
 'spi_read_burst',
 'test_12bit_output',
@@ -25,7 +27,7 @@ provides = [
 'calibration_set_firstpixel',
 'read_all_sector_gradient',
 'all_sector_cal_capture',
-'set_all_ram_bias',
+'set_all_ramp_bias',
 'set_clock_config',
 'printdir',
 'serialiser_global_change',
@@ -66,12 +68,45 @@ def spi_write_reg(register="0", value="0"):
 
 def spi_read_field(fieldname='CalEn'):
     asic = get_context('asic')
-    value = asic.read_field(fieldname)
+
+    try:
+        value = asic.read_field(fieldname)
+    except Exception as e:
+        print('Field read failed (mutex has been force released): ', e)
+        # Bodge: force relese the mutex since the software wont' yet
+        asic._register_controller._register_mutex.release()
+        raise RuntimeError('Field read failed (mutex has been force released): ', e)
+
     print('Read field {}: {} ({})'.format(fieldname, value, hex(value))) 
+
+def spi_get_fields():
+    asic = get_context('asic')
+    print(asic._register_controller.get_fields())
+
+def spi_print_fields(min_reg=1, max_reg=1):
+    asic = get_context('asic')
+    if max_reg is None:
+        rng = min_reg
+    else:
+        rng = range(min_reg, max_reg+1)
+
+    print(asic._register_controller.summarise_fields(rng))
+
+def spi_summarise_fields():
+    asic = get_context('asic')
+    print(asic._register_controller.summarise_fields())
 
 def spi_write_field(fieldname='CalEn', value=0):
     asic = get_context('asic')
-    asic.write_field(fieldname, value)
+
+    try:
+        asic.write_field(fieldname, value)
+    except Exception as e:
+        print('Field write failed (mutex has been force released): ', e)
+        # Bodge: force relese the mutex since the software wont' yet
+        asic._register_controller._register_mutex.release()
+        raise RuntimeError('Field write failed (mutex has been force released): ', e)
+
     print('Wrote field {} with {} ({})'.format(fieldname, value, hex(value))) 
 
 def spi_read_burst(start_register="0", num_bytes=1):
@@ -445,9 +480,11 @@ def all_sector_cal_capture(vcal_setting=0.8, acceptable_threshold=1000):
 
     print("Wrote to {}".format(filename))
 
-def set_all_ram_bias(bias=0b1000):
+def set_all_ramp_bias(bias=0b1000):
     asic = get_context('asic')
-    asic.set_all_ramp_bias(bias)
+    #asic.set_all_ramp_bias(bias)
+    for reg in range(46, 66):
+        spi_write_reg(reg, (bias | bias << 4))
     print("Set all ramp bias to {}".format(bias))
 
 def set_clock_config(config=205):
