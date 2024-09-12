@@ -11,25 +11,25 @@ include_directories(
         ${BLOSC_INCLUDE_DIR}
 )
 
-# Add library for BabydDetectorPlugin
-add_library(BabydDetectorPlugin SHARED
+# Add library for HexitecMhzDetectorPlugin
+add_library(HexitecMhzDetectorPlugin SHARED
         HexitecMhzPlugin.cpp
 )
 
-target_compile_options(BabydDetectorPlugin PRIVATE ${LIBDPDK_CFLAGS})
-target_link_directories(BabydDetectorPlugin PRIVATE ${ODINDATA_LIBRARY_DIR} ${LIBDPDK_LIBRARY_DIRS})
-target_link_libraries(BabydDetectorPlugin
+target_compile_options(HexitecMhzDetectorPlugin PRIVATE ${LIBDPDK_CFLAGS})
+target_link_directories(HexitecMhzDetectorPlugin PRIVATE ${ODINDATA_LIBRARY_DIR} ${LIBDPDK_LIBRARY_DIRS})
+target_link_libraries(HexitecMhzDetectorPlugin
         PRIVATE OdinDataDpdk rte_eal rte_kvargs rte_telemetry
         ${LIBDPDK_LDFLAGS} ${BLOSC_LIBRARIES}
 )
 
-get_target_property(PLUGIN_INSTALL_RPATH BabydDetectorPlugin INSTALL_RPATH)
+get_target_property(PLUGIN_INSTALL_RPATH HexitecMhzDetectorPlugin INSTALL_RPATH)
 
 
-set_target_properties(BabydDetectorPlugin PROPERTIES
+set_target_properties(HexitecMhzDetectorPlugin PROPERTIES
   INSTALL_RPATH "${PLUGIN_INSTALL_RPATH}:${LIBDPDK_LIBRARY_DIRS}"
 )
 
 # SET(CMAKE_INSTALL_RPATH "${INSTALL_RPATH}:${LIBDPDK_LIBRARY_DIRS}")
 
-install(TARGETS BabydDetectorPlugin LIBRARY DESTINATION lib)
+install(TARGETS HexitecMhzDetectorPlugin LIBRARY DESTINATION lib)
