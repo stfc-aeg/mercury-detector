@@ -8,9 +8,9 @@
     {
         "plugin": {
             "load": {
-                "index": "hibirdsdpdk",
-                "name": "HibirdsDpdkPlugin",
-                "library": "./lib/libHibirdsDpdkPlugin.so"
+                "index": "HexitecMhz",
+                "name": "HexitecMhzPlugin",
+                "library": "./lib/libHexitecMhzDetectorPlugin.so"
             }
         }
     },
@@ -35,7 +35,7 @@
     {
         "plugin": {
             "connect": {
-                "index": "hibirdsdpdk",
+                "index": "HexitecMhz",
                 "connection": "frame_receiver"
             }
         }
@@ -44,20 +44,20 @@
         "plugin": {
             "connect": {
                 "index": "hdf",
-                "connection": "hibirdsdpdk"
+                "connection": "HexitecMhz"
             }
         }
     },
     {
-        "hibirdsdpdk": {
+        "HexitecMhz": {
             "update_config": false,
             "dpdk_process_rank": 0,
             "num_secondary_processes": 0,
             "shared_buffer_size": 17179869184,
             "dpdk_eal": {
-                "corelist": "16-31,48-63",
+                "corelist": "0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30",
                 "loglevel": "debug",
-                "allowdevice": "0000:81:00.1",
+                "allowdevice": "0000:2c:00.0",
                 "proc-type": "Primary",
                 "file-prefix": "odin-data"
             },
