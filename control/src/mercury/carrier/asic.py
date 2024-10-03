@@ -825,7 +825,7 @@ class Asic():
         #Set default negative range
         self.set_register_bit(0,0b01000000)
 
-        #14fF, 0000 slew rate
+        #0000 slew rate
         self.set_all_ramp_bias(0b0000)
 
         self.clear_register_bit(0,0b00000100)
@@ -836,6 +836,9 @@ class Asic():
         self.write_register(17,174)
         self.write_register(21,190)
         self.write_register(18,197)
+
+        # Set default 7fF for max gain
+        self.set_feedback_capacitance(7)
 
         self._logger.info("Finished setting registers")
 

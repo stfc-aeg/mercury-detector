@@ -151,7 +151,7 @@ def log_instrument_values(output_fullpath, output_filename, associated_data_file
         file.write(','.join([str(x) for x in [datefmt, timefmt, asic_temp, temp, cur, vol, associated_data_file]]))
         file.write('\n')
 
-def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000, num_batches):
+def example_extended_capture(output_folder="default", filename="capture", suffix="", ignore_instrument_info=False, period_s=600, interval_s=60, num_frames=100000, num_batches=1):
     # This will demonstrate what it might be like to log ASIC bias measurements as well
     # as capturing data spaced out over a long period of time.
     # Suffix is used to record parameter values along with the data. This will be split 
@@ -167,12 +167,14 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
         raise Exception('Filename was too long ({} vs 32)'.format(len(filename)))
 
     # Fast data is stored on seneca, and instrument data on loki
-    fastdata_output_root = "/mnt/raid/loki/" + output_folder + '/'
+    #fastdata_output_root = "/mnt/raid/loki/" + output_folder + '/'
+    #fastdata_output_root = "/mnt/nvme/array0/" + output_folder + '/'
+    fastdata_output_root = "/mnt/nvme/array0/i13_tests/" + output_folder + '/'
     loki_output_root = "/opt/loki-detector/exports/instrumentdata/" + output_folder + "/"
 
     # Check that the ASIC has been brought into data mode
-    if carrier.get_asic_serialiser_mode() != 'data':
-        raise Exception('ASIC is not in data mode. Has fastdata_quickstart() been executed?')
+    #if carrier.get_asic_serialiser_mode() != 'data':
+    #    raise Exception('ASIC is not in data mode. Has fastdata_quickstart() been executed?')
 
     # Ensure that the loki path has been created (cannot do the fast data path as not this machine)
     try:
@@ -230,7 +232,7 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
         print('Delaying for {}s until next capture...'.format(interval_s))
         if _sleep_abortable(interval_s): return
 
-def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000, num_batches = 1):
+def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 6400, num_batches = 80):
     example_extended_capture(
         output_folder=output_folder,
         filename=filename,

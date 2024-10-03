@@ -13,8 +13,6 @@ requires = [
 ]
 
 provides = [
-        'extended_capture_histogramming',
-        'single_capture_histogramming',
 ]
 
 

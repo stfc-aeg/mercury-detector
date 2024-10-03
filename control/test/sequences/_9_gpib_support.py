@@ -173,9 +173,13 @@ def capture_data(
     # Due to bug(?) cannot create a boolean with default value of True. It will just use false in UI.
     munir = get_context('munir')
 
+    # Check that the number of frames is divisible by the number of batches
+    if num_frames % num_batches != 0:
+        raise RuntimeError('Invalid number of frames; must be a multiple of number of batches ({})'.format(num_batches))
+
     # Trigger munir data capture
-    print('Beginning fast data capture of {} frames to {} {}'.format(num_frames, path, file_name))
-    response = munir.execute_capture(path, file_name, num_frames, num_batches)
+    print('Beginning fast data capture of {} frames to {} {} with num_batches {}'.format(num_frames, path, file_name, num_batches))
+    response = munir.execute_capture(path, file_name, num_frames, 5000, num_batches)
 
     if response:
         #print('response: {} (type {})'.format(response, type(response)))

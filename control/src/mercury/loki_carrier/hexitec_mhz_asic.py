@@ -1187,6 +1187,9 @@ class HEXITEC_MHz(object):
         #self.write_register(18,197)
         self.write_field('SAMPLE_H_OFF', 197)
 
+        # Change to 7fF mode by default
+        self.set_feedback_capacitance(7)
+
         self._logger.info("Finished setting registers")
 
     def ser_enter_reset(self):
