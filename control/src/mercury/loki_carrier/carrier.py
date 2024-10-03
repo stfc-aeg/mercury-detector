@@ -75,6 +75,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # If simple enable is active, just power up the fireflies but don't monitor them (overridden by fast_data_enabled)
         self._FASTDATA_SIMPLE_ENABLE = True if kwargs.get('fast_data_simple_enable', 'False') in ['True', 'true'] else False
 
+        # If an override to the feedback capacitance has been supplied, it will be set during ASIC initialisation
+        self._asic_default_feedback_capacitance = kwargs.get('default_feedback_capacitance', None)
+        if self._asic_default_feedback_capacitance is not None:
+            self._asic_default_feedback_capacitance = int(self._asic_default_feedback_capacitance)
+
         # Override parent pin settings
 
         # Add mhz-specific pins (Application/ASIC enable are already default LOKI
@@ -959,6 +964,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 self._asic.Set_DiamondDefault_Registers()
             except Exception as e:
                 raise Exception('Failed while setting DIAMOND defaults: {}'.format(e))
+
+            step_delay()
+
+            # Set the default gain if it has been overridden in the configuration files
+            try:
+                if self._asic_default_feedback_capacitance is not None:
+                    self._asic.set_feedback_capacitance(self._asic_default_feedback_capacitance)
+                    logging.info('Default ASIC feedback capacitance has been overridden to{}fF'.format(self._asic_default_feedback_capacitance))
+            except Exception as e:
+                raise Exception('Failed while setting ASIC default gain: {}'.format(e))
 
             step_delay()
 

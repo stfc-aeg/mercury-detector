@@ -230,7 +230,7 @@ def example_extended_capture(output_folder="default", filename="capture", suffix
         print('Delaying for {}s until next capture...'.format(interval_s))
         if _sleep_abortable(interval_s): return
 
-def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000 num_batches = 1):
+def single_capture(output_folder = "default", filename = "capture", suffix="", num_frames = 100000, num_batches = 1):
     example_extended_capture(
         output_folder=output_folder,
         filename=filename,
