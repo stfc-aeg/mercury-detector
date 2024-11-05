@@ -199,6 +199,7 @@ def capture_data(
                 duration_s, get_frames_written(hide_printout=True), num_frames,
             ))
             reassured = duration_s
+            set_progress(get_frames_written(hide_printout=True), num_frames)
 
         time.sleep(0.1)
 
