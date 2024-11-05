@@ -2233,8 +2233,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_firefly_set_channel_enabled(self, channel_name, en=True):
         # Set enable state for a specific channel name, as defined by the application.
         # If channel_name is supplied as 'All', will operate on all channels (used for BabyD)
-        channel = self._merc_channels.get(channel_name, None)
+        channel = self._merc_channels.get(str(channel_name), None)
         if channel is None:
+            logging.error('FF could not find channel {} when checking enabled'.format(channel_name))
             return
         else:
             channel_bitfield = channel.firefly_ch_bitfield
@@ -2245,15 +2246,21 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 if channel.firefly_dev.initialised:
                     self._logger.error('Failed to get FireFly lock while returning channel states')
 
-            channel.firefly_dev.device.enable_tx_channels(channel_bitfield)
-            self._logger.info('Firefly: {}abled channel {}'.format('en' if en else 'dis', channel_name))
+            # Change the channel state
+            if en:
+                channel.firefly_dev.device.enable_tx_channels(channel_bitfield)
+            else:
+                channel.firefly_dev.device.disable_tx_channels(channel_bitfield)
+
+        self._logger.info('Firefly: {}abled channel {}'.format('en' if en else 'dis', channel_name))
 
     def mhz_firefly_get_channel_enabled(self, channel_name):
         # Get the current enable state for a channel name, where name is application-specific.
         # Get the current enable state for a channel name, as defined by the application.
         # If the channel_name is supplied as 'All', will return true if all used channels are enabled, false otherwise.
-        channel = self._merc_channels.get(channel_name, None)
+        channel = self._merc_channels.get(str(channel_name), None)
         if channel is None:
+            logging.error('FF Could not find channel {} when checking enabled'.format(channel_name))
             return None
         else:
             channel_bitfield = channel.firefly_ch_bitfield
