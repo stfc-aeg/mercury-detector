@@ -2156,6 +2156,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._logger.info('Enabled MHz channel {}'.format(chnum))
             self.mhz_firefly_set_channel_enabled(str(chnum), True)
 
+            # Sometimes the FireFlies appear to 'miss' channel control commands
+            misscount = 0
+            while True:
+                if self.mhz_firefly_get_channel_enabled(str(chnum)):
+                    break
+                time.sleep(0.1)
+                misscount += 1
+                if misscount > 10:
+                    self._logger.error('Failed to enable Firefly channel {}'.format(chnum))
+
     def _mhz_firefly_channel_loop(self):
         while not self.TERMINATE_THREADS:
             self.watchdog_kick()
