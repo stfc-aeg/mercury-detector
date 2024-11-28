@@ -1,5 +1,6 @@
 import time
 provides = [
+    'rebond',
     'trigger_segment_capture',
     'set_cal_pattern_enable',
     'change_calibration_preset',
@@ -7,6 +8,13 @@ provides = [
     'change_calibration_grid',
     'grid_scan_positions_ltor',
 ]
+
+def rebond():
+    asic = get_context('asic')
+    asic.enter_bonding_mode()
+    time.sleep(0.1)
+    asic.enter_data_mode()
+    print('ASIC output channels rebonded')
 
 def trigger_segment_capture(segment=20, trigger=1):
     carrier = get_context('carrier')

@@ -1,6 +1,6 @@
 import time
 requires = ['asic_spi']
-provides = ['test_time_difference', 'test_proxy_adapter', 'basic_readout_check', 'change_env_sensor_refresh_ms']
+provides = ['test_time_difference', 'test_proxy_adapter', 'basic_readout_check', 'change_env_sensor_refresh_ms', 'print_watchdog_info']
 
 def basic_readout_check(test_name='default'):
     store_sector_readout(sector_samples=1000, sector_array=[9], vcal_values=[1.0], test_name=test_name, test_index=0, suppress_progress_update=False, timesleep=0.0)
@@ -32,3 +32,8 @@ def test_proxy_adapter():
 def change_env_sensor_refresh_ms(ms=5000):
     carrier = get_context('carrier')
     carrier._env_reading_sync_period_s = (ms / 1000.0)
+
+def print_watchdog_info():
+    carrier = get_context('carrier')
+    print(carrier._watchdog_threads)
+    print(carrier._watchdog_kicks)

@@ -1083,6 +1083,23 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._asic.write_field('GL_SerAnaRstB_EN', 0b1)
         self._logger.info("Serialiser encoding state force reset")
 
+    def rebond_asic(self):
+        # If the channels have gone down, a quick way of re-syncing the output aurora stream
+        # with the firmware is temporarily switching the ASIC back to bonding mode, and then
+        # to data mode again. This is an alternative to fully re-initialising the ASIC.
+
+        # It only makes sense for this to happen if we've already initialised the ASIC
+        if (not self._STATE_ASIC_INITIALISED) or (not self._STATE_ASIC_FASTDATA_INITIALISED):
+            raise RuntimeError('Cannot rebond the ASIC before it is initialised')
+
+        self._asic.enter_bonding_mode()
+        self._STATE_ASIC_FASTDATA_INITIALISED = False
+        time.sleep(0.1)
+        self._asic.enter_data_mode()
+        self._STATE_ASIC_FASTDATA_INITIALISED = True
+
+        self._logger.info('Re-bonded ASIC serialiser outputs')
+
     def _setup_ltc2986(self):
         # Enable the sensor channel for the on-ASIC diode temperature sensor.
 
@@ -2568,6 +2585,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ASIC_INIT': (lambda: self._STATE_ASIC_INITIALISED, None),
                 'ASIC_FASTDATA_INIT': (lambda: self._STATE_ASIC_FASTDATA_INITIALISED, None),
                 'ASIC_FASTDATA_EN': (self.get_fast_data_enabled, None),
+                'ASIC_REBOND': (None, lambda x: self.rebond_asic()),
                 'DEVICES': {
                     'FIREFLY': {
                         '00to09': (lambda: 'error' if self._firefly_00to09.error else ('initialised' if self._firefly_00to09.initialised else 'unconfigured'), None),
