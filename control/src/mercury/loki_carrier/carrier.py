@@ -406,6 +406,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._segment_data = None
         self._segment_data_ready = False
 
+        self._asic_rebond_time = 0.1
+
         self._logger.info('ASIC instance creation complete')
 
         self._TRIPS_cached_any_trip = None
@@ -421,6 +423,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Final indicators of system readiness
         self._STATE_ASIC_INITIALISED = False
         self._STATE_ASIC_FASTDATA_INITIALISED = False
+        self._STATE_ASIC_REBONDING = False
 
         # Create HV lock and settings (set once)
         self._HV_mutex = threading.RLock()
@@ -514,6 +517,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         self.add_thread('SegmentCapture', self._segment_capture_loop)
         self.watchdog_add_thread('SegmentCapture', 10, lambda: 'Failure in segment capture loop')
+
+        self.add_thread('rebond', self._rebond_loop)
+        self.watchdog_add_thread('Rebond', 10, lambda: 'Failure in rebond loop')
 
     def _exit_nicely(self):
         # This wil be registered after the parent, therefore executed before automatic thread termination in LOKI
@@ -1083,7 +1089,28 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._asic.write_field('GL_SerAnaRstB_EN', 0b1)
         self._logger.info("Serialiser encoding state force reset")
 
-    def rebond_asic(self):
+    def _rebond_loop(self):
+        while not self.TERMINATE_THREADS:
+            self.watchdog_kick()
+
+            if self._STATE_ASIC_REBONDING:
+
+                try:
+                    self._asic.enter_bonding_mode()
+                    self._STATE_ASIC_FASTDATA_INITIALISED = False
+                    time.sleep(self._asic_rebond_time)
+                    self._asic.enter_data_mode()
+                    self._STATE_ASIC_FASTDATA_INITIALISED = True
+                    self._logger.info('Re-bonded ASIC serialiser outputs')
+                except Exception as e:
+                    raise Exception('Could not rebond ASIC: {}'.format(e))
+                finally:
+                    self._STATE_ASIC_REBONDING = False
+
+            else:
+                time.sleep(0.1)
+
+    def rebond_asic(self, bonding_time_s=0.1):
         # If the channels have gone down, a quick way of re-syncing the output aurora stream
         # with the firmware is temporarily switching the ASIC back to bonding mode, and then
         # to data mode again. This is an alternative to fully re-initialising the ASIC.
@@ -1092,13 +1119,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         if (not self._STATE_ASIC_INITIALISED) or (not self._STATE_ASIC_FASTDATA_INITIALISED):
             raise RuntimeError('Cannot rebond the ASIC before it is initialised')
 
-        self._asic.enter_bonding_mode()
-        self._STATE_ASIC_FASTDATA_INITIALISED = False
-        time.sleep(0.1)
-        self._asic.enter_data_mode()
-        self._STATE_ASIC_FASTDATA_INITIALISED = True
-
-        self._logger.info('Re-bonded ASIC serialiser outputs')
+        self._asic_rebond_time = float(bonding_time_s)
+        self._STATE_ASIC_REBONDING = True
 
     def _setup_ltc2986(self):
         # Enable the sensor channel for the on-ASIC diode temperature sensor.
@@ -1909,7 +1931,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         target_hv_bias = self.mhz_hv_get_target_bias()
                         if target_hv_bias is not None:
                             target_vcont = self._mhz_hv_calc_control_voltage_from_hvbias(target_hv_bias)
-                            self._logger.error('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
+                            self._logger.debug('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
                             self._mhz_hv_set_control_voltage_direct(target_vcont)
             except Exception as e:
                 self._logger.error('Error in HV thread: {}'.format(e))
@@ -2585,7 +2607,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ASIC_INIT': (lambda: self._STATE_ASIC_INITIALISED, None),
                 'ASIC_FASTDATA_INIT': (lambda: self._STATE_ASIC_FASTDATA_INITIALISED, None),
                 'ASIC_FASTDATA_EN': (self.get_fast_data_enabled, None),
-                'ASIC_REBOND': (None, lambda x: self.rebond_asic()),
+                'ASIC_REBOND': (lambda: self._STATE_ASIC_REBONDING, lambda x: self.rebond_asic(0.5)),
                 'DEVICES': {
                     'FIREFLY': {
                         '00to09': (lambda: 'error' if self._firefly_00to09.error else ('initialised' if self._firefly_00to09.initialised else 'unconfigured'), None),
