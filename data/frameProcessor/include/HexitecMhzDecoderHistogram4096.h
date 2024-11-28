@@ -5,7 +5,7 @@
  *      Author: Dominic Banks, STFC Detector Systems Software Group
  */
 
-// 1024 Bin Histogram
+// 4096 Bin Histogr
 
 #ifndef INCLUDE_HEXITECMHZ_PROTOCOL_DECODER_H_
 #define INCLUDE_HEXITECMHZ_PROTOCOL_DECODER_H_
@@ -16,7 +16,7 @@
 #include <rte_memcpy.h>
 
 #define FRAME_OUTER_CHUNK_SIZE 1
-#define PACKETS_PER_FRAME 3200
+#define PACKETS_PER_FRAME 3200 * 4
 
 // #define GET_PACKET_NUMBER(x) ((x >> 40) & 0xFFFFFF)
 // #define GET_FRAME_NUMBER(x) (x & 0xFFFFFFFFFF)

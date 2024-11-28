@@ -15,19 +15,24 @@
 
 #include <rte_memcpy.h>
 
-#define FRAME_OUTER_CHUNK_SIZE 1
-#define PACKETS_PER_FRAME 3200
+#define FRAME_OUTER_CHUNK_SIZE 1000
+#define PACKETS_PER_FRAME 2
 
-// #define GET_PACKET_NUMBER(x) ((x >> 40) & 0xFFFFFF)
-// #define GET_FRAME_NUMBER(x) (x & 0xFFFFFFFFFF)
+#define GET_PACKET_NUMBER(x) ((x >> 40) & 0xFFFFFF)
+#define GET_FRAME_NUMBER(x) (x & 0xFFFFFFFFFF)
 
 #define GET_PACKET_NUMBER(x) (x & 0xFFF)
 #define GET_FRAME_NUMBER(x) (x >> 24)
 
 struct X10GPacketHeader : PacketHeader
 {
-    rte_be64_t padding[7];
     rte_be64_t frame_number;
+    rte_be64_t padding[6];
+    rte_be32_t packet_number;
+    uint8_t markers;
+    uint8_t _unused_1;
+    uint8_t padding_bytes;
+    uint8_t readout_lane;
 } __rte_packed;
 
 
@@ -61,7 +66,7 @@ struct X10GSuperFrameHeader : SuperFrameHeader
 namespace Defaults
 {
     const std::size_t default_packets_per_frame = PACKETS_PER_FRAME;
-    const std::size_t default_payload_size = 8192;
+    const std::size_t default_payload_size = 5120;
 }
 
 class HexitecMhzDecoder : public ProtocolDecoder
@@ -204,7 +209,7 @@ public:
 
     virtual const FrameProcessor::DataType get_frame_bit_depth(void) const
     {
-        return FrameProcessor::raw_32bit;
+        return FrameProcessor::raw_16bit;
     }
 
     void set_frame_number(RawFrameHeader* frame_hdr, uint64_t frame_number)
