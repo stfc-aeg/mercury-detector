@@ -2410,7 +2410,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             return reshaped
 
-        blank_segment = [[0] * 80]*4
+        blank_segment = [[None] * 80]*4
 
         try:
 
