@@ -12,6 +12,24 @@ import time
 from enum import IntEnum, unique, auto
 import threading
 import numpy as np
+import math
+
+
+def _calculate_dewpoint_approx(relative_humidity, air_temperature):
+    # constants
+    b = 17.625
+    c = 243.04
+
+    def gamma(relative_humidity, air_temperature):
+        return math.log(relative_humidity / 100) + ((b * air_temperature) / (c + air_temperature))
+
+    # Save calculating the result twice
+    gamma_result = gamma(relative_humidity, air_temperature)
+
+    T_d = (c * gamma_result) / (b - gamma_result)
+
+    return round(T_d, 1)
+
 
 # Holds information mapping ASIC channels onto different devices, for example, fireflies, retimers etc.
 class ChannelInfo(object):
@@ -239,6 +257,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             ('DIODE', 'temperature', {"description": "ASIC internal temperature diode via LTC2986", "units": "C"}),
             ('FIREFLY00to09', 'temperature', {"description": "FireFly channels 0-9 temperature", "units": "C"}),
             ('FIREFLY10to19', 'temperature', {"description": "FireFly channels 10-19 temperature", "units": "C"}),
+            ('DEWPOINT', 'temperature', {"description": "Dew point calculated from the current power board environment"}),
         ])
 
         # Get config for FireFly
@@ -1302,6 +1321,24 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 if sensor_type == 'temperature':
                     # This is actually a cached value already, but no matter
                     return self._mhz_firefly_get_temperature_direct('10to19')
+                else:
+                    raise
+            elif name == 'DEWPOINT':
+                if sensor_type == 'temperature':
+                    # The dew point is calculated using the latest power board temperature combined with
+                    # the humidity reading from LOKI, since this is the only one available.
+
+                    # If the power board temperature is not available it will fall back to the LOKI one.
+                    if self.env_get_sensor_cached('POWER_BOARD', 'temperature') in [None, 'No Reading']:
+                        case_temperature = self.env_get_sensor_cached('BOARD', 'temperature')
+                        self._logger.warning('MIC284 error; dew point calculation falling back to LOKI temperature sensor')
+                    else:
+                        case_temperature = self.env_get_sensor_cached('POWER_BOARD', 'temperature')
+
+                    return _calculate_dewpoint_approx(
+                        relative_humidity=self.env_get_sensor_cached('BOARD', 'humidity'),
+                        air_temperature=case_temperature,
+                    )
                 else:
                     raise
             else:
