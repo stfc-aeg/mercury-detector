@@ -106,6 +106,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         if self._asic_default_feedback_capacitance is not None:
             self._asic_default_feedback_capacitance = int(self._asic_default_feedback_capacitance)
 
+        # Get the limits for temperature and dew point
+        self._critical_sensor_temperature = float(kwargs.get('critical_sensor_temperature', 60))
+        self._dew_point_tolerance = float(kwargs.get('dew_point_tolerance', 4))
+
         # Override parent pin settings
 
         # Add mhz-specific pins (Application/ASIC enable are already default LOKI
@@ -446,6 +450,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._ENABLE_STATE_LAST_IDLE = None                     # The last state passed through considered 'idle' (safe to return to)
         self._ENABLE_STATE_INERR = False                        # True if the system encountered an error at last state change
         self._ENABLE_STATE_ERRMSG = None                        # Message if an error was encountered
+        self._ENABLE_STATE_STATUSMSG = None
 
         # Final indicators of system readiness
         self._STATE_ASIC_INITIALISED = False
@@ -609,22 +614,116 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self.ENABLE_STATE.ASIC_DONE,
         ]
 
-        def handle_state_error(msg):
+        def handle_state_error(msg, target_state_override=None):
             # Report the error
             full_message = 'error processing enable state {}: {}'.format(self._ENABLE_STATE_CURRENT.name, msg)
             self._logger.error(full_message)
             self._ENABLE_STATE_INERR = True
             self._ENABLE_STATE_ERRMSG = full_message
 
-            # Set the current target to latest 'idle' state to prevent further advancement until
-            # the user requests it.
-            self._ENABLE_STATE_TARGET = self._ENABLE_STATE_LAST_IDLE
+            if target_state_override is not None:
+                self._ENABLE_STATE_TARGET = target_state_override
+                self._ENABLE_STATE_CURRENT = target_state_override
+            else:
+                # Set the current target to latest 'idle' state to prevent further advancement until
+                # the user requests it.
+                self._ENABLE_STATE_TARGET = self._ENABLE_STATE_LAST_IDLE
 
-            # Force the current state to the latest 'idle' state to prevent further advancement until
-            # the user requests it.
-            self._ENABLE_STATE_CURRENT = self._ENABLE_STATE_LAST_IDLE
+                # Force the current state to the latest 'idle' state to prevent further advancement until
+                # the user requests it.
+                self._ENABLE_STATE_CURRENT = self._ENABLE_STATE_LAST_IDLE
 
             self._logger.error('Moving back to last idle state ({}) until user advances it...'.format(self._ENABLE_STATE_LAST_IDLE.name))
+
+        def check_dewpoint_limits(timeout_s=10):
+            # Check the system temperatures available against the calculated dewpoint, and react accordingly.
+
+            # The timeout is mostly so that it can initally wait for the first round of readings to appear- it
+            # will otherwise routinely return very quickly.
+
+            # The temperature used will ideally be the ASIC diode, as this most accurately reflects the
+            # true ASIC temperature. The block temperature will be used as a fallback.
+
+            dew_point = None
+            block_temp = None
+            asic_temp = None
+
+            # Wait for a valid reading
+            time_check_start = time.time()
+            while dew_point is None:
+                dew_point = self.env_get_sensor_cached('DEWPOINT', 'temperature')
+                if dew_point == 'No Reading':
+                    dew_point = None
+
+                if time.time() - time_check_start > timeout_s:
+                    raise RuntimeError(f'Could not check system temperature against dew point; no dew point after {timeout_s}s')
+                time.sleep(0.2)
+
+            # Get the updated other sensor values
+            block_temp = self.env_get_sensor_cached('BLOCK', 'temperature')
+            if block_temp == 'No Reading':
+                block_temp = None
+            asic_temp = self.env_get_sensor_cached('DIODE', 'temperature')
+            if asic_temp == 'No Reading':
+                asic_temp = None
+
+            # Check the ASIC / block temperature against dew point
+            if asic_temp is not None:
+                # Use ASIC temperature
+                if (asic_temp - dew_point) < self._dew_point_tolerance:
+                    raise RuntimeError(f'ASIC temp {asic_temp} is too close to dew point {dew_point}')
+            else:
+                # Fall back to block temperature
+                if block_temp is None:
+                    raise RuntimeError('Could not check dew point: fallback block temperature not available')
+
+                if (block_temp - dew_point) < self._dew_point_tolerance:
+                    raise RuntimeError(f'Block temp {block_temp} is too close to dew point {dew_point}')
+
+            self._logger.debug(
+                'ASIC temp {} and block temp {} clear of dew point+tolerance {}+{}'.format(
+                    asic_temp, block_temp, dew_point, self._dew_point_tolerance
+                )
+            )
+
+        def check_temperature_limits(timeout_s=10):
+            # Check the sensor temperatures available against the set limit
+
+            # The timeout is mostly so that it can initally wait for the first round of readings to appear- it
+            # will otherwise routinely return very quickly.
+
+            # The temperature used will ideally be the ASIC diode, as this most accurately reflects the
+            # true ASIC temperature. The block temperature will be used as a fallback.
+
+            block_temp = None
+            asic_temp = None
+
+            # Wait for a valid reading
+            time_check_start = time.time()
+            while block_temp is None:
+                block_temp = self.env_get_sensor_cached('BLOCK', 'temperature')
+                if time.time() - time_check_start > timeout_s:
+                    raise RuntimeError(f'Could not check system temperature; no block temperature after {timeout_s}s')
+                time.sleep(0.2)
+
+            # Get the updated other sensor values
+            asic_temp = self.env_get_sensor_cached('DIODE', 'temperature')
+            if asic_temp == 'No Reading':
+                asic_temp = None
+
+            # Check the ASIC / block temperature against critical limits
+            if asic_temp is not None:
+                # Use ASIC temperature
+                if asic_temp > self._critical_sensor_temperature:
+                    raise RuntimeError(f'ASIC temp {asic_temp} is above critical limit {self._critical_sensor_temperature}')
+            else:
+                # Fall back to block temperature
+                if block_temp is None:
+                    raise RuntimeError('Could not check sensor temperature limits: fallback block temperature not available')
+
+                if block_temp > self._critical_sensor_temperature:
+                    raise RuntimeError(f'Block temp {block_temp} is above critical limit {self._critical_sensor_temperature}')
+
 
         def clear_error():
             self._ENABLE_STATE_INERR = False
@@ -665,6 +764,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Note: this state is entered immediately after the IO loops are started, and devices
                     # have note necessarily been created, so do nothing until advance is forced by setting
                     # the target at the end of __init__.
+                    self._ENABLE_STATE_STATUSMSG = "Pre-initialisation"
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -696,7 +796,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     self._ltc2986.diode_setup_done = False
 
                     # Perform init of devices on LOKI board
+                    self._ENABLE_STATE_STATUSMSG = "Setting up clocks"
                     self._setup_clocks()
+                    self._ENABLE_STATE_STATUSMSG = "Setting up VCAL"
                     self._setup_vcal_in()
 
                     # Although the LTC is present on the LOKI carrier, it is not set up until it is known that an
@@ -711,6 +813,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.LOKI_DONE:
                 try:
                     #TODO Set control lines, mutexes to disable anything on COB and power board
+
+                    self._ENABLE_STATE_STATUSMSG = "LOKI carrier setup complete"
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -744,16 +848,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     self._ltc2986.diode_setup_done = False
 
                     # Init the MIC temperature sensor and release its mutex if successful
+                    self._ENABLE_STATE_STATUSMSG = "Setting up MIC284 temperature monitor"
                     self._config_mic284()
                     if self._mic284.initialised:
                         full_unlock(self._mic284)
 
                     # Init the AD7998 ADC
+                    self._ENABLE_STATE_STATUSMSG = "Setting up AD7998 ADC"
                     self._config_ad7998()
                     if self._ad7998.initialised:
                         full_unlock(self._ad7998)
 
                     # Init the Digial Potentiometers (see below)
+                    self._ENABLE_STATE_STATUSMSG = "Setting up potentiometers"
                     self._config_potentiometers()
                     if self._digipot_peltier.initialised:
                         # This will start the peltier control
@@ -761,7 +868,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     if self._digipot_hv.initialised:
                         full_unlock(self._digipot_hv)
 
-                    # Init the HV system
+                    # Init the HV system - check dew point first
+                    # Wait for at least one round of environment readings
+                    self._ENABLE_STATE_STATUSMSG = "Checking dew point"
+                    check_dewpoint_limits()
+                    self._ENABLE_STATE_STATUSMSG = "Setting up HV"
                     self._mhz_hv_setup(self._HV_enable_after_setup)
 
                     # Set the next step, will be advanced depending on target
@@ -773,6 +884,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.PWR_DONE:
                 try:
                     #TODO Set control lines, mutexes to disable anything on COB
+
+                    try:
+                        self._ENABLE_STATE_STATUSMSG = "Checking dew point"
+                        check_dewpoint_limits()
+                        self._ENABLE_STATE_STATUSMSG = "Power board initialised"
+                    except RuntimeError:
+                        self.mhz_hv_set_enable(False)   # Force disable HV
+                        raise
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -796,6 +915,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Config fireflies, disable all output channels by default to prevent overheat
                     # This will be tried no matter if fast data is enabled or not, since we must
                     # still disable the channels to prevent overheat, if transceivers are present.
+                    self._ENABLE_STATE_STATUSMSG = "Configuring FireFlies"
                     self._config_fireflies(simple_enable=self._FASTDATA_SIMPLE_ENABLE)
                     if self._firefly_00to09.initialised:
                         full_unlock(self._firefly_00to09)
@@ -803,6 +923,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         full_unlock(self._firefly_10to19)
 
                     # Set up the LTC2986 to monitor the ASIC diode
+                    self._ENABLE_STATE_STATUSMSG = "Setting up LTC2986 Temperature Monitor"
                     self._setup_ltc2986()
 
                     # One-shot disable the regaultors (the user can override this in COB_DONE)
@@ -816,11 +937,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.COB_DONE:
                 try:
+                    self._ENABLE_STATE_STATUSMSG = "COB Initialised"
+
                     # Set the ASIC into reset
                     self.set_app_enabled(False)
 
                     # Disable the peltier so that cooling does not occur until the ASIC is actually active
                     self.mhz_peltier_set_enabled(False)
+
+                    check_temperature_limits()
 
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
@@ -838,11 +963,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     time.sleep(1)
 
                     # Enable the peltier, and check that temperature has settled
+                    self._ENABLE_STATE_STATUSMSG = "Enabling peltier"
                     self.mhz_peltier_set_enabled(True)
                     #TODO set a desired temperature from file if desired
                     #TODO check that temperature seems reasonable / settled before continuing
 
                     # Initialise the ASIC, either SPI only (if requested) or full functionality.
+                    self._ENABLE_STATE_STATUSMSG = "Checking fast data"
                     if self.get_fast_data_enabled():
                         if self._firefly_00to09.initialised and self._firefly_10to19.initialised:
                             # Enable the firefly channels for the ASIC outputs
@@ -853,10 +980,22 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             else:
                                 raise Exception('At least one firefly was not initialised while fast data is enabled, cannot switch on optical channels')
 
+                    try:
+                        self._ENABLE_STATE_STATUSMSG = "Checking dew point"
+                        check_dewpoint_limits()
+                    except RuntimeError:
+                        self.mhz_hv_set_enable(False)   # Force disable HV
+                        raise
+
+                    self._ENABLE_STATE_STATUSMSG = "Checking temperature limits"
+                    check_temperature_limits()
+
                     # Enable the regulators
+                    self._ENABLE_STATE_STATUSMSG = "Enabling ASIC regulators"
                     self.set_peripherals_enabled(True)
                     self._logger.info('Enabled Regulators')
                     time.sleep(3)
+                    self._ENABLE_STATE_STATUSMSG = "Initialising the ASIC"
                     self._initialise_asic(fast_data_enabled=self.get_fast_data_enabled())
 
                     # Set the next step, will be advanced depending on target
@@ -871,6 +1010,23 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_DONE:
                 try:
                     # System is ready! Release the ASIC mutex.
+                    self._ENABLE_STATE_STATUSMSG = "Full system init complete"
+
+                    try:
+                        check_dewpoint_limits()
+                    except RuntimeError:
+                        self.mhz_hv_set_enable(False)   # Force disable HV
+
+                        # Override the last valid idle state from this one, or it'll just stay here
+                        self._ENABLE_STATE_LAST_IDLE = self.ENABLE_STATE.COB_DONE
+                        raise
+
+                    try:
+                        check_temperature_limits()
+                    except RuntimeError:
+                        # Override the last valid idle state from this one, or it'll just stay here
+                        self._ENABLE_STATE_LAST_IDLE = self.ENABLE_STATE.COB_DONE
+                        raise
 
                     self._ENABLE_STATE_NEXT = self._ENABLE_STATE_CURRENT
                 except Exception as e:
@@ -904,6 +1060,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             return self._ENABLE_STATE_ERRMSG
         else:
             return None
+
+    def get_enable_state_status_message(self):
+        return self._ENABLE_STATE_STATUSMSG
 
     def get_enable_state(self):
         return self._ENABLE_STATE_CURRENT.name
@@ -986,6 +1145,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         try:
             # Enter Global mode - and reset the ASIC
             try:
+                self._ENABLE_STATE_STATUSMSG = "Entering global mode"
                 self.enter_global_mode()
             except Exception as e:
                 raise Exception('Failed while entering global mode: {}'.format(e))
@@ -994,6 +1154,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             # Set Diamond Default Registers
             try:
+                self._ENABLE_STATE_STATUSMSG = "Setting DIAMOND defaults"
                 self._asic.Set_DiamondDefault_Registers()
             except Exception as e:
                 raise Exception('Failed while setting DIAMOND defaults: {}'.format(e))
@@ -1003,6 +1164,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             # Set the default gain if it has been overridden in the configuration files
             try:
                 if self._asic_default_feedback_capacitance is not None:
+                    self._ENABLE_STATE_STATUSMSG = "Setting feedback capacitance"
                     self._asic.set_feedback_capacitance(self._asic_default_feedback_capacitance)
                     logging.info('Default ASIC feedback capacitance has been overridden to{}fF'.format(self._asic_default_feedback_capacitance))
             except Exception as e:
@@ -1013,6 +1175,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if fast_data_enabled:
                 # Reset the serialisers
                 logging.info("\tResetting Serialisers...")
+                self._ENABLE_STATE_STATUSMSG = "Restting serialisers"
                 time.sleep(0.5)
                 self._asic.ser_enter_reset()
                 time.sleep(0.5)
@@ -1022,6 +1185,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                 # Enter Bonding mode
                 logging.info("\tEntering Bonding Mode...")
+                self._ENABLE_STATE_STATUSMSG = "Entering bonding mode"
                 time.sleep(0.5)
                 self._asic.enter_bonding_mode()
 
@@ -1029,6 +1193,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                 # Enter Data mode
                 logging.info("\tEntering Data Mode...")
+                self._ENABLE_STATE_STATUSMSG = "Entering data mode"
                 time.sleep(0.5)
                 self._asic.enter_data_mode()
 
@@ -2292,7 +2457,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
-                    self._logger.error('Failed to get FireFly lock while returning temperature, timed out')
+                    self._logger.error('Failed to get FireFly lock while returning part number, timed out')
                 return None
 
             return current_ff.info_pn
@@ -2303,7 +2468,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
-                    self._logger.error('Failed to get FireFly lock while returning temperature, timed out')
+                    self._logger.error('Failed to get FireFly lock while returning vendor number, timed out')
                 return None
 
             return current_ff.info_vn
@@ -2314,7 +2479,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         with current_ff.acquire(blocking=True, timeout=1) as rslt:
             if not rslt:
                 if current_ff.initialised:
-                    self._logger.error('Failed to get FireFly lock while returning temperature, timed out')
+                    self._logger.error('Failed to get FireFly lock while returning OUI, timed out')
                 return None
 
             return current_ff.info_oui
@@ -2647,6 +2812,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ENABLE_STATE_TARGET': (self.get_enable_state_target, None),
                 'ENABLE_STATE_PROGRESS': (self.get_enable_state_progress, None),
                 'ENABLE_STATE_ERROR': (self.get_enable_state_error, None),
+                'ENABLE_STATE_STATUS_MESSAGE': (self.get_enable_state_status_message, None),
                 'POWER_BOARD_INIT': (lambda: self._ENABLE_STATE_CURRENT >= self.ENABLE_STATE.PWR_DONE, None),
                 'COB_INIT': (lambda: self._ENABLE_STATE_CURRENT >= self.ENABLE_STATE.COB_DONE, None),
                 'ASIC_INIT': (lambda: self._STATE_ASIC_INITIALISED, None),
