@@ -973,12 +973,23 @@ class HEXITEC_MHz(object):
 
         self.write_field('7fF', 1 if feedback_capacitance_fF in [7, 21] else 0)
         self.write_field('14fF', 1 if feedback_capacitance_fF in [14, 21] else 0)
+        self._logger.debug(f'Set pre-amp feedback to {feedback_capacitance_fF}fF')
 
     def get_feedback_capacitance(self):
         total_ff = 0
         total_ff += 7 if self.read_field('7fF') == 1 else 0
         total_ff += 14 if self.read_field('14fF') == 1 else 0
         return total_ff
+
+    def set_negative_range(self, negative_range_kev):
+        if negative_range_kev not in [-20, -10]:
+            raise ValueError("Negative must be -20 or -10 kev")
+
+        self.write_field('Range', 0 if negative_range_kev == -20 else 1)
+        self._logger.debug(f'Set pre-amp negative range to {negative_range_kev}keV')
+
+    def get_negative_range(self):
+        return {0: -20, 1:-10}[self.read_field('Range')]
 
     ##############################################################################
     # Serialiser Control                                                         #

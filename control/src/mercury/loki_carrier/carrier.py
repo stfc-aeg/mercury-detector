@@ -431,7 +431,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._calpattern_single_pixel_row = 0
         self._calpattern_single_pixel_col = 0
 
-        self._segment_capture_due = None
+        self._segment_capture_due = False
         self._segment_capture_selected_segment = 20 # All segments
         self._segment_capture_triggervalue = 0
         self._segment_data = None
@@ -616,7 +616,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         def handle_state_error(msg, target_state_override=None):
             # Report the error
-            full_message = 'error processing enable state {}: {}'.format(self._ENABLE_STATE_CURRENT.name, msg)
+            full_message = '{}: {}'.format(self._ENABLE_STATE_CURRENT.name, msg)
             self._logger.error(full_message)
             self._ENABLE_STATE_INERR = True
             self._ENABLE_STATE_ERRMSG = full_message
@@ -1175,7 +1175,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if fast_data_enabled:
                 # Reset the serialisers
                 logging.info("\tResetting Serialisers...")
-                self._ENABLE_STATE_STATUSMSG = "Restting serialisers"
+                self._ENABLE_STATE_STATUSMSG = "Resetting serialisers"
                 time.sleep(0.5)
                 self._asic.ser_enter_reset()
                 time.sleep(0.5)
@@ -2561,16 +2561,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self.watchdog_kick()
             time.sleep(0.2)
 
-            if self._segment_capture_due is not None:
+            if self._segment_capture_due is not False:
                 if self._STATE_ASIC_INITIALISED:
                     self.perform_asic_segment_capture(
                         self.get_segment_capture_selected_segment(),
                         self.get_segment_capture_triggervalue()
                     )
-                    self._segment_capture_due = None
+                    self._segment_capture_due = False
                 else:
                     self._logger.error('Cannot perform a segment capture when ASIC has not been initiliased')
-                    self._segment_capture_due = None
+                    self._segment_capture_due = False
 
     def set_segment_capture_selected_segment(self, segment):
         self._segment_capture_selected_segment = segment
@@ -2840,8 +2840,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     self._asic.set_frame_length),
                 'feedback_capacitance': (
                     lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else None,
-                    self._asic.set_feedback_capacitance),#TODO
+                    self._asic.set_feedback_capacitance),
                 'feedback_gain': (lambda: {7: 'high', 14: 'medium', 21: 'low', None:None, 0:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else None, None),
+                'negative_range': (
+                    lambda: self._asic.get_negative_range() if self._STATE_ASIC_INITIALISED else None,
+                    self._asic.set_negative_range),
+                'negative_range_name': (lambda: {-20: 'low', -10: 'high', None:None, 0:None}[self._asic.get_negative_range()] if self._STATE_ASIC_INITIALISED else None, None),
                 'serialiser_all_mode': (
                     lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_global_serialiser_mode),
