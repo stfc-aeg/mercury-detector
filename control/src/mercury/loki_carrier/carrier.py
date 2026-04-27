@@ -229,6 +229,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._ad7998= DeviceHandler(device_type_name='AD7998')
         self._ad7998.i2c_address = 0x20
         self._ad7998.i2c_bus = self._application_interfaces_i2c['APP_PWR']
+        self._ad7998.vdda_gain = float(kwargs.get('ad7998_vdda_gain', 20))
+        self._ad7998.vddd_gain = float(kwargs.get('ad7998_vddd_gain', 20))
+        self._ad7998.vdda_Rs = float(kwargs.get('ad7998_vdda_Rs', 0.015))
+        self._ad7998.vddd_Rs = float(kwargs.get('ad7998_vddd_Rs', 0.015))
+        self._ad7998.reference_voltage = 5.0
 
         # Get the limit for the DAC, other functionality provided by base adapter.
         kwargs.setdefault('vcal_in_limit', 1.8)     # 1.8v is max safe voltage to HEXITEC-MHz ASIC.
@@ -1524,8 +1529,6 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._ad7998.error = False
             self._ad7998.error_message = False
 
-            self._ad7998.reference_voltage = 5.0
-
             self._ad7998.device = AD7998(
                 address=self._ad7998.i2c_address,
                 busnum=self._ad7998.i2c_bus,
@@ -1663,8 +1666,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if Vout == None:
                 return None
             else:
-                G = 100.0   # Gain, depends on IC version
-                Rs = 0.015  # Sense resistor
+                G = self._ad7998.vdda_gain      # Gain, depends on IC version
+                Rs = self._ad7998.vdda_Rs       # Sense resistor
                 return round(Vout / (2 * G * Rs), 3)
 
     def mhz_adc_read_VDDD_current_A(self):
@@ -1681,8 +1684,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if Vout == None:
                 return None
             else:
-                G = 100.0   # Gain, depends on IC version
-                Rs = 0.015  # Sense resistor
+                G = self._ad7998.vddd_gain      # Gain, depends on IC version
+                Rs = self._ad7998.vddd_Rs       # Sense resistor
                 return round(Vout / (2 * G * Rs), 3)
 
     def mhz_adc_read_trips(self):
