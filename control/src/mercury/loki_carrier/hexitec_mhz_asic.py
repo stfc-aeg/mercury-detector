@@ -981,15 +981,127 @@ class HEXITEC_MHz(object):
         total_ff += 14 if self.read_field('14fF') == 1 else 0
         return total_ff
 
-    def set_negative_range(self, negative_range_kev):
-        if negative_range_kev not in [-20, -10]:
-            raise ValueError("Negative must be -20 or -10 kev")
+    def set_negative_range_lowhigh(self, negative_range_lowhigh):
+        """Set the negative range either low (more negative) or high using string names.
 
-        self.write_field('Range', 0 if negative_range_kev == -20 else 1)
-        self._logger.debug(f'Set pre-amp negative range to {negative_range_kev}keV')
+        Names are used because the keV value is different depending on the current feedback
+        capacitance. To set based on absolute keV, use the set_negative_range_kev function.
 
-    def get_negative_range(self):
-        return {0: -20, 1:-10}[self.read_field('Range')]
+        Args
+            negative_range_lowhigh      Either 'high' or 'low'. In default bias, 'low' would
+                                        correspond to -20keV, and 'high' to -10keV.
+        """
+        if negative_range_lowhigh not in ['low', 'high']:
+            raise ValueError("Negative range for this function must be \'low\' or \'high\'")
+
+        self.write_field('Range', 0 if negative_range_lowhigh == 'low' else 1)
+        negative_range_kev = self.get_negative_range_kev()
+        self._logger.debug(
+            f'Set pre-amp negative range to {negative_range_lowhigh} ({negative_range_kev}keV)'
+        )
+
+    def get_negative_range_lowhigh(self):
+        """Get whether the ASIC is in low (more negative) or high negative range mode."""
+        return {0: 'low', 1: 'high'}[self.read_field('Range')]
+
+    def get_negative_range_kev_from_lowhigh(self, low_or_high, feedback_capacitance_fF=None):
+        """Convert between low / high range and a specific keV baseline for current or given feedback.
+
+        Args:
+            low_or_high:                String 'low' or 'high', current range setting.
+            feedback_capacitance_fF:    Optionally supply a feedback capacitance value. Otherwise,
+                                        the function will use the current setting the ASIC is in.
+
+        Return:
+            keV value, float.
+        """
+        current_options = self.get_negative_range_options()
+        try:
+            return current_options[low_or_high]
+        except KeyError:
+            raise KeyError('Cannot get keV negative range for {low_or_high}, must be \'low\' or \'high\'')
+
+    def get_negative_range_lowhigh_from_kev(self, keV, feedback_capacitance_fF=None):
+        """Convert between a specific keV baseline and low / high range for current or given feedback.
+
+        Args:
+            keV:                        Baseline keV value to test, as a float.
+            feedback_capacitance_fF:    Optionally supply a feedback capacitance value. Otherwise,
+                                        the function will use the current setting the ASIC is in.
+
+        Return:
+            'low' or 'high' as a string.
+        """
+        current_options = self.get_negative_range_options()
+
+        if keV in current_options.values():
+            for low_high_option in current_options.keys():
+                if current_options[low_high_option] == keV:
+                    # Found the matching keV value, set this high/low range
+                    self.set_negative_range_lowhigh(low_high_option)
+        else:
+            raise ValueError(
+                '{} is not valid for the current feedback capacitance, valid values are {}/{}keV'.format(
+                    keV, current_options['low'], current_options['high'],
+                )
+            )
+
+    def get_negative_range_options(self, feedback_capacitance_fF=None):
+        """Get the relationship between 'low'/'high' and keV negative range.
+
+        The actual keV setting for the negative range when set low or high actually depends on
+        the feedback capacitance setting. This function will return a dictionary relating the
+        two.
+
+        Note that the results are only rough; for 21fF they are actually reccuring values.
+
+        Args:
+            feedback_capacitance_fF:    Optionally supply a feedback capacitance value. Otherwise,
+                                        the function will use the current setting the ASIC is in.
+
+        Return:
+            Dictionary relating high/low strings to keV values, in the following format:
+
+            {
+                'low': -20,
+                'high': -10,
+            }
+        """
+        if feedback_capacitance_fF is None:
+            feedback_capacitance_fF = self.get_feedback_capacitance()
+
+        if feedback_capacitance_fF == 14:
+            return {
+                'low': -20,
+                'high': -10,
+            }
+        elif feedback_capacitance_fF == 7:
+            return {
+                'low': -40,
+                'high': -20,
+            }
+        elif feedback_capacitance_fF == 21:
+            return {
+                'low': -13,
+                'high': -7,
+            }
+        else:
+            raise ValueError(f'Feedback capacitance value {feedback_capacitance_fF}fF is not valid')
+
+    def set_negative_range_kev(self, negative_range_kev):
+        """Set the negative range by specifying the baseline keV value.
+
+        Args:
+            negative_range_kev:     keV value of minimum, e.v. -10. Must be valid for the current
+                                    feedback capacitance setting. To see currently available settings,
+                                    use self.get_negative_range_options().
+        """
+        target_low_high_setting = self.get_negative_range_lowhigh_from_kev(negative_range_kev)
+        return self.set_negative_range_lowhigh(target_low_high_setting)
+
+    def get_negative_range_kev(self):
+        """Get the baseline value for the current negative range setting in keV."""
+        return self.get_negative_range_kev_from_lowhigh(self.get_negative_range_lowhigh())
 
     ##############################################################################
     # Serialiser Control                                                         #

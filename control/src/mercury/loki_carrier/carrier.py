@@ -106,6 +106,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         if self._asic_default_feedback_capacitance is not None:
             self._asic_default_feedback_capacitance = int(self._asic_default_feedback_capacitance)
 
+        # If an override to the negative range has been supplied, it will be set during the ASIC initialisation
+        # Should be 'low' or 'high' as a string.
+        self._asic_default_negative_range = kwargs.get('asic_default_negative_range', 'low')
+
         # Get the limits for temperature and dew point
         self._critical_sensor_temperature = float(kwargs.get('critical_sensor_temperature', 60))
         self._dew_point_tolerance = float(kwargs.get('dew_point_tolerance', 4))
@@ -1161,14 +1165,18 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
             step_delay()
 
-            # Set the default gain if it has been overridden in the configuration files
+            # Set the default preamp settings if they have been overridden in the configuration files
             try:
                 if self._asic_default_feedback_capacitance is not None:
                     self._ENABLE_STATE_STATUSMSG = "Setting feedback capacitance"
                     self._asic.set_feedback_capacitance(self._asic_default_feedback_capacitance)
-                    logging.info('Default ASIC feedback capacitance has been overridden to{}fF'.format(self._asic_default_feedback_capacitance))
+                    logging.info('Default ASIC feedback capacitance has been overridden to {}fF'.format(self._asic_default_feedback_capacitance))
+                if self._asic_default_negative_range is not None:
+                    self._ENABLE_STATE_STATUSMSG = "Setting negative range"
+                    self._asic.set_negative_range_lowhigh(self._asic_default_negative_range)
+                    logging.info('Default ASIC negative range has been overridden to {}'.format(self._asic_default_negative_range))
             except Exception as e:
-                raise Exception('Failed while setting ASIC default gain: {}'.format(e))
+                raise Exception('Failed while setting ASIC default preamp settings: {}'.format(e))
 
             step_delay()
 
@@ -2842,10 +2850,17 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_feedback_capacitance),
                 'feedback_gain': (lambda: {7: 'high', 14: 'medium', 21: 'low', None:None, 0:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else None, None),
-                'negative_range': (
-                    lambda: self._asic.get_negative_range() if self._STATE_ASIC_INITIALISED else None,
-                    self._asic.set_negative_range),
-                'negative_range_name': (lambda: {-20: 'low', -10: 'high', None:None, 0:None}[self._asic.get_negative_range()] if self._STATE_ASIC_INITIALISED else None, None),
+                'negative_range_kev': (
+                    lambda: self._asic.get_negative_range_kev() if self._STATE_ASIC_INITIALISED else None,
+                    self._asic.set_negative_range_kev),
+                'negative_range_lowhigh': (
+                    lambda: self._asic.get_negative_range_lowhigh() if self._STATE_ASIC_INITIALISED else None,
+                    self._asic.set_negative_range_lowhigh,
+                ),
+                'negative_range_options': (
+                    lambda: self._asic.get_negative_range_options() if self._STATE_ASIC_INITIALISED else None,
+                    None,
+                ),
                 'serialiser_all_mode': (
                     lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else None,
                     self._asic.set_global_serialiser_mode),
