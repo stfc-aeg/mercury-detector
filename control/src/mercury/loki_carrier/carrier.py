@@ -9,10 +9,11 @@ from odin_devices.firefly import FireFly
 from odin_devices.ad5259 import AD5259
 import logging
 import time
-from enum import IntEnum, unique, auto
+from enum import Enum, IntEnum, unique, auto
 import threading
 import numpy as np
 import math
+import traceback
 
 
 def _calculate_dewpoint_approx(relative_humidity, air_temperature):
@@ -89,7 +90,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         ASIC_INIT = auto()
         ASIC_DONE = auto()
 
+    @unique
+    class PELTIER_CONTROL_MODE(Enum):
+        manual = auto()
+        pid = auto()
+
     def __init__(self, **kwargs):
+        self._LOCAL_CLEANUP_DONE = False
         self._logger = logging.getLogger('HEXITEC-MHz Carrier')
 
         #TODO update this for HMHZ
@@ -494,6 +501,20 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._PELTIER_cached_count = None
         self._PELTIER_cached_proportion_saved = False
         self._PELTIER_enabled = None
+        self._PELTIER_control_mode = self._mhz_peltier_control_mode_to_enum(kwargs.get('peltier_control_default_mode', 'manual'))
+        self._PELTIER_PID_kp = float(kwargs.get('peltier_pid_kp', 0.01))
+        self._PELTIER_PID_ki = float(kwargs.get('peltier_pid_ki', 0.00))
+        self._PELTIER_PID_kd = float(kwargs.get('peltier_pid_kd', 0.00))
+        self._PELTIER_PID_allowed_temperature_target_sensors = ['DIODE', 'BLOCK']
+        self._PELTIER_PID_chosen_temperature_target_sensor = kwargs.get('peltier_pid_chosen_sensor', 'DIODE')
+        self._PELTIER_PID_target_temperature = int(kwargs.get('peltier_pid_target_temperature', 30))
+        self._PELTIER_PID_state = None
+
+        # Setting these will disable the peltier control when the COB is ready but not yet powered. Typically done when peltier
+        # control is in manual mode to avoid over-cooling and causing condensation. However, in PID mode it should correct for
+        # current temperature.
+        self._PELTIER_disable_manual_in_cob_done = bool(kwargs.get('peltier_disable_manual_in_cob_done', True))
+        self._PELTIER_disable_pid_in_cob_done = bool(kwargs.get('peltier_disable_pid_in_cob_done', False))
 
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
 
@@ -505,6 +526,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         else:
             self._ltc2986.hmhz_diode_channel = int(kwargs.get('ltc_diode_channel_no', 6))   # Specifies the uppper channel
             self._ltc2986.hmhz_diode_mode = LTC2986.Diode_Endedness.DIFFERENTIAL
+        self._ltc2986.diode_setup_done = False
 
         # Register a callback for when the application enable state changes, since the API for this is
         # provided by the base class and we need to set state variables related to it.
@@ -533,9 +555,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # The cleanup function is called by odin-control on exit, for example if reloaded in debug mode
         # by a file edit.
 
+        if self._LOCAL_CLEANUP_DONE:
+            self._logger.critical('Cleanup for HMHz already done')
+            return
+
+        self._logger.critical('odin-control has begun cleanup for HMHz')
+
         # This will terminate all threads, after setting main enable to false. This should also set SYNC
         # low first, ensuring that the ASIC completes its last packet before going down.
         self._exit_nicely()
+
+        self._logger.critical('HMHz cleanup done, Performing superclass cleanup')
+        self._LOCAL_CLEANUP_DONE = True
+        super(LokiCarrier_HMHz, self).cleanup()
 
     def _start_io_loops(self, options):
         # override IO loop start to add loops for this adapter
@@ -573,11 +605,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # Wait for up to 20s for the main enable to work properly
         timeout = 20
-        while not self.get_enable_state() != exit_target_state:
+        while not self.get_enable_state() == exit_target_state:
             time.sleep(1)
             timeout -= 1
             self._logger.critical('\ttimeout: {}'.format(timeout))
             if timeout <= 0:
+                break
+            if self.get_enable_state() == None:
+                # State machine is in error
                 break
 
         if self.get_enable_state() == exit_target_state:
@@ -627,6 +662,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             # Report the error
             full_message = '{}: {}'.format(self._ENABLE_STATE_CURRENT.name, msg)
             self._logger.error(full_message)
+            self._logger.error(traceback.format_exc())
             self._ENABLE_STATE_INERR = True
             self._ENABLE_STATE_ERRMSG = full_message
 
@@ -778,7 +814,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Set the next step, will be advanced depending on target
                     self._ENABLE_STATE_NEXT = self.ENABLE_STATE(self._ENABLE_STATE_CURRENT + 1)
                 except Exception as e:
-                    handle_state_error(e)
+                    handle_state_error(traceback.format_exc())
                     continue
 
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.LOKI_INIT:
@@ -931,6 +967,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     if self._firefly_10to19.initialised:
                         full_unlock(self._firefly_10to19)
 
+                    # Disable the peltier controller before setting up LTC, so that if it was already operating
+                    # it will not complain about lack of sensor until it tries again when enabled or in COB_DONE.
+                    self.mhz_peltier_set_enabled(False)
+
                     # Set up the LTC2986 to monitor the ASIC diode
                     self._ENABLE_STATE_STATUSMSG = "Setting up LTC2986 Temperature Monitor"
                     self._setup_ltc2986()
@@ -952,7 +992,13 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     self.set_app_enabled(False)
 
                     # Disable the peltier so that cooling does not occur until the ASIC is actually active
-                    self.mhz_peltier_set_enabled(False)
+                    if (self._PELTIER_disable_manual_in_cob_done and self.mhz_peltier_get_control_mode() == 'manual') or self._PELTIER_disable_pid_in_cob_done and self.mhz_peltier_get_control_mode() == 'pid':
+                        if self.mhz_peltier_get_enabled():
+                            self._logger.warning('Disabling peltier; not allowed when in COB_DONE when mode is {}'.format(self.mhz_peltier_get_control_mode()))
+                        self.mhz_peltier_set_enabled(False)
+                    else:
+                        self._logger.warning('Automatically enabling peltier; allowed when in COB_DONE when mode is {}'.format(self.mhz_peltier_get_control_mode()))
+                        self.mhz_peltier_set_enabled(True)
 
                     check_temperature_limits()
 
@@ -2039,19 +2085,19 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_hv_set_kp(self, kp):
         self._HV_PID_kp = kp
 
-    def mhz_hv_get_kp(self, kp):
+    def mhz_hv_get_kp(self):
         return self._HV_PID_kp
 
     def mhz_hv_set_ki(self, ki):
         self._HV_PID_ki = ki
 
-    def mhz_hv_get_ki(self, ki):
+    def mhz_hv_get_ki(self):
         return self._HV_PID_ki
 
     def mhz_hv_set_kd(self, kd):
         self._HV_PID_kd = kd
 
-    def mhz_hv_get_kd(self, kd):
+    def mhz_hv_get_kd(self):
         return self._HV_PID_kd
 
     def _mhz_hv_loop(self, update_period_s=1):
@@ -2155,7 +2201,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             self._logger.debug('target vcont for hv bias {} is {}'.format(target_hv_bias, target_vcont))
                             self._mhz_hv_set_control_voltage_direct(target_vcont)
             except Exception as e:
-                self._logger.error('Error in HV thread: {}'.format(e))
+                self._logger.error('Error in HV thread: {}'.format(traceback.format_exc()))
                 raise
 
     def _mhz_hv_handle_failure(self):
@@ -2168,10 +2214,15 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Disable the HV
         self.mhz_hv_set_enable(False)
 
-        # Move to the LOKI_DONE mode, since HV is enabled in PWR_INIT
-        self.set_enable_state('LOKI_DONE')
+        # Move to the LOKI_DONE mode, since HV is enabled in PWR_INIT (but only if already advanced past it).
+        if self._ENABLE_STATE_CURRENT > self.ENABLE_STATE.LOKI_DONE:
+            self.set_enable_state('LOKI_DONE')
 
     def _mhz_peltier_loop(self, update_period_s):
+        self._PELTIER_PID_latest_time = None
+        self._PELTIER_PID_integral = 0
+        self._PELTIER_PID_error = None
+
         while not self.TERMINATE_THREADS:
             try:
                 time.sleep(update_period_s)
@@ -2180,8 +2231,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 self._mhz_peltier_sync_proportion()
                 self._mhz_peltier_sync_proportion_stored()
                 self._mhz_peltier_sync_enabled()
+
+                if self._PELTIER_control_mode == self.PELTIER_CONTROL_MODE.pid:
+                    # It only makes sense to calculate if the controller is actually enabled- this also means
+                    # it doesn't error out and switch to manual mode if a temperature sensor is not available
+                    # while the peltier is disabled but PID mode selected.
+                    if self.mhz_peltier_get_enabled():
+                        self._mhz_peltier_pid_run_once()
+
             except Exception as e:
-                self._logger.error('Error in Peltier thread: {}'.format(e))
+                self._logger.error('Error in Peltier thread: {}'.format(traceback.format_exc()))
                 raise
 
     def _mhz_peltier_sync_proportion(self):
@@ -2276,20 +2335,35 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         )
 
     def mhz_peltier_set_temperature(self, temperature):
-        # Set the target temperature
-        target_proportion = self._mhz_peltier_convert_temp_to_proportion(temperature)
-        self.mhz_peltier_set_proportion(target_proportion)
-        self._logger.info('Set peltier proportion to {} to achieve temperature target {}C'.format(
-            target_proportion, temperature
-        ))
+        # Set the target temperature:
+        #   - Manual mode: Set a proportion directly using the formula
+        #   - Auto mode: Set the target temperature for PID
+
+        if self._PELTIER_control_mode == self.PELTIER_CONTROL_MODE.manual:
+            target_proportion = self._mhz_peltier_convert_temp_to_proportion(temperature)
+            self.mhz_peltier_set_proportion(target_proportion)
+            self._logger.info('Set peltier proportion to {} to achieve temperature target {}C'.format(
+                target_proportion, temperature
+            ))
+        elif self._PELTIER_control_mode == self.PELTIER_CONTROL_MODE.pid:
+            self._PELTIER_PID_target_temperature = temperature
+            self._logger.info('Set peltier PID temperature target to {}C'.format(
+                self._PELTIER_PID_target_temperature
+            ))
 
     def mhz_peltier_get_temperature(self):
-        # Get the target temperature as determined by the reverse of the current wiper proportion
-        target_proportion = self.mhz_peltier_get_proportion()
-        if target_proportion is None:
-            return None
-        else:
-            return round(self._mhz_peltier_convert_proportion_to_temp(target_proportion), 2)
+        # Get the currently targeted temperature for the peltier
+        #   - Manual mode: Calculate the target determined by the reverse of the current wiper proportion
+        #   - Auto mode: Simply return the last set target temperature
+
+        if self._PELTIER_control_mode == self.PELTIER_CONTROL_MODE.manual:
+            target_proportion = self.mhz_peltier_get_proportion()
+            if target_proportion is None:
+                return None
+            else:
+                return round(self._mhz_peltier_convert_proportion_to_temp(target_proportion), 2)
+        elif self._PELTIER_control_mode == self.PELTIER_CONTROL_MODE.pid:
+            return self._PELTIER_PID_target_temperature
 
     def mhz_peltier_set_enabled(self, enable):
         # Always let the peltier be enabled / disabled. Until the power board is init, this will
@@ -2303,6 +2377,141 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def mhz_peltier_get_enabled(self):
         return self._PELTIER_enabled
+
+    def _mhz_peltier_control_mode_to_enum(self, control_mode_str):
+        try:
+            return self.PELTIER_CONTROL_MODE[control_mode_str]
+        except KeyError:
+            raise KeyError('Peltier control mode {} does not exist, try: {}'.format(
+                control_mode_str, self.mhz_peltier_get_control_modes()))
+
+    def mhz_peltier_set_control_mode(self, control_mode_or_str):
+        target_control_mode = control_mode if isinstance(control_mode_or_str, self.PELTIER_CONTROL_MODE) else self._mhz_peltier_control_mode_to_enum(control_mode_or_str)
+
+        self._PELTIER_control_mode = target_control_mode
+
+    def mhz_peltier_get_control_mode(self):
+        return str(self._PELTIER_control_mode.name)
+
+    def mhz_peltier_get_control_modes(self):
+        return [x.name for x in self.PELTIER_CONTROL_MODE]
+
+    def mhz_peltier_set_temperature_target_sensor(self, sensor_name):
+        # Set the target sensor to a given sensor name in the system's 'environment' monitoring.
+        # Currently this is expected to be 'DIODE' or 'BLOCK'.
+
+        if sensor_name in self._env_cached_readings.keys() and sensor_name in self.mhz_peltier_get_allowed_temperature_target_sensors():
+            self._PELTIER_PID_chosen_temperature_target_sensor = sensor_name
+        else:
+            self._logger.warning('Could not select sensor {} for peltier control, it is not in the allowed list or has no readings'.format(sensor_name))
+
+    def mhz_peltier_get_temperature_target_sensor(self):
+        return self._PELTIER_PID_chosen_temperature_target_sensor
+
+    def mhz_peltier_get_allowed_temperature_target_sensors(self):
+        return self._PELTIER_PID_allowed_temperature_target_sensors
+
+    def mhz_peltier_get_temperature_target_sensor_reading(self):
+        # Return the latest reading from the chosen sensor being used for PID control
+
+        #latest_target_reading = self.env_get_sensor_cached(self.mhz_peltier_get_temperature_target_sensor(), 'temperature')
+        # We need an up to date reading. This does not risk coupling use interface to system load as it is still an internal
+        # thread driven at a consistent interval.
+        latest_target_reading = self._env_get_sensor(self.mhz_peltier_get_temperature_target_sensor(), 'temperature')
+
+        if latest_target_reading is None:
+            self._logger.error('Cannot use PID mode with no temperature sensor')
+            self.mhz_peltier_set_control_mode('manual')
+        return latest_target_reading
+
+    def mhz_peltier_pid_set_kp(self, kp):
+        self._PELTIER_PID_kp = kp
+
+    def mhz_peltier_pid_get_kp(self):
+        return self._PELTIER_PID_kp
+
+    def mhz_peltier_pid_set_ki(self, ki):
+        self._PELTIER_PID_ki = ki
+
+    def mhz_peltier_pid_get_ki(self):
+        return self._PELTIER_PID_ki
+
+    def mhz_peltier_pid_set_kd(self, kd):
+        self._PELTIER_PID_kd = kd
+
+    def mhz_peltier_pid_get_kd(self):
+        return self._PELTIER_PID_kd
+
+    def mhz_peltier_pid_reset(self):
+        self._PELTIER_PID_integral = 0
+
+    def mhz_peltier_pid_get_state(self):
+        return self._PELTIER_PID_state
+
+    def _mhz_peltier_pid_run_once(self):
+
+        # Normal PID loop
+
+        # Get timings between measurements
+        last_time = self._PELTIER_PID_latest_time
+        self._PELTIER_PID_latest_time = time.time()
+
+        if last_time is None:
+            # First loop
+            dt = 0
+            return
+        else:
+            dt = self._PELTIER_PID_latest_time - last_time
+
+        target = self._PELTIER_PID_target_temperature
+
+        if target is None:
+            raise Exception('Cannot track a target of None for peltier control')
+
+        latest_target_reading = self.mhz_peltier_get_temperature_target_sensor_reading()
+        if latest_target_reading is None:
+            return
+
+        error_last = self._PELTIER_PID_error
+        self._PELTIER_PID_error =  latest_target_reading - target
+
+        if error_last is None:
+            d_error = 0
+        else:
+            d_error = self._PELTIER_PID_error - error_last
+
+        # PID intermediates
+        proportional = self._PELTIER_PID_error
+        derivative = 0 if dt == 0 else (d_error) / dt
+        self._PELTIER_PID_integral += self._PELTIER_PID_error * dt
+
+        # PID output
+        peltier_pid_output = (
+            self.mhz_peltier_get_proportion()
+            + (proportional * self._PELTIER_PID_kp)
+            + (derivative * self._PELTIER_PID_kd)
+            + (self._PELTIER_PID_integral * self._PELTIER_PID_ki)
+        )
+
+        self._logger.info('Peltier PID: P:{} I:{} D:{} (({}) + ({}) +({})) --> output proportion to {}'.format(
+            proportional, self._PELTIER_PID_integral, derivative,
+            proportional * self._PELTIER_PID_kp, self._PELTIER_PID_integral * self._PELTIER_PID_ki, derivative * self._PELTIER_PID_kd,
+            peltier_pid_output
+        ))
+
+        # Set the output, capped
+        if  peltier_pid_output < 0:
+            self._logger.critical('Peltier underdriven below 0 ({}), capping'.format(peltier_pid_output))
+            peltier_pid_output = 0
+            self._PELTIER_PID_state = 'underdriven'
+        elif peltier_pid_output > 1:
+            self._logger.critical('Peltier overdriven above 1 ({}), capping'.format(peltier_pid_output))
+            peltier_pid_output = 1
+            self._PELTIER_PID_state = 'overdriven'
+        else:
+            self._PELTIER_PID_state = None
+
+        self.mhz_peltier_set_proportion(peltier_pid_output)
 
     def _config_potentiometers(self):
         for current_pot in [self._digipot_peltier, self._digipot_hv]:
@@ -2440,7 +2649,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                         else:
                             current_ff._cached_channels_disabled = current_ff.device.get_disabled_tx_channels_field()
                 except Exception as e:
-                    logging.error('Error in FireFly channel sync loop: {}'.format(e))
+                    logging.error('Error in FireFly channel sync loop: {}'.format(traceback.format_exc()))
 
     def mhz_firefly_get_device_names(self):
         return [dev.name for dev in  self._fireflies]
@@ -2932,6 +3141,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'count': (self.mhz_peltier_get_count, None),
                 'temperature': (self.mhz_peltier_get_temperature, self.mhz_peltier_set_temperature),
                 'enable': (self.mhz_peltier_get_enabled, self.mhz_peltier_set_enabled),
+                'mode': (self.mhz_peltier_get_control_mode, self.mhz_peltier_set_control_mode),
+                'modes_available': (self.mhz_peltier_get_control_modes, None),
+                'pid_target_sensor': (self.mhz_peltier_get_temperature_target_sensor, self.mhz_peltier_set_temperature_target_sensor),
+                'pid_target_sensors_available': (self.mhz_peltier_get_allowed_temperature_target_sensors, None),
+                'pid_kp': (self.mhz_peltier_pid_get_kp, self.mhz_peltier_pid_set_kp),
+                'pid_ki': (self.mhz_peltier_pid_get_ki, self.mhz_peltier_pid_set_ki),
+                'pid_kd': (self.mhz_peltier_pid_get_kd, self.mhz_peltier_pid_set_kd),
+                'pid_state': (self.mhz_peltier_pid_get_state, None),
             },
         }
 
