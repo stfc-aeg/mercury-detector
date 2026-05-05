@@ -511,6 +511,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._PELTIER_PID_anti_windup_enabled = bool(kwargs.get('peltier_pid_enable_anti_windup', "True") in ["True", "true"])
         self._PELTIER_PID_reset_on_target_change = bool(kwargs.get('peltier_pid_reset_on_target_change', "True") in ["True", "true"])
         self._PELTIER_PID_state = None
+        self._PELTIER_PID_reset_offset = float(kwargs.get('peltier_pid_safety_offset', 0.35))    # Essentially the reset value, must be <1
 
         # Setting these will disable the peltier control when the COB is ready but not yet powered. Typically done when peltier
         # control is in manual mode to avoid over-cooling and causing condensation. However, in PID mode it should correct for
@@ -2466,6 +2467,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # Normal PID loop
 
+        # This loop uses an OFFSET; we rely mostly on the intergral term for this loop currently, meaning that on reset
+        # the count is 0, and the controller will drop to near 0 immediately, which causes a temperature spike. To avoid this
+        # the controller is actually designed to calculate a setpoint above a proportion of 30- it *can* go below this if it drives under it, but it means that on reset it will go to 30 % (0.3), which is a non critical setting.
+        # This is now a reprogammable term, 'safety offset'
+
         # Get timings between measurements
         last_time = self._PELTIER_PID_latest_time
         self._PELTIER_PID_latest_time = time.time()
@@ -2501,6 +2507,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # PID output
         peltier_pid_output = (
+            self._PELTIER_PID_reset_offset +        # Safety offset, relates to about 50 degrees
             #self.mhz_peltier_get_proportion()
             + (proportional * self._PELTIER_PID_kp)
             + (derivative * self._PELTIER_PID_kd)
