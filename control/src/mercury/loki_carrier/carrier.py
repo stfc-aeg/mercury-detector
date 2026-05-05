@@ -502,12 +502,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._PELTIER_cached_proportion_saved = False
         self._PELTIER_enabled = None
         self._PELTIER_control_mode = self._mhz_peltier_control_mode_to_enum(kwargs.get('peltier_control_default_mode', 'manual'))
-        self._PELTIER_PID_kp = float(kwargs.get('peltier_pid_kp', 0.01))
-        self._PELTIER_PID_ki = float(kwargs.get('peltier_pid_ki', 0.00))
-        self._PELTIER_PID_kd = float(kwargs.get('peltier_pid_kd', 0.00))
+        self._PELTIER_PID_kp = float(kwargs.get('peltier_pid_kp', 0.03))
+        self._PELTIER_PID_ki = float(kwargs.get('peltier_pid_ki', 0.001))
+        self._PELTIER_PID_kd = float(kwargs.get('peltier_pid_kd', 0.001))
         self._PELTIER_PID_allowed_temperature_target_sensors = ['DIODE', 'BLOCK']
         self._PELTIER_PID_chosen_temperature_target_sensor = kwargs.get('peltier_pid_chosen_sensor', 'DIODE')
         self._PELTIER_PID_target_temperature = int(kwargs.get('peltier_pid_target_temperature', 30))
+        self._PELTIER_PID_anti_windup_enabled = bool(kwargs.get('peltier_pid_enable_anti_windup', "True") in ["True", "true"])
+        self._PELTIER_PID_reset_on_target_change = bool(kwargs.get('peltier_pid_reset_on_target_change', "True") in ["True", "true"])
         self._PELTIER_PID_state = None
 
         # Setting these will disable the peltier control when the COB is ready but not yet powered. Typically done when peltier
@@ -2351,6 +2353,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._logger.info('Set peltier PID temperature target to {}C'.format(
                 self._PELTIER_PID_target_temperature
             ))
+            if self._PELTIER_PID_reset_on_target_change:
+                self.mhz_peltier_pid_reset()
+                self._logger.info('Reset peltier PID counts')
 
     def mhz_peltier_get_temperature(self):
         # Get the currently targeted temperature for the peltier
@@ -2451,6 +2456,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_peltier_pid_get_state(self):
         return self._PELTIER_PID_state
 
+    def mhz_peltier_pid_set_enable_anti_windup(self, enable=True):
+        self._PELTIER_PID_anti_windup_enabled = bool(enable)
+
+    def mhz_peltier_pid_get_enable_anti_windup(self):
+        return self._PELTIER_PID_anti_windup_enabled
+
     def _mhz_peltier_pid_run_once(self):
 
         # Normal PID loop
@@ -2507,10 +2518,20 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             self._logger.critical('Peltier underdriven below 0 ({}), capping'.format(peltier_pid_output))
             peltier_pid_output = 0
             self._PELTIER_PID_state = 'underdriven'
+
+            #  Reverse the integral change (freeze it); anti-wind up
+            if self._PELTIER_PID_anti_windup_enabled:
+                self._PELTIER_PID_integral -= self._PELTIER_PID_error * dt
+
         elif peltier_pid_output > 1:
             self._logger.critical('Peltier overdriven above 1 ({}), capping'.format(peltier_pid_output))
             peltier_pid_output = 1
             self._PELTIER_PID_state = 'overdriven'
+
+            #  Reverse the integral change (freeze it); anti-wind up
+            if self._PELTIER_PID_anti_windup_enabled:
+                self._PELTIER_PID_integral -= self._PELTIER_PID_error * dt
+
         else:
             self._PELTIER_PID_state = None
 
@@ -3153,6 +3174,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'pid_kd': (self.mhz_peltier_pid_get_kd, self.mhz_peltier_pid_set_kd),
                 'pid_state': (self.mhz_peltier_pid_get_state, None),
                 'pid_reset': (None, lambda val: self.mhz_peltier_pid_reset()),
+                'pid_anti_windup': (self.mhz_peltier_pid_get_enable_anti_windup, self.mhz_peltier_pid_set_enable_anti_windup),
             },
         }
 
