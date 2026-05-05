@@ -513,8 +513,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # Setting these will disable the peltier control when the COB is ready but not yet powered. Typically done when peltier
         # control is in manual mode to avoid over-cooling and causing condensation. However, in PID mode it should correct for
         # current temperature.
-        self._PELTIER_disable_manual_in_cob_done = bool(kwargs.get('peltier_disable_manual_in_cob_done', True))
-        self._PELTIER_disable_pid_in_cob_done = bool(kwargs.get('peltier_disable_pid_in_cob_done', False))
+        self._PELTIER_disable_manual_in_cob_done = bool(kwargs.get('peltier_disable_manual_in_cob_done', "True") in ["True", "true"])
+        self._PELTIER_disable_pid_in_cob_done = bool(kwargs.get('peltier_disable_pid_in_cob_done', "False") in ["True", "true"])
 
         super(LokiCarrier_HMHz, self).__init__(**kwargs)
 
@@ -585,7 +585,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.add_thread('HV', self._mhz_hv_loop, update_period_s=1)
         self.watchdog_add_thread('HV', 10, self._mhz_hv_handle_failure())
 
-        self.add_thread('Peltier', self._mhz_peltier_loop, update_period_s=1)
+        # Note- this period cannot be too short, as the LTC takes up to 251ms to read in 3 conversion mode anyway
+        self.add_thread('Peltier', self._mhz_peltier_loop, update_period_s=float(options.get('peltier_pid_time_period_s', 1.0)))
         self.watchdog_add_thread('Peltier', 10, lambda: 'Failure in Peltier Loop')
 
         self.add_thread('SegmentCapture', self._segment_capture_loop)
@@ -2371,6 +2372,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # initially get a temperature setting reading back.
         self.set_pin_value('peltier_en', enable)
         self._mhz_peltier_sync_enabled()
+        if not enable:
+            self.mhz_peltier_pid_reset()
 
     def _mhz_peltier_sync_enabled(self):
         self._PELTIER_enabled = self.get_pin_value('peltier_en')
@@ -2487,7 +2490,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         # PID output
         peltier_pid_output = (
-            self.mhz_peltier_get_proportion()
+            #self.mhz_peltier_get_proportion()
             + (proportional * self._PELTIER_PID_kp)
             + (derivative * self._PELTIER_PID_kd)
             + (self._PELTIER_PID_integral * self._PELTIER_PID_ki)
@@ -3149,6 +3152,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'pid_ki': (self.mhz_peltier_pid_get_ki, self.mhz_peltier_pid_set_ki),
                 'pid_kd': (self.mhz_peltier_pid_get_kd, self.mhz_peltier_pid_set_kd),
                 'pid_state': (self.mhz_peltier_pid_get_state, None),
+                'pid_reset': (None, lambda val: self.mhz_peltier_pid_reset()),
             },
         }
 
