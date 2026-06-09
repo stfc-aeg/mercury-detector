@@ -1001,7 +1001,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             self._logger.warning('Disabling peltier; not allowed when in COB_DONE when mode is {}'.format(self.mhz_peltier_get_control_mode()))
                         self.mhz_peltier_set_enabled(False)
                     else:
-                        self._logger.warning('Automatically enabling peltier; allowed when in COB_DONE when mode is {}'.format(self.mhz_peltier_get_control_mode()))
+                        if not self.mhz_peltier_get_enabled():
+                            self._logger.warning('Automatically enabling peltier; allowed when in COB_DONE when mode is {}'.format(self.mhz_peltier_get_control_mode()))
                         self.mhz_peltier_set_enabled(True)
 
                     check_temperature_limits()
@@ -2514,7 +2515,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             + (self._PELTIER_PID_integral * self._PELTIER_PID_ki)
         )
 
-        self._logger.info('Peltier PID: P:{} I:{} D:{} (({}) + ({}) +({})) --> output proportion to {}'.format(
+        self._logger.debug('Peltier PID: P:{} I:{} D:{} (({}) + ({}) +({})) --> output proportion to {}'.format(
             proportional, self._PELTIER_PID_integral, derivative,
             proportional * self._PELTIER_PID_kp, self._PELTIER_PID_integral * self._PELTIER_PID_ki, derivative * self._PELTIER_PID_kd,
             peltier_pid_output

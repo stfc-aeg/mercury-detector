@@ -2,8 +2,6 @@ from odin_devices.spi_device import SPIDevice
 from loki.register_controller import RegisterController
 
 import logging
-logging.basicConfig()
-logging.root.setLevel(logging.INFO)
 
 REGISTER_WRITE_TRANSACTION = 0X00
 REGISTER_READ_TRANSACTION = 0X80
