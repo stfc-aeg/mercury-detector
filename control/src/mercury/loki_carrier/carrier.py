@@ -627,14 +627,25 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # If main enable has succeeded of we've given up waiting, perform critical exit operations
         self._logger.critical('Performing final cleanup operations for HEXITEC-MHz')
 
+        # Stop the peltier from over-driving by resetting it to safe value, and disabling PID
+        # modifications.
+        self.mhz_peltier_set_control_mode('manual')
+        self.mhz_peltier_set_proportion(self._PELTIER_PID_reset_offset) # Reasonable reset value to avoid overdrive
+        # By this point the peltier should be off anyway, but still force disable it
+        self.mhz_peltier_set_enabled(False)
+        self._logger.critical('Peltier setpoint set to safe value for restart ({}) and disabled'.format(self.mhz_peltier_get_proportion()))
+
         # Disable both fireflies
         self.set_pin_value('firefly_en', False)
+        self._logger.critical('Fireflies disabled')
 
         # Disable regulators
         self.set_peripherals_enabled(False)
+        self._logger.critical('Regulators disabled')
 
         # Disable HV
         self.mhz_hv_set_enable(False)
+        self._logger.critical('HV disabled')
 
         self._logger.critical('HEXITEC-MHz Cleanup done')
 
