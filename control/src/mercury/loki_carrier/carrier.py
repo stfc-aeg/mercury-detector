@@ -1030,6 +1030,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # will result in a proper cycle.
                     self.set_app_enabled(False)
                     self.set_peripherals_enabled(False)
+                    self._logger.info('Regulators and ASIC disabled to prepare for init')
 
                     time.sleep(1)
 
@@ -1076,6 +1077,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
                     # Also disable the regulators
                     self.set_peripherals_enabled(False)
+                    self._logger.critical('Regulators disabled due to error in ASIC_INIT')
                     continue
 
             elif self._ENABLE_STATE_CURRENT == self.ENABLE_STATE.ASIC_DONE:
@@ -1144,12 +1146,21 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _set_enable_state_target(self, target_state):
         # State machine will move to this target state directly if it is an earlier state,
         # or will proceed as normal until this state if it is a later state.
+
+        # Don't try and change the state while rebonding is already taking place
+        if self._STATE_ASIC_REBONDING:
+            raise RuntimeError('Cannot change state while rebonding is taking place')
+
         self._ENABLE_STATE_TARGET = self.ENABLE_STATE(target_state)
 
     def _set_enable_state_target_via(self, target_state, via_state):
         # State machine will proceed to a first target state, and once reached, will move
         # to a second target state. Often used to jump back through the state machine to a
         # different target while wanting to repeat previous init steps.
+
+        # Don't try and change the state while rebonding is already taking place
+        if self._STATE_ASIC_REBONDING:
+            raise RuntimeError('Cannot change state while rebonding is taking place')
 
         # If the specified 'via' state is still ahead of where we are, ignore it since we could be skipping
         # required process. The via is used for stepping backwards only.
