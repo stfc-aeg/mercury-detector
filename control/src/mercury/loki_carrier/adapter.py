@@ -93,10 +93,16 @@ class CarrierAdapter(ApiAdapter):
         :return: an ApiAdapterResponse object containing the appropriate response
         """
 
+
         content_type = 'application/json'
         data=0
         try:
             data = json_decode(request.body)
+
+            # Put should not be very often, hence print in log for easier audit without log level set to debug.
+            # Log before processing to make logs clearer (cause -> effect)
+            self._logger.info('PUT request from {}: {}'.format(request.remote_ip, data))
+
             print("path, data: ", path, ", ", data)
             self.carrier.set(path, data)
             response = self.carrier.get(path)
@@ -105,8 +111,6 @@ class CarrierAdapter(ApiAdapter):
             response = {'error': 'Failed to decode PUT request body: {}'.format(str(e))}
             status_code = 400
 
-        # Put should not be very often, hence print in log for easier audit without log level set to debug.
-        self._logger.info('PUT request from {}: {}'.format(request.remote_ip, data))
         #self._logger.debug(response)
 
         return ApiAdapterResponse(response, content_type=content_type,
