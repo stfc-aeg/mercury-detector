@@ -2857,7 +2857,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         def read_8bit_array(segment):
             # Get the segment pattern read from the ASIC, 320 pixel values
             patternout_12bit = self._asic.read_test_pattern(segment)
-            logging.warning('Pattern out: {}'.format(patternout_12bit))
+            logging.debug('Pattern out: {}'.format(patternout_12bit))
 
             # Re-order the data with numpy
             reshaped = np.empty((4,80), dtype=np.uint16)
@@ -2866,7 +2866,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 ridx = scol*4
                 reshaped[::, ridx:ridx+4] = np.array(patternout_12bit)[idx:idx+16].reshape(4,4)
 
-            logging.warning('Reshaped array: {}'.format(reshaped))
+            logging.debug('Reshaped array: {}'.format(reshaped))
 
             # Converts numpy array to python array - adds commas
             reshaped = reshaped.tolist()
