@@ -2087,6 +2087,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def mhz_hv_set_target_bias(self, hv_bias_v):
         # Request a high voltage bias setting, which will be targeted by the PID loop. Only possible when the loop is in
         # 'auto' mode.
+
+        # The bias is  allowed to be None or an integer
+        if hv_bias_v:
+            hv_bias_v = int(hv_bias_v)
+            if hv_bias_v > 0 or hv_bias_v < -1500:
+                raise RuntimeError('HV bias voltage must be in range -1500-0v')
+        else:
+            # Must be none, which means unset
+            pass
+
         with self._HV_mutex:
             self._HV_target_bias = hv_bias_v
 
