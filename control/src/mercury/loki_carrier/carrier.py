@@ -1158,6 +1158,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # to a second target state. Often used to jump back through the state machine to a
         # different target while wanting to repeat previous init steps.
 
+        self._logger.info('Request to move to state {} via {}'.format(target_state.name, via_state.name))
+
         # Don't try and change the state while rebonding is already taking place
         if self._STATE_ASIC_REBONDING:
             raise RuntimeError('Cannot change state while rebonding is taking place')
@@ -1166,10 +1168,12 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # required process. The via is used for stepping backwards only.
         if via_state < self._ENABLE_STATE_CURRENT:
             self._ENABLE_STATE_TARGET = self.ENABLE_STATE(via_state)
+            self._logger.info('Waiting for via state {} to be reached'.format(via_state.name))
             while (self._ENABLE_STATE_CURRENT != self.ENABLE_STATE(via_state)):
                 #TODO time this out
                 pass
 
+        self._logger.info('Via state {} reached, requesting transition to final state {}'.format(via_state.name, target_state.name))
         self._ENABLE_STATE_TARGET = self.ENABLE_STATE(target_state)
 
     def set_enable_state(self, state_name):
