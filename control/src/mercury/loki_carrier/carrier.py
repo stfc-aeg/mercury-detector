@@ -106,7 +106,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.set_fast_data_enabled(True if kwargs.get('fast_data_enabled', 'True') in ['True', 'true'] else False)
 
         # If simple enable is active, just power up the fireflies but don't monitor them (overridden by fast_data_enabled)
-        self._FASTDATA_SIMPLE_ENABLE = True if kwargs.get('fast_data_simple_enable', 'False') in ['True', 'true'] else False
+        self._IGNORE_UNRESPONSIVE_FIREFLIES = True if kwargs.get('ignore_unresponsive_fireflies', 'False') in ['True', 'true'] else False
 
         # If an override to the feedback capacitance has been supplied, it will be set during ASIC initialisation
         self._asic_default_feedback_capacitance = kwargs.get('default_feedback_capacitance', None)
@@ -649,6 +649,10 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
         self._logger.critical('HEXITEC-MHz Cleanup done')
 
+    def set_ignore_unresponsive_fireflies(self, value):
+        if bool(value):
+            self._IGNORE_UNRESPONSIVE_FIREFLIES  = bool(value)
+
     def _mhz_enable_state_machine_loop(self):
         # Controls the main state progression of the system. Enables for individual devices are handled
         # by mutexes (locks). To effectively 'disable' a device, its mutex is grabbed to prevent any other
@@ -982,7 +986,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # This will be tried no matter if fast data is enabled or not, since we must
                     # still disable the channels to prevent overheat, if transceivers are present.
                     self._ENABLE_STATE_STATUSMSG = "Configuring FireFlies"
-                    self._config_fireflies(simple_enable=self._FASTDATA_SIMPLE_ENABLE)
+                    self._config_fireflies(simple_enable=self._IGNORE_UNRESPONSIVE_FIREFLIES)
                     if self._firefly_00to09.initialised:
                         full_unlock(self._firefly_00to09)
                     if self._firefly_10to19.initialised:
@@ -1053,7 +1057,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             # Enable the firefly channels for the ASIC outputs
                             self._setup_fireflies()
                         else:
-                            if self._FASTDATA_SIMPLE_ENABLE:
+                            if self._IGNORE_UNRESPONSIVE_FIREFLIES:
                                 self._logger.warning('Enabling the ASIC while fast data enabled im simple mode. This should work, but FireFly channel states / temperatures cannot be monitored')
                             else:
                                 raise Exception('At least one firefly was not initialised while fast data is enabled, cannot switch on optical channels')
@@ -3113,6 +3117,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'ASIC_FASTDATA_INIT': (lambda: self._STATE_ASIC_FASTDATA_INITIALISED, None),
                 'ASIC_FASTDATA_EN': (self.get_fast_data_enabled, None),
                 'ASIC_REBOND': (lambda: self._STATE_ASIC_REBONDING, lambda x: self.rebond_asic(0.5)),
+                'FASTDATA_IGNORE_FIREFLIES': (lambda: self._IGNORE_UNRESPONSIVE_FIREFLIES, self.set_ignore_unresponsive_fireflies),
                 'DEVICES': {
                     'FIREFLY': {
                         '00to09': (lambda: 'error' if self._firefly_00to09.error else ('initialised' if self._firefly_00to09.initialised else 'unconfigured'), None),
