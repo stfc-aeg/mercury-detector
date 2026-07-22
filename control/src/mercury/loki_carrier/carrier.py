@@ -763,26 +763,31 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             while block_temp is None:
                 block_temp = self.env_get_sensor_cached('BLOCK', 'temperature')
                 if time.time() - time_check_start > timeout_s:
-                    raise RuntimeError(f'Could not check system temperature; no block temperature after {timeout_s}s')
+                    raise RuntimeError(f'Dewpoint check: Could not check system temperature; no block temperature after {timeout_s}s')
                 time.sleep(0.2)
+            self._logger.debug('Dewpoint check: Recovered block temperature as backup for dewpoint, value {} after {}s'.format(
+                block_temp, time.time() - time_check_start))
 
             # Get the updated other sensor values
             asic_temp = self.env_get_sensor_cached('DIODE', 'temperature')
             if asic_temp == 'No Reading':
                 asic_temp = None
+            self._logger.debug('Dewpoint check: ASIC temperature read as {}'.format(asic_temp))
 
             # Check the ASIC / block temperature against critical limits
             if asic_temp is not None:
                 # Use ASIC temperature
+                self._logger.debug('Dewpoint check: Using ASIC temperature {} to check against dew point'.format(asic_temp))
                 if asic_temp > self._critical_sensor_temperature:
-                    raise RuntimeError(f'ASIC temp {asic_temp} is above critical limit {self._critical_sensor_temperature}')
+                    raise RuntimeError(f'Dewpoint check: ASIC temp {asic_temp} is above critical limit {self._critical_sensor_temperature}')
             else:
-                # Fall back to block temperature
+                # Fall back to block temperature - should not be possible to get here if still none
+                self._logger.debug('Dewpoint check: Using block temperature {} to check against dew point as fallback'.format(block_temp))
                 if block_temp is None:
-                    raise RuntimeError('Could not check sensor temperature limits: fallback block temperature not available')
+                    raise RuntimeError('Dewpoint check: Could not check sensor temperature limits: fallback block temperature not available')
 
                 if block_temp > self._critical_sensor_temperature:
-                    raise RuntimeError(f'Block temp {block_temp} is above critical limit {self._critical_sensor_temperature}')
+                    raise RuntimeError(f'Dewpoint check: Block temp {block_temp} is above critical limit {self._critical_sensor_temperature}')
 
 
         def clear_error():
@@ -931,6 +936,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                     # Init the HV system - check dew point first
                     # Wait for at least one round of environment readings
                     self._ENABLE_STATE_STATUSMSG = "Checking dew point"
+                    # Wait for up to 5s
                     check_dewpoint_limits()
                     self._ENABLE_STATE_STATUSMSG = "Setting up HV"
                     self._mhz_hv_setup(self._HV_enable_after_setup)
