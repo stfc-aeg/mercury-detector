@@ -650,8 +650,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._logger.critical('HEXITEC-MHz Cleanup done')
 
     def set_ignore_unresponsive_fireflies(self, value):
-        if bool(value):
-            self._IGNORE_UNRESPONSIVE_FIREFLIES  = bool(value)
+        self._IGNORE_UNRESPONSIVE_FIREFLIES  = bool(value)
 
     def _mhz_enable_state_machine_loop(self):
         # Controls the main state progression of the system. Enables for individual devices are handled
