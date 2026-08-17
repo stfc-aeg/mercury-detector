@@ -1216,7 +1216,7 @@ class HEXITEC_MHz(object):
         # output channel.
 
         serialiser_number, driver_number = self.get_serialiserblk_from_channel(channel)
-        self.read_field('Ser{}_PatternControl'.format(serialiser_number))
+        return self.read_field('Ser{}_PatternControl'.format(serialiser_number))
 
     def set_channel_serialiser_cml_en(self, channel, enable):
         # Set the serialiser CML enable state for the driver associated with an ASIC channel

@@ -490,7 +490,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self.mhz_hv_set_auto(kwargs.get('hv_pid_enabled', False))
         self.mhz_hv_set_target_bias(kwargs.get('hv_pid_target_bias', None)) # Manual mode with no target is allowed
         self._HV_cached_vcont = None
-        self._HV_cached_vcont_saved = None
+        self._HV_cached_vcont_saved = False     # Assume unsaved until known
         self._HV_vcont_override = kwargs.get('hv_startup_vcont_override', None)
         self._HV_enable_after_setup = True if kwargs.get('hv_enable_after_setup', 'False')in ['True', 'true'] else False
 
@@ -1640,7 +1640,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if self._ad7998.initialised:
                     raise Exception('Failed to get ADC input {} from AD7998, mutex timed out'.format(channel_number))
-                return None
+                return self.NO_DATA_FLOAT
 
             # Proportional input is float between 0-1.
             input_proportional = self._ad7998.device.read_input_scaled(channel_number)
@@ -1652,7 +1652,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def _mhz_adc_read_chan_direct(self, channel_name):
         if not self._ad7998.initialised:
-            return None
+            return self.NO_DATA_FLOAT
 
         (dac_chan, input_multiplier) = self._ad7998._channel_mapping.get(channel_name, (None, None))
         if dac_chan is None:
@@ -1743,14 +1743,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if self._ad7998.initialised:
                     raise Exception('Failed to get access AD7998 reading cache while reading VDDA, mutex timed out')
-                return None
+                return self.NO_DATA_FLOAT
 
             # Get the raw input voltage
             Vout = self._ad7998._reading_cache.get('VDDA', None)
 
             # Convert to a current
             if Vout == None:
-                return None
+                return self.NO_DATA_FLOAT
             else:
                 G = self._ad7998.vdda_gain      # Gain, depends on IC version
                 Rs = self._ad7998.vdda_Rs       # Sense resistor
@@ -1761,14 +1761,14 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if self._ad7998.initialised:
                     raise Exception('Failed to get access AD7998 reading cache while reading VDDD, mutex timed out')
-                return None
+                return self.NO_DATA_FLOAT
 
             # Get the raw input voltage
             Vout = self._ad7998._reading_cache.get('VDDD', None)
 
             # Convert to a current
             if Vout == None:
-                return None
+                return self.NO_DATA_FLOAT
             else:
                 G = self._ad7998.vddd_gain      # Gain, depends on IC version
                 Rs = self._ad7998.vddd_Rs       # Sense resistor
@@ -2045,13 +2045,18 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
     def _mhz_hv_get_control_voltage_direct(self):
         # Directly read the control voltage from the potentiometer, and cache it
         tmp_vcont = self._digipot_hv.device.get_wiper_voltage()
+
         with self._HV_mutex:
             self._HV_cached_vcont = tmp_vcont
+
         return tmp_vcont
 
     def mhz_hv_get_control_voltage(self):
         # Return the most recently cached value for the control voltage
-        return self._HV_cached_vcont
+        if self._HV_cached_vcont:
+            return self._HV_cached_vcont
+        else:
+            return self.NO_DATA_FLOAT
 
     def _mhz_hv_sync_control_voltage_stored(self):
         # Directly check the current eeprom count against the latest control voltage count, and
@@ -2083,7 +2088,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         # is reading incorrectly, or the HV module is not outputting the correct voltage because it is damaged, or the
         # digital potentiometer is configured incorrectly.
         if (self.mhz_hv_get_hvmon_voltage() is None) or (self.mhz_hv_get_control_voltage() is None):
-            return None
+            return True     # If there is a reading error on either the control or input, flag a mismatch
 
         if self.mhz_hv_get_enable():
             return abs(
@@ -2129,8 +2134,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
 
     def mhz_hv_get_pid_status(self):
         # Return a textual representation of the current PID mode for the UI
-        #TODO
-        pass
+        with self._HV_mutex:
+            return 'DISABLED' if self._HV_PID_DISABLED else ('OK' if self._HV_MODE_AUTO else 'OFF')
 
     def mhz_hv_set_kp(self, kp):
         self._HV_PID_kp = kp
@@ -2316,7 +2321,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             return None
 
     def mhz_peltier_get_count(self):
-        return self._PELTIER_cached_count
+        return self._PELTIER_cached_count if self._PELTIER_cached_count else self.NO_DATA_INT
 
     def mhz_peltier_get_proportion(self):
         # Return the most recently cached value for the control voltage
@@ -2431,7 +2436,8 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._PELTIER_enabled = self.get_pin_value('peltier_en')
 
     def mhz_peltier_get_enabled(self):
-        return self._PELTIER_enabled
+        # Return either the value, or assume False if None
+        return self._PELTIER_enabled if self._PELTIER_enabled else False
 
     def _mhz_peltier_control_mode_to_enum(self, control_mode_str):
         try:
@@ -2501,7 +2507,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
         self._PELTIER_PID_integral = 0
 
     def mhz_peltier_pid_get_state(self):
-        return self._PELTIER_PID_state
+        return self._PELTIER_PID_state if self._PELTIER_PID_state else ""
 
     def mhz_peltier_pid_set_enable_anti_windup(self, enable=True):
         self._PELTIER_PID_anti_windup_enabled = bool(enable)
@@ -2744,7 +2750,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if current_ff.initialised:
                     self._logger.error('Failed to get FireFly lock while returning temperature, timed out')
-                return None
+                    return None
+                else:
+                    return self.NO_DATA_FLOAT
 
             return current_ff.device.get_temperature(direction=FireFly.DIRECTION_TX)
 
@@ -2755,7 +2763,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if current_ff.initialised:
                     self._logger.error('Failed to get FireFly lock while returning part number, timed out')
-                return None
+                    return None
+                else:
+                    return ""
 
             return current_ff.info_pn
 
@@ -2766,7 +2776,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if current_ff.initialised:
                     self._logger.error('Failed to get FireFly lock while returning vendor number, timed out')
-                return None
+                    return None
+                else:
+                    return ""
 
             return current_ff.info_vn
 
@@ -2777,7 +2789,9 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if current_ff.initialised:
                     self._logger.error('Failed to get FireFly lock while returning OUI, timed out')
-                return None
+                    return None
+                else:
+                    return ""
 
             return current_ff.info_oui
 
@@ -2825,7 +2839,11 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             if not rslt:
                 if channel.firefly_dev.initialised:
                     self._logger.error('Failed to get FireFly lock while returning channel states')
-                return None
+                    return None
+                else:
+                    # If we not initialised, just return the value of firefly_en, since we know that the
+                    # devices power up by default.
+                    return self.get_pin_value('firefly_en')
 
             return not bool((channel.firefly_dev._cached_channels_disabled & channel_bitfield) == channel_bitfield)
 
@@ -3131,44 +3149,44 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
             },
             'asic_settings': {
                 'integration_time': (
-                    lambda: self._asic.get_integration_time() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_integration_time() if self._STATE_ASIC_INITIALISED else self.NO_DATA_INT,
                     self._asic.set_integration_time),
                 'frame_length': (
-                    lambda: self._asic.get_frame_length() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_frame_length() if self._STATE_ASIC_INITIALISED else self.NO_DATA_INT,
                     self._asic.set_frame_length),
                 'feedback_capacitance': (
-                    lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_feedback_capacitance() if self._STATE_ASIC_INITIALISED else self.NO_DATA_INT,
                     self._asic.set_feedback_capacitance),
-                'feedback_gain': (lambda: {7: 'high', 14: 'medium', 21: 'low', None:None, 0:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else None, None),
+                'feedback_gain': ((lambda: {7: 'high', 14: 'medium', 21: 'low', None:None, 0:None}[self._asic.get_feedback_capacitance()] if self._STATE_ASIC_INITIALISED else ''), None),
                 'negative_range_kev': (
-                    lambda: self._asic.get_negative_range_kev() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_negative_range_kev() if self._STATE_ASIC_INITIALISED else self.NO_DATA_INT,
                     self._asic.set_negative_range_kev),
                 'negative_range_lowhigh': (
-                    lambda: self._asic.get_negative_range_lowhigh() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_negative_range_lowhigh() if self._STATE_ASIC_INITIALISED else '',
                     self._asic.set_negative_range_lowhigh,
                 ),
                 'negative_range_options': (
-                    lambda: self._asic.get_negative_range_options() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_negative_range_options() if self._STATE_ASIC_INITIALISED else {},
                     None,
                 ),
                 'serialiser_all_mode': (
-                    lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_global_serialiser_mode() if self._STATE_ASIC_INITIALISED else '',
                     self._asic.set_global_serialiser_mode),
                 'serialiser_all_pattern': (
-                    lambda: self._asic.get_all_serialiser_pattern() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_all_serialiser_pattern() if self._STATE_ASIC_INITIALISED else self.NO_DATA_INT,
                     self._asic.set_all_serialiser_pattern),
                 'serialiser_all_scrambleen': (
-                    lambda: self._asic.get_all_serialiser_bit_scramble() if self._STATE_ASIC_INITIALISED else None,
+                    lambda: self._asic.get_all_serialiser_bit_scramble() if self._STATE_ASIC_INITIALISED else False,
                     self._asic.set_all_serialiser_bit_scramble),
                 'segment_readout': {
                     'REQUEST': (lambda: self._segment_capture_due, self.trigger_segment_capture),
                     'SEGMENT_SELECT': (self.get_segment_capture_selected_segment, self.set_segment_capture_selected_segment),
                     'TRIGGER': (self.get_segment_capture_triggervalue, self.set_segment_capture_triggervalue),  # Only segment reads with a pixel at least this high will be counted
-                    'SEGMENT_DATA': (lambda: self._segment_data if self._segment_data_ready else None, None),
+                    'SEGMENT_DATA': (lambda: self._segment_data if self._segment_data_ready else [], None),
                 },
                 'calibration_pattern': {
                     "ENABLE": (
-                        lambda: self._asic.get_calibration_test_pattern_enabled() if self._STATE_ASIC_INITIALISED else None,
+                        lambda: self._asic.get_calibration_test_pattern_enabled() if self._STATE_ASIC_INITIALISED else False,
                         self._asic.enable_calibration_test_pattern,
                         {"description": "Enable ASIC calibration pattern injection"}),
                     "MODE": (self.get_calibration_pattern_mode, self.set_calibration_pattern_mode),
@@ -3184,16 +3202,16 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                             "SELECT": (self.get_calibration_pattern_grid, self.set_calibration_pattern_grid),
                             "CORNERS_ONLY": (self.get_calibration_pattern_grid_cornersonly, self.set_calibration_pattern_grid_cornersonly),
                         },
-                        "DIRECT": (lambda: self.get_calibration_pattern_direct() if self._STATE_ASIC_INITIALISED else None, self.set_calibration_pattern_direct),
+                        "DIRECT": (lambda: self.get_calibration_pattern_direct() if self._STATE_ASIC_INITIALISED else [], self.set_calibration_pattern_direct),
                     },
-                    "DIRECT_MAP": (lambda: self.get_calibration_pattern_direct_map() if self._STATE_ASIC_INITIALISED else None, None),
+                    "DIRECT_MAP": (lambda: self.get_calibration_pattern_direct_map() if self._STATE_ASIC_INITIALISED else [], None),
                 },
             },
             'monitoring': {
                 'TRIPS': (self.mhz_adc_read_trips, None),
                 'VDDD_I': (self.mhz_adc_read_VDDD_current_A, None),
                 'VDDA_I': (self.mhz_adc_read_VDDA_current_A, None),
-                'ADC_RAW': (lambda: self._ad7998._reading_cache if self._ad7998.initialised else None, None),
+                'ADC_RAW': (lambda: self._ad7998._reading_cache if self._ad7998.initialised else {}, None),
             },
             'firefly': {
                 'ch00to09': self._gen_firefly_paramtree('00to09'),
@@ -3207,17 +3225,17 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'control_voltage': (self.mhz_hv_get_control_voltage, self.mhz_hv_set_control_voltage),
                 'control_voltage_save': (self.mhz_hv_control_voltage_is_stored, lambda val: self.mhz_hv_store_eeprom()),
                 'control_voltage_overridden': (self._mhz_hv_get_vcont_overridden, None),
-                'target_bias': (self.mhz_hv_get_target_bias, self.mhz_hv_set_target_bias),
-                'readback_bias': (self.mhz_hv_get_bias, None),
-                'monitor_voltage': (self.mhz_hv_get_hvmon_voltage, None),
+                'target_bias': (lambda: self.mhz_hv_get_target_bias() if self.mhz_hv_get_target_bias() else self.NO_DATA_FLOAT, self.mhz_hv_set_target_bias),
+                'readback_bias': (lambda: self.mhz_hv_get_bias() if self.mhz_hv_get_bias() else self.NO_DATA_FLOAT, None),
+                'monitor_voltage': (lambda: self.mhz_hv_get_hvmon_voltage() if self.mhz_hv_get_hvmon_voltage() else self.NO_DATA_FLOAT, None),
                 'monitor_control_mismatch_detected': (self.mhz_hv_input_output_mismatched, None),
                 'PID_STATUS': (self.mhz_hv_get_pid_status, None),
             },
             'peltier': {
-                'proportion': (self.mhz_peltier_get_proportion, self.mhz_peltier_set_proportion),
+                'proportion': ((lambda: self.mhz_peltier_get_proportion() if self.mhz_peltier_get_proportion() else self.NO_DATA_INT), self.mhz_peltier_set_proportion),
                 'proportion_save': (self.mhz_peltier_proportion_is_stored, lambda val: self.mhz_peltier_store_eeprom()),
                 'count': (self.mhz_peltier_get_count, None),
-                'temperature': (self.mhz_peltier_get_temperature, self.mhz_peltier_set_temperature),
+                'temperature': ((lambda: self.mhz_peltier_get_temperature() if self.mhz_peltier_get_temperature() else self.NO_DATA_FLOAT), self.mhz_peltier_set_temperature),
                 'enable': (self.mhz_peltier_get_enabled, self.mhz_peltier_set_enabled),
                 'mode': (self.mhz_peltier_get_control_mode, self.mhz_peltier_set_control_mode),
                 'modes_available': (self.mhz_peltier_get_control_modes, None),
@@ -3228,7 +3246,7 @@ class LokiCarrier_HMHz (LokiCarrier_1v0):
                 'pid_kd': (self.mhz_peltier_pid_get_kd, self.mhz_peltier_pid_set_kd),
                 'pid_state': (self.mhz_peltier_pid_get_state, None),
                 'pid_reset': (None, lambda val: self.mhz_peltier_pid_reset()),
-                'pid_anti_windup': (self.mhz_peltier_pid_get_enable_anti_windup, self.mhz_peltier_pid_set_enable_anti_windup),
+                'pid_anti_windwp': (self.mhz_peltier_pid_get_enable_anti_windup, self.mhz_peltier_pid_set_enable_anti_windup),
             },
         }
 
