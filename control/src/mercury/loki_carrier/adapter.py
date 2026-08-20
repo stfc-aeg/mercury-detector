@@ -3,9 +3,8 @@ from mercury.loki_carrier.hexitec_mhz_asic import HEXITEC_MHz
 
 from tornado.ioloop import IOLoop
 from tornado.escape import json_decode
-from odin.adapters.adapter import ApiAdapter, ApiAdapterResponse, request_types, response_types, wants_metadata
-from odin._version import get_versions
-from odin.adapters.parameter_tree import ParameterTreeError
+from odin_control.adapters.adapter import ApiAdapter, ApiAdapterResponse, request_types, response_types, wants_metadata
+from odin_control.adapters.parameter_tree import ParameterTreeError
 
 import logging
 
@@ -26,9 +25,10 @@ class CarrierAdapter(ApiAdapter):
 
 
         # Add the sequencer context
-        self._logger.debug("Adding context to odin_sequencer")
-        sequencer_adapter = self.adapters['odin_sequencer']
         try:
+            self._logger.debug("Adding context to odin_sequencer")
+            sequencer_adapter = self.adapters['odin_sequencer']
+
             current_object = sequencer_adapter
             current_class = "sequencer adapter"
             current_function = "add_context"
@@ -43,16 +43,19 @@ class CarrierAdapter(ApiAdapter):
             current_class = "sequencer adapter manager"
             current_function = "add_context"
             getattr(current_object, current_function)
+
+            self.adapters['odin_sequencer'].add_context('carrier', self.carrier)
+            self.adapters['odin_sequencer'].add_context('asic', self.carrier._asic)
+
         except AttributeError:
             self._logger.debug(
                     "{} object has no {}() function, dir:"
                     "\n\t{}".format(current_class, current_function, dir(current_object)))
             self._logger.debug("type: {}, self: {}".format(type(current_object), current_object))
             exit()
+        except KeyError as e:
+            self._logger.error('Failed to find sequencer context: {}'.format(e))
         self._logger.debug("All objects had valid add_context when checked, proceeding...")
-
-        self.adapters['odin_sequencer'].add_context('carrier', self.carrier)
-        self.adapters['odin_sequencer'].add_context('asic', self.carrier._asic)
 
         self._logger.debug("THIS IS THE END OF CARRIER ADAPTER INIT")
 

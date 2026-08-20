@@ -8,8 +8,8 @@ import logging
 
 from tornado.escape import json_decode
 
-from odin.adapters.adapter import ApiAdapterResponse, request_types, response_types
-from odin.adapters.async_adapter import AsyncApiAdapter
+from odin_control.adapters.adapter import ApiAdapterResponse, request_types, response_types
+from odin_control.adapters.async_adapter import AsyncApiAdapter
 
 from .detector import MercuryDetector, MercuryDetectorError
 

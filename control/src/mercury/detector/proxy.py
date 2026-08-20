@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from odin.adapters.parameter_tree import ParameterTreeError
+from odin_control.adapters.parameter_tree import ParameterTreeError
 
 from .context import SyncContext
 

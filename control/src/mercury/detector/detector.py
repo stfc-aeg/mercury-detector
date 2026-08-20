@@ -6,7 +6,7 @@ Tim Nicholls, STFC Detector Systems Software Group
 """
 import logging
 
-from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
+from odin_control.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from mercury.asic.device import MercuryAsicDevice
 from .context import SyncContext
 from .proxy import MunirProxyContext, GPIBProxyContext
