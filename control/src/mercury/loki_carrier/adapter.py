@@ -34,25 +34,15 @@ class CarrierAdapter(ApiAdapter):
             current_function = "add_context"
             getattr(current_object, current_function)
 
-            current_object = sequencer_adapter.command_sequencer
-            current_class = "sequencer adapter command sequencer"
-            current_function = "_add_context"
-            getattr(current_object, current_function)
-
-            current_object = sequencer_adapter.command_sequencer.manager
-            current_class = "sequencer adapter manager"
-            current_function = "add_context"
-            getattr(current_object, current_function)
-
             self.adapters['odin_sequencer'].add_context('carrier', self.carrier)
             self.adapters['odin_sequencer'].add_context('asic', self.carrier._asic)
 
         except AttributeError as e:
-            self._logger.error('Could not register contexts with sequencer')
-            self._logger.error(
+            self._logger.warning('Could not register contexts with sequencer')
+            self._logger.warning(
                     "{} object has no {}() function, dir:"
                     "\n\t{}".format(current_class, current_function, dir(current_object)))
-            self._logger.error("type: {}, self: {} (raw error: {})".format(type(current_object), current_object, e))
+            self._logger.warning("type: {}, self: {} (raw error: {})".format(type(current_object), current_object, e))
         except KeyError as e:
             self._logger.error('Failed to find sequencer context: {}'.format(e))
         self._logger.debug("All objects had valid add_context when checked, proceeding...")
